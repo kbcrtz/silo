@@ -19,6 +19,8 @@ export type ColorProfile = {
 type ProfileState = {
   onboarded: boolean;
   shopFor: ShopFor;
+  /** Printed on the passport card. */
+  displayName?: string;
   /** File names from lib/photos, not uris. */
   selfiePhoto?: string;
   bodyPhoto?: string;
@@ -65,6 +67,7 @@ export const useProfile = create<ProfileState>()(
       reset: () =>
         set({
           ...initial,
+          displayName: undefined,
           selfiePhoto: undefined,
           bodyPhoto: undefined,
           photoTraits: undefined,

@@ -1,12 +1,19 @@
 import { Image } from "expo-image";
 import { Link } from "expo-router";
 import { useMemo } from "react";
-import { Alert, Pressable, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
+import { PassportCard } from "@/components/passport/PassportCard";
+import { usePassportData } from "@/components/passport/usePassportData";
 import { Screen } from "@/components/Screen";
-import { Swatches } from "@/components/Swatches";
 import { Text } from "@/components/Text";
 import { loadDemoProfile } from "@/data/demo";
 import { SEASONS } from "@/data/seasons";
@@ -34,6 +41,8 @@ export default function Me() {
   const latest = useMemo(() => latestMeasurements(entries), [entries]);
   const shape = bodyShape(latest);
   const season = t.season;
+  const passport = usePassportData();
+  const { width } = useWindowDimensions();
 
   const replaceBodyPhoto = async () => {
     const uri = await pickPhoto("library");
@@ -68,41 +77,68 @@ export default function Me() {
     <Screen>
       <Text variant="title">Me</Text>
 
-      <Card>
-        <Text variant="caption" tone="muted">
-          YOUR SEASON
-        </Text>
-        <Text variant="title">{season?.name ?? "Not analyzed"}</Text>
-        {season ? (
-          <>
-            <Text tone="muted">{season.description}</Text>
-            <Swatches colors={season.best} size={28} />
-            {profile.colorProfile ? (
-              <View style={{ gap: t.space(2), marginTop: t.space(2) }}>
-                <Text variant="caption" tone="muted">
-                  Not quite right? Try a close match
-                </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    gap: t.space(2),
-                  }}
-                >
-                  {profile.colorProfile.ranked.slice(0, 4).map((id) => (
-                    <Chip
-                      key={id}
-                      label={SEASONS[id].name}
-                      selected={id === season.id}
-                      onPress={() => profile.chooseSeason(id)}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-          </>
-        ) : null}
-      </Card>
+      {passport && season ? (
+        <View style={{ gap: t.space(3), alignItems: "center" }}>
+          <PassportCard data={passport} width={width - t.space(10)} />
+          <Text variant="caption" tone="muted">
+            Tilt your phone or drag sideways · Tap to flip
+          </Text>
+        </View>
+      ) : (
+        <Card>
+          <Text variant="caption" tone="muted">
+            YOUR PASSPORT
+          </Text>
+          <Text tone="muted">
+            Finish color analysis to get your Silo passport.
+          </Text>
+        </Card>
+      )}
+
+      {season && profile.colorProfile ? (
+        <Card>
+          <Text variant="caption" tone="muted">
+            ON YOUR PASSPORT
+          </Text>
+          <TextInput
+            value={profile.displayName ?? ""}
+            onChangeText={(displayName) => profile.set({ displayName })}
+            placeholder="Your name"
+            placeholderTextColor={t.colors.textMuted}
+            autoCapitalize="words"
+            returnKeyType="done"
+            maxLength={24}
+            style={{
+              ...t.type.body,
+              color: t.colors.text,
+              backgroundColor: t.colors.bg,
+              borderColor: t.colors.border,
+              borderWidth: 1,
+              borderRadius: t.radius.sm,
+              padding: t.space(3),
+            }}
+          />
+          <Text
+            variant="caption"
+            tone="muted"
+            style={{ marginTop: t.space(2) }}
+          >
+            Not quite your season? Try a close match
+          </Text>
+          <View
+            style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space(2) }}
+          >
+            {profile.colorProfile.ranked.slice(0, 4).map((id) => (
+              <Chip
+                key={id}
+                label={SEASONS[id].name}
+                selected={id === season.id}
+                onPress={() => profile.chooseSeason(id)}
+              />
+            ))}
+          </View>
+        </Card>
+      ) : null}
 
       <Link href="/measurements" asChild>
         <Pressable>

@@ -57,7 +57,7 @@ src/lib/          pure logic: color math, color analysis, palette match, body sh
 src/data/         seasons/palettes, catalog, size charts, demo profile
 src/store/        zustand stores persisted to AsyncStorage
 src/theme/        theme built at runtime from the user's season
-src/components/   shared UI
+src/components/   shared UI; passport/ is the Skia holo passport card on the Me tab
 ```
 
 ## Checks
