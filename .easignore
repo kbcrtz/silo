@@ -1,0 +1,36 @@
+# EAS uploads from the git root, not frontend/. A root .easignore REPLACES every
+# .gitignore for that upload, so frontend's rules are repeated here.
+
+# Not part of the app build
+backend/
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Dependencies and generated folders (EAS installs and prebuilds itself)
+**/node_modules/
+frontend/.expo/
+frontend/ios/
+frontend/android/
+frontend/dist/
+frontend/expo-env.d.ts
+frontend/coverage/
+
+# Secrets and local env: the EAS environment is the only source of config
+**/.env
+**/.env*.local
+**/credentials.json
+**/credentials/
+*.p8
+*.p12
+*.jks
+*.key
+*.pem
+*.mobileprovision
+
+# Build artifacts and junk
+*.ipa
+*.app
+*.tar.gz
+*.tsbuildinfo
+.DS_Store

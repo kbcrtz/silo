@@ -1,59 +1,15 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# Repo-wide. frontend/ and backend/ keep their own .gitignore for stack-specific rules.
 
-# dependencies
 node_modules/
+.DS_Store
 
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
+# Secrets
+.env
+.env*.local
+*.pem
+*.key
 *.p8
 *.p12
-*.key
-*.mobileprovision
 
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-# generated native folders
-/ios
-/android
-
-# env
-.env
-
-# build artifacts
-*.ipa
-*.app
-*.tar.gz
-
-# EAS local credentials (certificate passwords live in these)
-credentials.json
-credentials/
-
-# test coverage
-coverage/
-
-# per-person Claude Code settings
+# Per-person Claude Code settings
 .claude/settings.local.json
