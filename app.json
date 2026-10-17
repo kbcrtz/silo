@@ -1,10 +1,14 @@
 {
   "expo": {
-    "name": "silo",
+    "name": "Silo",
     "slug": "silo",
     "version": "1.0.0",
+    "platforms": [
+      "ios"
+    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "silo",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -12,19 +16,35 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+      "bundleIdentifier": "com.siloapp.ios",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       },
-      "predictiveBackGestureEnabled": false
+      "appleTeamId": "Q724R9Q8UC"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      "expo-router",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Silo uses your photos for your color analysis and try-on body photo.",
+          "cameraPermission": "Silo uses the camera to take your color analysis selfie and try-on body photo.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c9e59557-aa83-407d-8487-33e9fd20da06"
+      }
+    },
+    "owner": "kbcrtz"
   }
 }

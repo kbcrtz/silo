@@ -39,3 +39,14 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Silo specifics
+
+- iOS only (`platforms: ["ios"]` in app.json). Dev client builds, never Expo Go. Hackathon project: not shipping to the App Store.
+- Keep it minimal: no HealthKit, no chart libraries, no privacy/App Review flows.
+- Colors always come from `useTheme()` (`src/theme`). The theme is rebuilt from the user's season, so never hardcode UI colors.
+- Logic that can be pure lives in `src/lib/` with tests in `src/lib/__tests__/`. Screens stay thin.
+- Measurements are stored in cm/kg as a history (`src/store/measurements.ts`); convert only for display (`src/lib/units.ts`).
+- Persist photo file names from `src/lib/photos.ts`, never picker uris or absolute paths.
+- Every backend call in `src/api/` has a mock behind `USE_MOCKS`; keep the documented request/response shapes in sync with the README.
+- `npm run typecheck`, `npm test` and `npx expo-doctor` must pass.
