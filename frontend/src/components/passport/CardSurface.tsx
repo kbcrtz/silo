@@ -13,8 +13,13 @@ import {
 } from "@shopify/react-native-skia";
 import { useMemo, type ReactNode } from "react";
 import type { Season } from "@/data/seasons";
-import { mix } from "@/lib/color";
-import { rosettePoints, wavePoints } from "@/lib/passport";
+import {
+  cardStock,
+  rosettePoints,
+  wavePoints,
+  type CardStock,
+} from "@/lib/passport";
+import { buildTheme } from "@/theme";
 import { holoEffect } from "./holoShader";
 
 /** Animated shader inputs (a Reanimated derived value); see holoShader.ts for the fields. */
@@ -63,8 +68,12 @@ export function rosettePath(
   return path;
 }
 
-export function inkColor(season: Season): string {
-  return mix(season.neutrals[season.neutrals.length - 1], "#1a1a1a", 0.5);
+/** Card paper and ink for a season, matched to the app theme. */
+export function useCardStock(season: Season): CardStock {
+  return useMemo(
+    () => cardStock(season, buildTheme(season.id).colors.bg),
+    [season],
+  );
 }
 
 type Props = {
@@ -95,7 +104,8 @@ export function CardSurface({
   rosette,
   children,
 }: Props) {
-  const ink = inkColor(season);
+  const stock = useCardStock(season);
+  const ink = stock.ink;
   const u = w / 100;
 
   const patterns = useMemo(() => {
@@ -138,10 +148,8 @@ export function CardSurface({
         <LinearGradient
           start={vec(0, 0)}
           end={vec(w, h)}
-          colors={[
-            mix(season.neutrals[0], "#ffffff", 0.55),
-            mix(season.signature, "#ffffff", 0.8),
-          ]}
+          colors={stock.colors}
+          positions={stock.positions}
         />
       </RoundedRect>
       <Group

@@ -1,5 +1,9 @@
+import { SEASON_IDS, SEASONS } from "@/data/seasons";
+import { buildTheme } from "@/theme";
+import { contrastRatio } from "../color";
 import {
   cardNumber,
+  cardStock,
   formatIssued,
   MRZ_LENGTH,
   mrzLines,
@@ -67,6 +71,20 @@ describe("rosettePoints", () => {
       expect(Math.hypot(pts[i] - 50, pts[i + 1] - 50)).toBeLessThanOrEqual(
         20.0001,
       );
+    }
+  });
+});
+
+describe("cardStock", () => {
+  it.each(SEASON_IDS)("%s matches the app and keeps ink legible", (id) => {
+    const season = SEASONS[id];
+    const appBg = buildTheme(id).colors.bg;
+    const stock = cardStock(season, appBg);
+    expect(stock.colors[0]).toBe(appBg);
+    expect(stock.colors).toHaveLength(stock.positions.length);
+    for (const stop of stock.colors) {
+      expect(contrastRatio(stock.ink, stop)).toBeGreaterThanOrEqual(7);
+      expect(contrastRatio(stock.muted, stop)).toBeGreaterThanOrEqual(4.5);
     }
   });
 });

@@ -20,7 +20,7 @@ import {
   CARD_PAD,
   CardSurface,
   Holo,
-  inkColor,
+  useCardStock,
   rosettePath,
   type HoloUniforms,
 } from "./CardSurface";
@@ -64,8 +64,7 @@ export function PassportFront({
 }: Props) {
   const u = w / 100;
   const { season } = data;
-  const ink = inkColor(season);
-  const muted = mix(ink, "#ffffff", 0.35);
+  const { ink, muted } = useCardStock(season);
   const photo = useImage(data.selfieUri ?? null);
   const traits = describeTraits(data.traits);
 

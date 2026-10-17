@@ -10,12 +10,11 @@ import {
   vec,
 } from "@shopify/react-native-skia";
 import { useMemo } from "react";
-import { mix } from "@/lib/color";
 import {
   CARD_PAD,
   CardSurface,
   Holo,
-  inkColor,
+  useCardStock,
   type HoloUniforms,
 } from "./CardSurface";
 import type { PassportData } from "./usePassportData";
@@ -37,8 +36,7 @@ export function PassportBack({
 }: Props) {
   const u = w / 100;
   const { season } = data;
-  const ink = inkColor(season);
-  const muted = mix(ink, "#ffffff", 0.35);
+  const { ink, muted } = useCardStock(season);
 
   const fonts = useMemo(
     () => ({

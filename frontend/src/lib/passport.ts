@@ -1,7 +1,48 @@
-import type { ColorTraits, SeasonId } from "@/data/seasons";
+import type { ColorTraits, Season, SeasonId } from "@/data/seasons";
 import type { BodyShape } from "./bodyShape";
+import { ensureContrast, luminance, mix } from "./color";
 
 export const MRZ_LENGTH = 36;
+
+export type CardStock = {
+  /** Diagonal gradient, top-left to bottom-right. */
+  colors: string[];
+  positions: number[];
+  /** Printed text: legible on the darkest stop. */
+  ink: string;
+  muted: string;
+};
+
+/**
+ * The card's paper, built from the same colors as the rest of the app: it
+ * starts at the app background (so the card sits in the screen like it belongs
+ * there) and sweeps through soft tints of the season's signature and next two
+ * best colors, the same three the foil shader is tinted with. Ink is darkened
+ * against the darkest stop, so a deep season's richer tints stay readable.
+ */
+export function cardStock(season: Season, appBackground: string): CardStock {
+  const colors = [
+    appBackground,
+    mix(season.signature, "#ffffff", 0.62),
+    mix(season.best[1], "#ffffff", 0.68),
+    mix(season.best[2], "#ffffff", 0.74),
+  ];
+  const darkest = colors.reduce((a, b) =>
+    luminance(b) < luminance(a) ? b : a,
+  );
+  const baseInk = mix(
+    season.neutrals[season.neutrals.length - 1],
+    "#1a1a1a",
+    0.5,
+  );
+  const ink = ensureContrast(baseInk, darkest, 7);
+  return {
+    colors,
+    positions: [0, 0.4, 0.75, 1],
+    ink,
+    muted: ensureContrast(mix(ink, "#ffffff", 0.35), darkest, 4.5),
+  };
+}
 
 export function passportName(displayName: string | undefined): string {
   const name = displayName?.trim();
