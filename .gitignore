@@ -47,3 +47,13 @@ yarn-error.*
 *.ipa
 *.app
 *.tar.gz
+
+# EAS local credentials (certificate passwords live in these)
+credentials.json
+credentials/
+
+# test coverage
+coverage/
+
+# per-person Claude Code settings
+.claude/settings.local.json
