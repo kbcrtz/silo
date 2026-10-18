@@ -48,6 +48,8 @@ export type CatalogProduct = {
     hex: string | null;
     confidence: "high" | "medium" | "low";
     cut: Pick<CatalogItem, "category" | "silhouette" | "length" | "sleeve">;
+    pattern: "solid" | "plaid" | "stripes" | "print";
+    accent: string | null;
     clothing: boolean;
     evidence: string;
     source: "ai";

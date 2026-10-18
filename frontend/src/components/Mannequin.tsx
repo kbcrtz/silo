@@ -6,13 +6,20 @@ import {
   LinearGradient,
   Oval,
   Path,
+  Rect,
   Shadow,
   vec,
 } from "@shopify/react-native-skia";
 import { useMemo, type ReactNode } from "react";
 import type { CatalogItem } from "@/data/catalog";
 import { deltaE, mix } from "@/lib/color";
-import { bodyOutlines, landmarks, outfit, type Garment } from "@/lib/mannequin";
+import {
+  bodyOutlines,
+  landmarks,
+  outfit,
+  patternBands,
+  type Garment,
+} from "@/lib/mannequin";
 import type { Measurements } from "@/lib/measurements";
 import type { ShopFor } from "@/store/profile";
 import { useTheme, type Theme } from "@/theme";
@@ -165,6 +172,7 @@ export function MannequinFigure({
             key={li}
             color={fill}
             trim={layer.role === "item" ? item?.colors[1] : undefined}
+            pattern={layer.role === "item" ? item?.pattern : undefined}
             paths={layer}
             cm={cm}
             shade={shade}
@@ -208,6 +216,7 @@ function fade(
 function Fabric({
   color,
   trim,
+  pattern,
   paths,
   cm,
   shade,
@@ -215,6 +224,7 @@ function Fabric({
 }: {
   color: string;
   trim?: string;
+  pattern?: CatalogItem["pattern"];
   paths: ReturnType<typeof garmentPaths>;
   cm: (n: number) => number;
   shade: (light: string, dark: string) => ReactNode;
@@ -242,6 +252,21 @@ function Fabric({
             {shade(light, dark)}
             {volume("rgba(0,0,0,0.32)", "rgba(255,255,255,0.28)", 1.6)}
           </Path>
+          {/* Plaid or stripes in the second color, over the shading so the folds still show through. */}
+          {pattern && trim ? (
+            <Group clip={p} opacity={0.55}>
+              {patternBands(p.getBounds(), pattern, cm(1)).map((b, k) => (
+                <Rect
+                  key={k}
+                  x={b.x}
+                  y={b.y}
+                  width={b.width}
+                  height={b.height}
+                  color={trim}
+                />
+              ))}
+            </Group>
+          ) : null}
           <Path
             path={p}
             style="stroke"

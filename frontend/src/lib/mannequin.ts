@@ -871,3 +871,35 @@ export function outfit(L: Landmarks, item: Cut): Layer[] {
       return [bottom, top, own];
   }
 }
+
+type Box = { x: number; y: number; width: number; height: number };
+
+/**
+ * Bands to lay over a garment for its pattern, in the box's units: plaid
+ * crosses wide bands both ways with thin lines between, stripes run
+ * vertically. Prints have no simple repeat and stay solid.
+ */
+export function patternBands(
+  box: Box,
+  pattern: "solid" | "plaid" | "stripes" | "print",
+  cm: number,
+): Box[] {
+  const bands: Box[] = [];
+  const across = (step: number, size: number, offset = 0) => {
+    for (let y = box.y + offset; y < box.y + box.height; y += step)
+      bands.push({ x: box.x, y, width: box.width, height: size });
+  };
+  const down = (step: number, size: number, offset = 0) => {
+    for (let x = box.x + offset; x < box.x + box.width; x += step)
+      bands.push({ x, y: box.y, width: size, height: box.height });
+  };
+  if (pattern === "plaid") {
+    across(5 * cm, 1.8 * cm);
+    down(5 * cm, 1.8 * cm);
+    across(5 * cm, 0.3 * cm, 3.4 * cm);
+    down(5 * cm, 0.3 * cm, 3.4 * cm);
+  } else if (pattern === "stripes") {
+    down(2.2 * cm, 0.8 * cm);
+  }
+  return bands;
+}

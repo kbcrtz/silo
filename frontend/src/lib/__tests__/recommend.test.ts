@@ -7,6 +7,7 @@ import {
   hemY,
   landmarks,
   outfit,
+  patternBands,
 } from "../mannequin";
 import { recommend } from "../recommend";
 import { silhouetteMatch } from "../silhouette";
@@ -161,6 +162,18 @@ describe("mannequin", () => {
     expect(
       landmarks({ ...base, chest: 82, bust: 100 }, "womens").half.chest,
     ).toBeGreaterThan(narrow.half.chest);
+  });
+
+  it("lays plaid bands both ways and stripes one way across the garment", () => {
+    const box = { x: 0, y: 0, width: 100, height: 200 };
+    const plaid = patternBands(box, "plaid", 4);
+    expect(plaid.some((b) => b.width === 100)).toBe(true); // across
+    expect(plaid.some((b) => b.height === 200)).toBe(true); // down
+    const stripes = patternBands(box, "stripes", 4);
+    expect(stripes.length).toBeGreaterThan(3);
+    expect(stripes.every((b) => b.height === 200)).toBe(true);
+    expect(patternBands(box, "solid", 4)).toEqual([]);
+    expect(patternBands(box, "print", 4)).toEqual([]);
   });
 
   it("drops the hem lower for longer lengths", () => {

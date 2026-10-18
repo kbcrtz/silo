@@ -49,6 +49,8 @@ export type CatalogItem = {
   evidence?: string;
   /** Popular with the shopper's season this week (from the backend). */
   popular?: boolean;
+  /** Plaid or stripes are drawn on the mannequin in colors[1]; absent means solid. */
+  pattern?: "plaid" | "stripes" | "print";
 };
 
 /** Placeholder catalog spread across all twelve seasons. Brands are fictional. */

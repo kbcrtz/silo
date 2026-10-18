@@ -8,18 +8,22 @@ export const GARMENTS = ["top", "bottom", "dress", "outerwear"] as const;
 export const SILHOUETTES = ["fitted", "relaxed", "boxy", "wrap", "tailored", "cropped", "slip", "a-line", "slim", "straight", "wide-leg"] as const;
 const LENGTHS = ["waist", "hip", "thigh", "knee", "midi", "ankle"] as const;
 const SLEEVES = ["none", "short", "long"] as const;
+const PATTERNS = ["solid", "plaid", "stripes", "print"] as const;
+const hex = z
+  .string()
+  .regex(/^#[0-9A-Fa-f]{6}$/)
+  .nullable();
 
 const Item = z.strictObject({
   i: z.int().min(0),
-  hex: z
-    .string()
-    .regex(/^#[0-9A-Fa-f]{6}$/)
-    .nullable(),
+  hex,
   confidence: z.enum(["high", "medium", "low"]),
   category: z.enum(GARMENTS),
   silhouette: z.enum(SILHOUETTES),
   length: z.enum(LENGTHS),
   sleeve: z.enum(SLEEVES).nullable(),
+  pattern: z.enum(PATTERNS),
+  accent: hex,
   clothing: z.boolean(),
   evidence: z.string().max(200),
 });
@@ -31,6 +35,9 @@ export type Insight = {
   hex: string | null;
   confidence: "high" | "medium" | "low";
   cut: { category: (typeof GARMENTS)[number]; silhouette: (typeof SILHOUETTES)[number]; length: (typeof LENGTHS)[number]; sleeve?: (typeof SLEEVES)[number] };
+  /** A plaid or stripe and its second color, so it isn't drawn as one averaged color. */
+  pattern: (typeof PATTERNS)[number];
+  accent: string | null;
   /** False for shoes, bags and other non-garments that slip through Shopify's clothing filter. */
   clothing: boolean;
   /** The listing's own words the estimate rests on. */
@@ -45,6 +52,8 @@ const BATCH = 5;
 const PROMPT = `You read clothing store listings and describe each garment for a color and fit app. Use only the listing text. Never guess beyond it. When the labeled specs state a fit, length or sleeve, use them over the title and description.
 For each listing, by its index i:
 - hex: the garment's main color as #RRGGBB, from its color name and description. Fanciful names ("Bering Sea", "Roasted Pecan") mean their usual color. For a print or several colors, the dominant one. Null if the text gives no color.
+- pattern: solid, plaid (also check, gingham, tartan, flannel check), stripes, or print (floral, graphic, camo, other prints). Use the labeled Pattern spec when there is one.
+- accent: for plaid, stripes or print, the second main color as #RRGGBB (for "gray and black plaid", hex is the gray and accent the black). Null for solid.
 - confidence: high when the text names a specific color, medium when the name is vague or fanciful, low when you are inferring from very little.
 - category: top, bottom, dress, or outerwear (jackets, coats, blazers, cardigans).
 - silhouette: the closest of fitted, relaxed, boxy, wrap, tailored, cropped, slip, a-line, slim, straight, wide-leg.
@@ -92,8 +101,16 @@ export function createEnricher(opts: { create: CreateInteraction; model: string;
     for (const raw of items) {
       const item = Item.safeParse(raw);
       if (!item.success || item.data.i >= out.length || out[item.data.i]) continue;
-      const { hex, confidence, category, silhouette, length, sleeve, clothing, evidence } = item.data;
-      out[item.data.i] = { hex, confidence, cut: { category, silhouette, length, ...(sleeve && category !== "bottom" && { sleeve }) }, clothing, evidence };
+      const { hex, confidence, category, silhouette, length, sleeve, pattern, accent, clothing, evidence } = item.data;
+      out[item.data.i] = {
+        hex,
+        confidence,
+        cut: { category, silhouette, length, ...(sleeve && category !== "bottom" && { sleeve }) },
+        pattern,
+        accent: pattern === "solid" ? null : accent,
+        clothing,
+        evidence,
+      };
     }
     return out;
   }

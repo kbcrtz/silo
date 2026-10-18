@@ -166,6 +166,10 @@ export function toCatalogItem(
     source: "shopify",
     ...(product.estimate && { evidence: product.estimate.evidence }),
     ...(product.popular && { popular: true }),
+    ...(product.estimate?.pattern &&
+      product.estimate.pattern !== "solid" && {
+        pattern: product.estimate.pattern,
+      }),
     // The backend's reading of the full listing beats a guess from the title alone.
     ...(product.estimate?.cut ?? inferCut(product.title, product.category)),
   };
@@ -173,6 +177,7 @@ export function toCatalogItem(
 
 /** The AI's color unless it says it's guessing, else the swatch for the merchant's color name, else none. */
 function colorOf({ estimate, color }: CatalogProduct): string[] {
-  if (estimate?.hex && estimate.confidence !== "low") return [estimate.hex];
+  if (estimate?.hex && estimate.confidence !== "low")
+    return estimate.accent ? [estimate.hex, estimate.accent] : [estimate.hex];
   return color?.hex ? [color.hex] : [];
 }

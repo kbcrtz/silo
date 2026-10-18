@@ -14,6 +14,8 @@ const insight = (i: number, patch: Record<string, unknown> = {}) => ({
   silhouette: "relaxed",
   length: "ankle",
   sleeve: null,
+  pattern: "solid",
+  accent: null,
   clothing: true,
   evidence: "Olive Green; Relaxed fit & drawstring waist",
   ...patch,
@@ -65,6 +67,8 @@ test("answers line up with listings by index; a bad item is skipped, not fatal",
     hex: "#333333",
     confidence: "high",
     cut: { category: "top", silhouette: "fitted", length: "hip", sleeve: "long" },
+    pattern: "solid",
+    accent: null,
     clothing: true,
     evidence: "Olive Green; Relaxed fit & drawstring waist",
   });
@@ -113,4 +117,10 @@ test("the prompt asks whether it's a garment and treats Tall as longer, not crop
   await enricher(async (p: any) => ((prompt = p.input[0].text), { output_text: JSON.stringify({ items: [insight(0)] }) }))([listingFacts(trouser)!]);
   assert.match(prompt, /clothing: false for/);
   assert.match(prompt, /Tall/);
+});
+
+test("a plaid comes back as a pattern with its second color, not one muddy average", async () => {
+  const [out] = await enricher(replying({ items: [insight(0, { hex: "#808080", pattern: "plaid", accent: "#1A1A1A" })] }))([listingFacts(trouser)!]);
+  assert.equal(out?.pattern, "plaid");
+  assert.equal(out?.accent, "#1A1A1A");
 });

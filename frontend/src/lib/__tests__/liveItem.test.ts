@@ -149,6 +149,8 @@ describe("toCatalogItem with the backend's AI estimate", () => {
       silhouette: "wide-leg" as const,
       length: "ankle" as const,
     },
+    pattern: "solid" as const,
+    accent: null,
     clothing: true,
     evidence: "Tobacco; relaxed wide leg",
     source: "ai" as const,
@@ -170,6 +172,22 @@ describe("toCatalogItem with the backend's AI estimate", () => {
       length: "ankle",
     });
     expect(item.evidence).toBe("Tobacco; relaxed wide leg");
+  });
+
+  it("keeps a plaid's pattern and both colors", () => {
+    const item = toCatalogItem(
+      product({
+        estimate: {
+          ...estimate,
+          hex: "#808080",
+          pattern: "plaid",
+          accent: "#1A1A1A",
+        },
+      }),
+      "mens",
+    );
+    expect(item.colors).toEqual(["#808080", "#1A1A1A"]);
+    expect(item.pattern).toBe("plaid");
   });
 
   it("ignores a low-confidence color but still takes the cut", () => {

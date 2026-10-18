@@ -204,7 +204,7 @@ test("each product gets the AI's estimate of its color and cut from the listing 
     seen.push(facts);
     return facts.map((f, i) =>
       i === 0
-        ? { hex: "#6B7A3A", confidence: "high" as const, cut: { category: "bottom" as const, silhouette: "relaxed" as const, length: "ankle" as const }, clothing: true, evidence: "Olive Green; relaxed fit" }
+        ? { hex: "#6B7A3A", confidence: "high" as const, cut: { category: "bottom" as const, silhouette: "relaxed" as const, length: "ankle" as const }, pattern: "solid" as const, accent: null, clothing: true, evidence: "Olive Green; relaxed fit" }
         : null,
     );
   };
@@ -216,6 +216,8 @@ test("each product gets the AI's estimate of its color and cut from the listing 
     hex: "#6B7A3A",
     confidence: "high",
     cut: { category: "bottom", silhouette: "relaxed", length: "ankle" },
+    pattern: "solid",
+    accent: null,
     clothing: true,
     evidence: "Olive Green; relaxed fit",
     source: "ai",
@@ -254,6 +256,8 @@ test("listings the AI says aren't clothing (sneakers, bags) are dropped from the
       hex: null,
       confidence: "low" as const,
       cut: { category: "bottom" as const, silhouette: "straight" as const, length: "ankle" as const },
+      pattern: "solid" as const,
+      accent: null,
       clothing: i !== 0,
       evidence: i === 0 ? "sneaker" : "trouser",
     }));
