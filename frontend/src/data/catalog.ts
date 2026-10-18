@@ -404,13 +404,6 @@ export const CATALOG: CatalogItem[] = [
   },
 ];
 
-export const CATEGORY_LABELS: Record<Category, string> = {
-  top: "Tops",
-  bottom: "Bottoms",
-  dress: "Dresses",
-  outerwear: "Outerwear",
-};
-
 export const SILHOUETTE_LABELS: Record<Silhouette, string> = {
   fitted: "Fitted",
   relaxed: "Relaxed",

@@ -27,6 +27,8 @@ export function buildApp(deps: {
   gate: Gate;
   /** Estimates feed products' color and cut from listing text; the feed works without it. */
   enrich?: Enrich;
+  /** Per-IP budget for those Gemini estimates; pages past it load without them. */
+  estimateGate?: Gate;
   /** On-device data backed up to Postgres; /me answers 503 without it. */
   userData?: UserData;
   /** Season popularity from app events (Tiger Cloud); the feed works without it. */
@@ -39,7 +41,17 @@ export function buildApp(deps: {
     logger: logger ? { ...logger, serializers: { ...logger.serializers, req } } : logger,
     genReqId: () => randomUUID(),
     requestIdHeader: false, // never trust a client-supplied id
+    // A stalled upload would otherwise hold a color-analysis slot until the socket dies.
+    requestTimeout: 60_000,
   });
+  // Fastify's own errors (bad JSON, body too large, unknown route) in the app's { error } shape.
+  app.setErrorHandler((err: { statusCode?: number }, req, reply) => {
+    const status = err.statusCode ?? 500;
+    if (status >= 500) req.log.error({ errorName: (err as Error).name }, "unhandled");
+    const code = status === 413 ? "too_large" : status === 415 ? "unsupported_media_type" : status < 500 ? "invalid_request" : "internal_error";
+    return reply.code(status).send({ error: code });
+  });
+  app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not_found" }));
   app.addHook("onRequest", async (req, reply) => {
     if (!bearerOk(req.headers.authorization, deps.secret)) return reply.code(401).send({ error: "unauthorized" });
   });

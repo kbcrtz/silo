@@ -26,6 +26,11 @@ function fakeData() {
     async putSaved(user, value) {
       saved.set(user, value);
     },
+    async deleteAll(user) {
+      profiles.delete(user);
+      saved.delete(user);
+      measurements.delete(user);
+    },
     async addMeasurements(user, entries) {
       const list = measurements.get(user) ?? [];
       const fresh = entries.filter((e) => !list.some((m) => m.type === e.type && m.measuredAt === e.measuredAt));
@@ -55,7 +60,7 @@ function setup(userData: UserData | null = fakeData()) {
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     userData: userData ?? undefined,
   });
-  const call = (method: "GET" | "PUT" | "POST", url: string, payload?: unknown, user: string | null = USER) =>
+  const call = (method: "GET" | "PUT" | "POST" | "DELETE", url: string, payload?: unknown, user: string | null = USER) =>
     app.inject({
       method,
       url,
@@ -129,4 +134,31 @@ test("logs carry counts, never measurements or profile contents", async () => {
   const all = JSON.stringify(logs);
   assert.ok(logs.some((l) => l.userData?.route === "measurements" && l.userData.added === 1));
   assert.ok(!all.includes("72.5") && !all.includes("soft-autumn") && !all.includes(USER), "log leaked user data");
+});
+
+test("bust is a measurement the app records, so it backs up too", async () => {
+  const { call } = setup();
+  const res = await call("POST", "/me/measurements", { entries: [{ type: "bust", value: 90, measuredAt: "2026-10-18T10:00:00.000Z" }] });
+  assert.deepEqual(res.json(), { added: 1 });
+});
+
+test("measurement dates outside 2000..tomorrow are rejected", async () => {
+  const { call } = setup();
+  for (const measuredAt of ["1999-12-31T00:00:00.000Z", "9999-01-01T00:00:00.000Z", new Date(Date.now() + 3 * 86_400_000).toISOString()]) {
+    const res = await call("POST", "/me/measurements", { entries: [{ type: "waist", value: 70, measuredAt }] });
+    assert.equal(res.statusCode, 400, measuredAt);
+  }
+});
+
+test("reset deletes everything stored for the device", async () => {
+  const { call } = setup();
+  await call("PUT", "/me/profile", { data: profile });
+  await call("POST", "/me/measurements", { entries: [{ type: "waist", value: 72, measuredAt: "2026-10-18T10:00:00.000Z" }] });
+  assert.equal((await call("DELETE", "/me")).statusCode, 204);
+  assert.deepEqual((await call("GET", "/me")).json(), { profile: null, saved: null, measurements: [] });
+});
+
+test("framework errors use the same { error } shape", async () => {
+  const { call } = setup();
+  assert.deepEqual((await call("GET", "/nope")).json(), { error: "not_found" });
 });

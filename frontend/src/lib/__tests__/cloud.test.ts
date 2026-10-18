@@ -1,6 +1,8 @@
 import type { CatalogItem } from "@/data/catalog";
 import {
+  entriesFromBackup,
   eventFor,
+  isEmptyInstall,
   measurementRows,
   profileSnapshot,
   savedSnapshot,
@@ -95,5 +97,38 @@ describe("event payloads", () => {
       garment: "outerwear",
       silhouette: "relaxed",
     });
+  });
+});
+
+describe("restore on an empty install", () => {
+  const empty = { onboarded: false, colorProfile: undefined };
+  it("restores only when nothing at all is on the phone", () => {
+    expect(isEmptyInstall(empty, 0, 0)).toBe(true);
+    expect(isEmptyInstall({ ...empty, onboarded: true }, 0, 0)).toBe(false);
+    // "Redo onboarding" keeps the season and history: never overwrite that.
+    expect(
+      isEmptyInstall(
+        { onboarded: false, colorProfile: { seasonId: "soft-autumn" } },
+        0,
+        0,
+      ),
+    ).toBe(false);
+    expect(isEmptyInstall(empty, 3, 0)).toBe(false);
+    expect(isEmptyInstall(empty, 0, 1)).toBe(false);
+  });
+
+  it("turns backed-up measurements back into the phone's entries", () => {
+    expect(
+      entriesFromBackup([
+        { type: "waist", value: 72, measuredAt: "2026-10-18T10:00:00.000Z" },
+      ]),
+    ).toEqual([
+      {
+        id: "waist-2026-10-18T10:00:00.000Z",
+        type: "waist",
+        value: 72,
+        measuredAt: "2026-10-18T10:00:00.000Z",
+      },
+    ]);
   });
 });

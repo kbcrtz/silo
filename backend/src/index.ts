@@ -57,6 +57,8 @@ if (!(enrichTimeoutMs > 0)) {
 // Flash-Lite: on a 20-listing page it took ~1.5 s against ~4 s for Flash, agreeing on category and cut (2026-10-18).
 const enrichModel = process.env.CATALOG_AI_MODEL ?? "gemini-3.5-flash-lite";
 const enrich = process.env.CATALOG_AI === "off" ? undefined : createEnricher({ create, model: enrichModel, timeoutMs: enrichTimeoutMs });
+// 30 AI-read pages per device per 10 minutes (up to 120 Gemini calls), 4 at once; past that, pages skip the estimates.
+const estimateGate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 4 });
 
 // Tiger Cloud Postgres backs up the app's on-device data. Without it, /me answers 503 and everything else works.
 const databaseUrl = process.env.TIGER_DATABASE_URL;
@@ -83,6 +85,7 @@ const app = buildApp({
   secret,
   gate,
   enrich,
+  estimateGate,
   userData,
   trends,
   locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }),

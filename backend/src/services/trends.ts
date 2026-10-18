@@ -24,6 +24,11 @@ export type Trends = {
 
 const TOP_ITEMS = 20;
 const TOP_TRAITS = 5;
+/**
+ * Points needed to count as popular (shop 5, save 3, open 1): one open never is.
+ * shortcut: one device can still reach it alone, count distinct devices once there are real users.
+ */
+const MIN_SCORE = 6;
 
 export function familyOfHex(hex: string): Family | null {
   return /^#[0-9a-f]{6}$/i.test(hex) ? familyFor(nameForHex(hex)) : null;
@@ -43,8 +48,8 @@ export function pickTrending(rows: Row[]): Trending {
     byTrait.set(key, seen);
   }
   return {
-    items: [...byItem].sort((a, b) => b[1] - a[1]).slice(0, TOP_ITEMS).map(([id]) => id),
-    traits: [...byTrait.values()].sort((a, b) => b.score - a.score).slice(0, TOP_TRAITS).map((t) => t.trait),
+    items: [...byItem].filter(([, score]) => score >= MIN_SCORE).sort((a, b) => b[1] - a[1]).slice(0, TOP_ITEMS).map(([id]) => id),
+    traits: [...byTrait.values()].filter((t) => t.score >= MIN_SCORE).sort((a, b) => b.score - a.score).slice(0, TOP_TRAITS).map((t) => t.trait),
   };
 }
 

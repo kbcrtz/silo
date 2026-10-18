@@ -8,13 +8,50 @@ let deviceId: Promise<string> | null = null;
 
 /** This install's anonymous id, made on first use and kept on the phone. */
 export function getDeviceId(): Promise<string> {
-  deviceId ??= AsyncStorage.getItem(DEVICE_KEY).then(async (saved) => {
-    if (saved) return saved;
-    const fresh = uuidV4();
-    await AsyncStorage.setItem(DEVICE_KEY, fresh);
-    return fresh;
-  });
+  deviceId ??= AsyncStorage.getItem(DEVICE_KEY)
+    .then(async (saved) => {
+      if (saved) return saved;
+      const fresh = uuidV4();
+      await AsyncStorage.setItem(DEVICE_KEY, fresh);
+      return fresh;
+    })
+    .catch((e) => {
+      deviceId = null; // don't keep a failed read for the whole session
+      throw e;
+    });
   return deviceId;
+}
+
+/**
+ * "Reset": deletes this device's backup on the server, then forgets the id so
+ * the next backup starts a new one. The id is dropped first, so a backup that
+ * fires meanwhile can't write under the old id again.
+ */
+export async function forgetDevice() {
+  const old = await AsyncStorage.getItem(DEVICE_KEY);
+  deviceId = null;
+  await AsyncStorage.removeItem(DEVICE_KEY);
+  if (USE_MOCKS || !old) return;
+  await fetch(`${API_URL}/me`, {
+    method: "DELETE",
+    headers: { ...apiHeaders(), "x-device-id": old },
+  }).then(expectOk);
+}
+
+export type Backup = {
+  profile: Record<string, unknown> | null;
+  saved: Record<string, unknown> | null;
+  measurements: { type: string; value: number; measuredAt: string }[];
+};
+
+/** The server copy for this phone's existing device id; null when there is no id yet (nothing was ever backed up). */
+export async function fetchBackup(): Promise<Backup | null> {
+  const id = await AsyncStorage.getItem(DEVICE_KEY);
+  if (USE_MOCKS || !id) return null;
+  const res = await fetch(`${API_URL}/me`, {
+    headers: { ...apiHeaders(), "x-device-id": id },
+  }).then(expectOk);
+  return res.json();
 }
 
 async function send(method: "PUT" | "POST", path: string, body: unknown) {
@@ -52,8 +89,16 @@ export const backupMeasurements = (
     : Promise.resolve();
 
 // Events go in batches: a burst of taps is one request.
-let queue: ReturnType<typeof eventFor>[] = [];
+const queue: ReturnType<typeof eventFor>[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+function flush() {
+  // The backend takes 100 per request.
+  while (queue.length) {
+    // Lost on failure: popularity is a nice-to-have, not the user's data.
+    send("POST", "/events", { events: queue.splice(0, 100) }).catch(() => {});
+  }
+}
 
 /**
  * Reports an open, save or Shop tap for "popular with your season".
@@ -66,10 +111,5 @@ export function track(
 ) {
   queue.push(eventFor(kind, item, season));
   clearTimeout(flushTimer);
-  flushTimer = setTimeout(() => {
-    const events = queue.splice(0, 100);
-    queue = queue.length ? queue : [];
-    // Lost on failure: popularity is a nice-to-have, not the user's data.
-    send("POST", "/events", { events }).catch(() => {});
-  }, 3000);
+  flushTimer = setTimeout(flush, 3000);
 }

@@ -4,6 +4,7 @@ import { discover } from "../catalog/discover.ts";
 import { normalizeProduct } from "../catalog/normalize.ts";
 import { CATEGORIES, STYLES } from "../catalog/query.ts";
 import { HttpError } from "../errors.ts";
+import type { Gate } from "../guard.ts";
 import type { Enrich } from "../services/listingInsights.ts";
 import type { Catalog } from "../services/shopifyCatalog.ts";
 import { markPopular, type Trends } from "../services/trends.ts";
@@ -64,6 +65,8 @@ function clientSignal(reply: FastifyReply): AbortSignal {
   return controller.signal;
 }
 
+const TRENDING_BUDGET_MS = 1_500;
+
 const cents = (dollars?: number) => (dollars === undefined ? undefined : dollars * 100);
 
 /**
@@ -73,7 +76,13 @@ const cents = (dollars?: number) => (dollars === undefined ? undefined : dollars
  */
 export async function catalogRoute(
   app: FastifyInstance,
-  { catalog, secret, enrich, trends }: { catalog: Catalog; secret: string; enrich?: Enrich; trends?: Trends },
+  {
+    catalog,
+    secret,
+    enrich,
+    trends,
+    estimateGate,
+  }: { catalog: Catalog; secret: string; enrich?: Enrich; trends?: Trends; estimateGate?: Gate },
 ) {
   async function handle(route: string, req: { log: FastifyInstance["log"] }, reply: FastifyReply, run: (diag: Record<string, unknown>) => Promise<unknown>) {
     const started = performance.now();
@@ -98,17 +107,34 @@ export async function catalogRoute(
     handle("discover", req, reply, async (diag) => {
       const query = DiscoverQuery.safeParse(req.query);
       if (!query.success) throw new HttpError("invalid_request", 400);
-      const { cursor, priceMin, priceMax, season, ...params } = query.data;
-      diag.category = params.category;
-      // Looked up alongside the Shopify search; a failure just means no popular marks.
-      const trending = season && trends ? trends.trending(season).catch(() => null) : null;
-      const page = await discover(catalog, { ...params, priceMin: cents(priceMin), priceMax: cents(priceMax) }, cursor, secret, clientSignal(reply), enrich);
-      const top = await trending;
-      if (top) page.products = markPopular(page.products, top);
-      diag.popular = page.products.filter((p) => p.popular).length;
-      const { upstreamCalls, dropped, estimated, estimateError } = page;
-      Object.assign(diag, { upstreamCalls, returned: page.products.length, dropped, estimated, estimateError });
-      return { products: page.products, cursor: page.cursor, source: "shopify" };
+      // Gemini estimates are billed per page; past the device's budget the page loads without them.
+      const aiAllowed = Boolean(enrich) && (!estimateGate || estimateGate.tryEnter(req.ip) === "ok");
+      try {
+        const { cursor, priceMin, priceMax, season, ...params } = query.data;
+        diag.category = params.category;
+        // Looked up alongside the Shopify search; slow (database down, pool busy) or failed just means no popular marks.
+        const trending =
+          season && trends
+            ? Promise.race([trends.trending(season).catch(() => null), new Promise<null>((r) => setTimeout(r, TRENDING_BUDGET_MS, null))])
+            : null;
+        const page = await discover(
+          catalog,
+          { ...params, priceMin: cents(priceMin), priceMax: cents(priceMax) },
+          cursor,
+          secret,
+          clientSignal(reply),
+          aiAllowed ? enrich : undefined,
+        );
+        if (enrich && !aiAllowed) page.estimateError = "estimate_budget";
+        const top = await trending;
+        if (top) page.products = markPopular(page.products, top);
+        diag.popular = page.products.filter((p) => p.popular).length;
+        const { upstreamCalls, dropped, estimated, estimateError } = page;
+        Object.assign(diag, { upstreamCalls, returned: page.products.length, dropped, estimated, estimateError });
+        return { products: page.products, cursor: page.cursor, source: "shopify" };
+      } finally {
+        if (aiAllowed && estimateGate) estimateGate.leave();
+      }
     }),
   );
 

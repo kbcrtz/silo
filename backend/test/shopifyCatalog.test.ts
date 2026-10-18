@@ -92,6 +92,47 @@ test("a long Retry-After is not waited out: it fails fast as rate limited", asyn
   assert.equal(calls.length, 1);
 });
 
+test("a 429 without Retry-After backs off 500 ms instead of retrying at once", async () => {
+  const { catalog, waits } = setup([json({}, 429), json(searchResult([trouser]))]);
+  await catalog.search({ query: "x", limit: 10 });
+  assert.deepEqual(waits, [500]);
+});
+
+test("a body that stalls past the timeout is a timeout, not an invalid response", async () => {
+  const catalog = createCatalog({
+    fetch: (async (_: string, init: RequestInit) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            init.signal!.addEventListener("abort", () => controller.error(init.signal!.reason));
+          },
+        }),
+        { status: 200 },
+      )) as unknown as typeof fetch,
+    endpoint: "https://catalog.test",
+    profile: "https://profile.test",
+    country: "US",
+    timeoutMs: 20,
+  });
+  await failsWith(catalog.search({ query: "x", limit: 10 }), "catalog_timeout", 504);
+});
+
+test("time spent queued for a slot counts toward the timeout", async () => {
+  const hang = (signal: AbortSignal) => new Promise<Response>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+  const catalog = createCatalog({
+    fetch: ((_: string, init: RequestInit) => hang(init.signal!)) as typeof fetch,
+    endpoint: "https://catalog.test",
+    profile: "https://profile.test",
+    country: "US",
+    timeoutMs: 30,
+  });
+  const started = performance.now();
+  // Two fill the slots; the third waits in the queue and must still give up near 30 ms, not 60.
+  const results = await Promise.allSettled([1, 2, 3].map(() => catalog.search({ query: "x", limit: 10 })));
+  assert.ok(results.every((r) => r.status === "rejected"));
+  assert.ok(performance.now() - started < 55, `took ${performance.now() - started} ms`);
+});
+
 test("repeated 429s give up after the retry", async () => {
   const { catalog, calls } = setup([json({}, 429), json({}, 429)]);
   await failsWith(catalog.search({ query: "x", limit: 10 }), "catalog_rate_limited", 503, 429);

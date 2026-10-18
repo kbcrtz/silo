@@ -12,7 +12,6 @@ import {
   unitLabel,
   type UnitSystem,
 } from "@/lib/units";
-import type { ShopFor } from "@/store/profile";
 import { useTheme } from "@/theme";
 import { Chip } from "./Chip";
 import { Text } from "./Text";
@@ -21,7 +20,6 @@ type Props = {
   initial: Measurements;
   unitSystem: UnitSystem;
   onUnitSystemChange: (system: UnitSystem) => void;
-  shopFor: ShopFor;
   /** Called on every edit with values in cm / kg. */
   onChange: (values: Measurements) => void;
 };
@@ -34,7 +32,6 @@ export function MeasurementForm({
   initial,
   unitSystem,
   onUnitSystemChange,
-  shopFor,
   onChange,
 }: Props) {
   const t = useTheme();
@@ -74,7 +71,7 @@ export function MeasurementForm({
       </View>
       {MEASUREMENT_TYPES.map((type) => {
         const info = MEASUREMENT_INFO[type];
-        const label = type === "chest" ? chestLabel(shopFor) : info.label;
+        const label = info.label;
         return (
           <View key={type} style={{ gap: t.space(1) }}>
             <View
@@ -111,14 +108,6 @@ export function MeasurementForm({
       })}
     </View>
   );
-}
-
-function chestLabel(shopFor: ShopFor): string {
-  return shopFor === "womens"
-    ? "Bust"
-    : shopFor === "mens"
-      ? "Chest"
-      : "Chest / bust";
 }
 
 function toTexts(

@@ -94,3 +94,12 @@ test("no season, no trending lookup; a failed lookup leaves the feed alone", asy
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json().products.map((p: any) => p.id), [sweater.id, trouser.id]);
 });
+
+test("a slow trending lookup is dropped instead of holding up the feed", async () => {
+  const slow: Trends = { record: async () => {}, trending: () => new Promise(() => {}) };
+  const started = performance.now();
+  const res = await setup({ trends: slow }).call("GET", "/catalog/discover?category=tops&season=soft-autumn");
+  assert.equal(res.statusCode, 200);
+  assert.ok(performance.now() - started < 3000);
+  assert.ok(res.json().products.every((p: any) => p.popular === undefined));
+});

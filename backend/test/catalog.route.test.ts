@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp } from "../src/app.ts";
 import { HttpError } from "../src/errors.ts";
-import { createGate } from "../src/guard.ts";
+import { createGate, type Gate } from "../src/guard.ts";
 import type { Enrich } from "../src/services/listingInsights.ts";
 import type { Catalog, SearchInput } from "../src/services/shopifyCatalog.ts";
 
@@ -16,7 +16,7 @@ const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis
 const softAutumn = "palette=%23B07D62,%239CAF88,%23C9A66B,%237E8C6A&neutrals=%23EDE4D8,%235C5046";
 
 /** A catalog that answers every search with `products` and a cursor named after the query. */
-function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean; enrich?: Enrich } = {}) {
+function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean; enrich?: Enrich; estimateGate?: Gate } = {}) {
   const searches: SearchInput[] = [];
   const lookups: { id: string; selected?: unknown }[] = [];
   const catalog: Catalog = {
@@ -47,6 +47,7 @@ function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown
     secret: SECRET,
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     enrich: opts.enrich,
+    estimateGate: opts.estimateGate,
   });
   const get = (url: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${SECRET}` } });
   return { get, searches, lookups, logs };
@@ -232,4 +233,16 @@ test("if the AI fails the page still loads, without estimates", async () => {
   assert.equal(res.statusCode, 200);
   assert.ok(res.json().products.every((p: any) => p.estimate === undefined));
   assert.equal(logs.find((l) => l.catalog)?.catalog.estimateError, "gemini_timeout");
+});
+
+test("past the per-device budget, pages load without spending Gemini", async () => {
+  let calls = 0;
+  const enrich: Enrich = async (facts) => (calls++, facts.map(() => null));
+  const { get, logs } = setup({ enrich, estimateGate: createGate({ windowMs: 60_000, max: 1, concurrency: 4 }) });
+  assert.equal((await get("/catalog/discover?category=tops")).statusCode, 200);
+  const second = await get("/catalog/discover?category=tops");
+  assert.equal(second.statusCode, 200);
+  assert.equal(second.json().products.length, 2);
+  assert.equal(calls, 1);
+  assert.equal(logs.filter((l) => l.catalog).at(-1).catalog.estimateError, "estimate_budget");
 });

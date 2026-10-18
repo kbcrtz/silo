@@ -118,32 +118,6 @@ export async function discoverProducts(
   return res.json();
 }
 
-/**
- * Full listing for the item screen. `selected` is the card's own option
- * choices, so the detail opens on the variant the card showed.
- *
- * Backend contract: GET {API_URL}/catalog/product?id&selected=<JSON>
- * -> { product }; 404 { error: "product_not_found" }
- */
-export async function getCatalogProduct(
-  id: string,
-  selected?: Choice[],
-  signal?: AbortSignal,
-): Promise<CatalogProduct> {
-  if (USE_MOCKS) {
-    const item = CATALOG.find((i) => `demo:${i.id}` === id);
-    if (!item) throw new Error("404 product_not_found");
-    return toDemoProduct(item);
-  }
-  const query = new URLSearchParams({ id });
-  if (selected?.length) query.set("selected", JSON.stringify(selected));
-  const res = await fetch(`${API_URL}/catalog/product?${query}`, {
-    headers: apiHeaders(),
-    signal,
-  }).then(expectOk);
-  return (await res.json()).product;
-}
-
 // Mock: the bundled demo catalog as one page, labeled "demo".
 const DEMO_CATEGORY: Record<CatalogItem["category"], FeedCategory> = {
   top: "tops",

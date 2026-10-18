@@ -81,7 +81,9 @@ class Retryable extends Error {
 }
 
 function retryAfter(res: Response): number | undefined {
-  const seconds = Number(res.headers.get("retry-after"));
+  const header = res.headers.get("retry-after");
+  if (!header?.trim()) return undefined; // Number(null) is 0, which would retry at once
+  const seconds = Number(header);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : undefined;
 }
 
@@ -89,8 +91,7 @@ export function createCatalog(cfg: CatalogConfig): Catalog {
   const sleep = cfg.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const gate = limiter(MAX_IN_FLIGHT);
 
-  async function attempt(body: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
-    const timeout = AbortSignal.timeout(cfg.timeoutMs);
+  async function attempt(body: string, timeout: AbortSignal, signal?: AbortSignal): Promise<Record<string, unknown>> {
     let res: Response;
     let parsed: unknown;
     try {
@@ -102,7 +103,10 @@ export function createCatalog(cfg: CatalogConfig): Catalog {
       });
       if (res.status === 429) throw new Retryable(429, retryAfter(res));
       if (res.status >= 500) throw new Retryable(res.status);
-      parsed = await res.json().catch(() => undefined);
+      parsed = await res.json().catch((e) => {
+        if (signal?.aborted || timeout.aborted) throw e; // a stalled body is a timeout, not bad JSON
+        return undefined;
+      });
     } catch (e) {
       if (signal?.aborted) throw new HttpError("client_closed", 499);
       if (timeout.aborted) throw new HttpError("catalog_timeout", 504);
@@ -123,9 +127,11 @@ export function createCatalog(cfg: CatalogConfig): Catalog {
       id: 1,
       params: { name, arguments: { meta: { "ucp-agent": { profile: cfg.profile } }, catalog } },
     });
+    // One clock for the whole call: time queued behind the limiter and retries count.
+    const timeout = AbortSignal.timeout(cfg.timeoutMs);
     for (let tries = 1; ; tries++) {
       try {
-        return await gate(() => attempt(body, signal));
+        return await gate(() => attempt(body, timeout, signal));
       } catch (e) {
         if (!(e instanceof Retryable)) throw e;
         const tooLong = (e.retryAfterMs ?? 0) > MAX_RETRY_AFTER_MS;

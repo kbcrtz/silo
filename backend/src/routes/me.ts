@@ -11,7 +11,14 @@ const SAVED_LIMIT = 256 * 1024;
 const Snapshot = z.object({ data: z.record(z.string(), z.unknown()) });
 const Measurements = z.object({
   entries: z
-    .array(z.object({ type: z.enum(MEASUREMENT_TYPES), value: z.number().positive().max(1000), measuredAt: z.iso.datetime() }))
+    .array(
+      z.object({
+        type: z.enum(MEASUREMENT_TYPES),
+        value: z.number().positive().max(1000),
+        // Bounded: every distinct week becomes a hypertable chunk.
+        measuredAt: z.iso.datetime().refine((at) => at >= "2000-01-01" && Date.parse(at) < Date.now() + 86_400_000),
+      }),
+    )
     .max(500),
 });
 const DeviceId = z.uuid();
@@ -40,7 +47,7 @@ const Events = z.object({
 /**
  * The app's on-device data, backed up to Postgres (Tiger Cloud) per anonymous
  * device id sent as x-device-id: GET /me, PUT /me/profile, PUT /me/saved,
- * POST /me/measurements. Selfie photos stay on the phone.
+ * POST /me/measurements, DELETE /me (reset), and POST /events. Selfie photos stay on the phone.
  */
 export async function meRoute(app: FastifyInstance, { userData, trends }: { userData?: UserData; trends?: Trends }) {
   async function handle<S>(
@@ -84,7 +91,13 @@ export async function meRoute(app: FastifyInstance, { userData, trends }: { user
     }),
   );
 
-  app.put("/me/profile", (req, reply) =>
+  app.delete("/me", (req, reply) =>
+    handle("delete", userData, req, reply, async (data, device) => {
+      await data.deleteAll(device);
+    }),
+  );
+
+    app.put("/me/profile", (req, reply) =>
     handle("profile", userData, req, reply, async (data, device) => {
       await data.putProfile(device, snapshot(req.body, PROFILE_LIMIT));
     }),

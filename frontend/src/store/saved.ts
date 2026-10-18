@@ -39,7 +39,10 @@ const front = (ids: string[], id: string) => [
 /** `items` plus a bookmark for `id` when it's a live product. */
 function bookmark(items: Record<string, CatalogItem>, id: string) {
   const item = findItem(id);
-  return item?.source ? { ...items, [id]: item } : items;
+  // "Popular" is this week's; a bookmark outlives it.
+  return item?.source
+    ? { ...items, [id]: { ...item, popular: undefined } }
+    : items;
 }
 
 function unbookmark(items: Record<string, CatalogItem>, id: string) {

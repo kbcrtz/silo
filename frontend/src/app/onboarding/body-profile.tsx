@@ -28,7 +28,7 @@ const FIELDS: { type: MeasurementType; label: string; hint: string }[] = [
   { type: "height", label: "Height", hint: "Head to floor" },
   { type: "weight", label: "Weight", hint: "Current body weight" },
   { type: "armLength", label: "Arm length", hint: "Shoulder to wrist" },
-  { type: "inseam", label: "Leg length", hint: "Hip to ankle" },
+  { type: "inseam", label: "Leg length", hint: "Crotch to floor" },
   { type: "hips", label: "Hips", hint: "Fullest point" },
   { type: "waist", label: "Waist", hint: "Natural waistline" },
   { type: "chest", label: "Chest", hint: "Around upper torso" },
@@ -257,7 +257,8 @@ export default function BodyProfile() {
           { color: BRAND.inkMuted, textAlign: "center", marginTop: 16 },
         ]}
       >
-        Your measurements stay on this device.
+        {"Saved on this device and backed up to Silo's server. "}
+        Your selfie stays on your phone.
       </Text>
     </OnboardingScreen>
   );

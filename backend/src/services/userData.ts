@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 
-export const MEASUREMENT_TYPES = ["height", "weight", "chest", "waist", "hips", "inseam", "armLength"] as const;
+// Mirrors frontend/src/lib/measurements.ts MeasurementType.
+export const MEASUREMENT_TYPES = ["height", "weight", "chest", "bust", "waist", "hips", "inseam", "armLength"] as const;
 export type Measurement = { type: (typeof MEASUREMENT_TYPES)[number]; value: number; measuredAt: string };
 
 /**
@@ -14,6 +15,8 @@ export type UserData = {
   putSaved(deviceId: string, data: Record<string, unknown>): Promise<void>;
   /** Returns how many were new; resending the same entry is a no-op. */
   addMeasurements(deviceId: string, entries: Measurement[]): Promise<number>;
+  /** Everything stored for the device, events included: the app's "Reset" means it. */
+  deleteAll(deviceId: string): Promise<void>;
 };
 
 /** Creates the tables if missing. Measurements are a TimescaleDB hypertable on measured_at. */
@@ -44,12 +47,13 @@ export function createUserData(sql: postgres.Sql): UserData {
     async get(deviceId) {
       const [profile] = await sql<{ data: unknown }[]>`SELECT data FROM profiles WHERE device_id = ${deviceId}`;
       const [saved] = await sql<{ data: unknown }[]>`SELECT data FROM saved WHERE device_id = ${deviceId}`;
+      // The newest 1000, oldest first: the app reads the latest of each type.
       const rows = await sql<{ type: Measurement["type"]; value: number; measured_at: Date }[]>`
-        SELECT type, value, measured_at FROM measurements WHERE device_id = ${deviceId} ORDER BY measured_at LIMIT 1000`;
+        SELECT type, value, measured_at FROM measurements WHERE device_id = ${deviceId} ORDER BY measured_at DESC LIMIT 1000`;
       return {
         profile: profile?.data ?? null,
         saved: saved?.data ?? null,
-        measurements: rows.map((r) => ({ type: r.type, value: r.value, measuredAt: r.measured_at.toISOString() })),
+        measurements: rows.reverse().map((r) => ({ type: r.type, value: r.value, measuredAt: r.measured_at.toISOString() })),
       };
     },
     async putProfile(deviceId, data) {
@@ -59,6 +63,14 @@ export function createUserData(sql: postgres.Sql): UserData {
     async putSaved(deviceId, data) {
       await sql`INSERT INTO saved (device_id, data) VALUES (${deviceId}, ${json(data)})
         ON CONFLICT (device_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`;
+    },
+    async deleteAll(deviceId) {
+      await sql.begin(async (tx) => {
+        await tx`DELETE FROM profiles WHERE device_id = ${deviceId}`;
+        await tx`DELETE FROM saved WHERE device_id = ${deviceId}`;
+        await tx`DELETE FROM measurements WHERE device_id = ${deviceId}`;
+        await tx`DELETE FROM events WHERE device_id = ${deviceId}`;
+      });
     },
     async addMeasurements(deviceId, entries) {
       if (!entries.length) return 0;

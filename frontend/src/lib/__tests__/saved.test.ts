@@ -71,6 +71,13 @@ describe("saved live products", () => {
     expect(useSaved.getState().items[other.id]).toEqual(other);
   });
 
+  it("doesn't keep this week's Popular mark in a bookmark", () => {
+    const item = { ...live("shopify-POP"), popular: true };
+    rememberItems([item]);
+    useSaved.getState().toggle(item.id);
+    expect(useSaved.getState().items[item.id].popular).toBeUndefined();
+  });
+
   it("doesn't bookmark bundled demo items; they're always available", () => {
     useSaved.getState().toggle("w-01");
     expect(useSaved.getState().items).toEqual({});

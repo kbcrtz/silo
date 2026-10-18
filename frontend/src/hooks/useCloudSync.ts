@@ -1,6 +1,18 @@
 import { useEffect } from "react";
-import { backupMeasurements, backupProfile, backupSaved } from "@/api/userData";
-import { measurementRows, profileSnapshot, savedSnapshot } from "@/lib/cloud";
+import {
+  backupMeasurements,
+  backupProfile,
+  backupSaved,
+  fetchBackup,
+} from "@/api/userData";
+import { rememberItems, type CatalogItem } from "@/data/catalog";
+import {
+  entriesFromBackup,
+  isEmptyInstall,
+  measurementRows,
+  profileSnapshot,
+  savedSnapshot,
+} from "@/lib/cloud";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
@@ -18,38 +30,76 @@ function debounced(run: () => Promise<unknown>) {
   return { fire, cancel: () => clearTimeout(timer) };
 }
 
+/** On an empty install, puts back what the server has for this phone's device id. */
+async function restore() {
+  const empty = isEmptyInstall(
+    useProfile.getState(),
+    useMeasurements.getState().entries.length,
+    useSaved.getState().itemIds.length,
+  );
+  const backup = empty ? await fetchBackup() : null;
+  if (!backup) return;
+  if (backup.profile) useProfile.setState(backup.profile);
+  if (backup.saved) {
+    useSaved.setState(backup.saved);
+    rememberItems(
+      Object.values((backup.saved.items ?? {}) as Record<string, CatalogItem>),
+    );
+  }
+  if (backup.measurements.length)
+    useMeasurements
+      .getState()
+      .replaceAll(entriesFromBackup(backup.measurements));
+}
+
 /**
- * Once the stores have loaded, backs them up now and after every change:
- * profile (no selfie), saved items, measurements.
+ * Once the stores have loaded: restores an empty install from the server,
+ * then backs everything up now and after every change (profile without the
+ * selfie, saved items, measurements). Restoring first keeps an empty phone
+ * from overwriting the server copy.
  */
 export function useCloudSync(hydrated: boolean) {
   useEffect(() => {
     if (!hydrated) return;
-    const jobs = [
-      [
-        useProfile,
-        debounced(() => backupProfile(profileSnapshot(useProfile.getState()))),
-      ],
-      [
-        useSaved,
-        debounced(() => backupSaved(savedSnapshot(useSaved.getState()))),
-      ],
-      [
-        useMeasurements,
-        debounced(() =>
-          backupMeasurements(
-            measurementRows(useMeasurements.getState().entries),
-          ),
-        ),
-      ],
-    ] as const;
-    const unsubs = jobs.map(([store, job]) => {
-      job.fire();
-      return store.subscribe(job.fire);
-    });
+    let stopped = false;
+    let stop = () => {};
+    // A failed restore (offline) just starts from the phone's state.
+    restore()
+      .catch(() => {})
+      .then(() => {
+        if (stopped) return;
+        const jobs = [
+          [
+            useProfile,
+            debounced(() =>
+              backupProfile(profileSnapshot(useProfile.getState())),
+            ),
+          ],
+          [
+            useSaved,
+            debounced(() => backupSaved(savedSnapshot(useSaved.getState()))),
+          ],
+          [
+            useMeasurements,
+            debounced(() =>
+              backupMeasurements(
+                measurementRows(useMeasurements.getState().entries),
+              ),
+            ),
+          ],
+        ] as const;
+        const unsubs = jobs.map(([store, job]) => {
+          job.fire();
+          return store.subscribe(job.fire);
+        });
+        stop = () => {
+          unsubs.forEach((u) => u());
+          jobs.forEach(([, job]) => job.cancel());
+        };
+      });
     return () => {
-      unsubs.forEach((u) => u());
-      jobs.forEach(([, job]) => job.cancel());
+      stopped = true;
+      stop();
     };
   }, [hydrated]);
 }

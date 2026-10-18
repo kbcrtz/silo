@@ -23,7 +23,6 @@ export default function MeasurementsScreen() {
   const entries = useMeasurements((s) => s.entries);
   const latest = useMemo(() => latestMeasurements(entries), [entries]);
   const unitSystem = useProfile((s) => s.unitSystem);
-  const shopFor = useProfile((s) => s.shopFor);
   const setProfile = useProfile((s) => s.set);
   const [draft, setDraft] = useState<Measurements>(latest);
 
@@ -38,7 +37,6 @@ export default function MeasurementsScreen() {
         initial={latest}
         unitSystem={unitSystem}
         onUnitSystemChange={(u) => setProfile({ unitSystem: u })}
-        shopFor={shopFor}
         onChange={setDraft}
       />
 

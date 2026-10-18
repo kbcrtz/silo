@@ -1,5 +1,5 @@
 import type { CatalogItem } from "@/data/catalog";
-import type { MeasurementEntry } from "./measurements";
+import type { MeasurementEntry, MeasurementType } from "./measurements";
 
 type State = Record<string, unknown>;
 
@@ -57,4 +57,32 @@ export function eventFor(
     silhouette: item.silhouette,
     ...(item.colors[0] && { color: item.colors[0] }),
   };
+}
+
+/**
+ * Only an install with nothing on it is restored from the backup: "Redo
+ * onboarding" keeps the season and history, and must never be overwritten.
+ */
+export function isEmptyInstall(
+  profile: { onboarded: boolean; colorProfile?: unknown },
+  measurementCount: number,
+  savedCount: number,
+): boolean {
+  return (
+    !profile.onboarded &&
+    !profile.colorProfile &&
+    !measurementCount &&
+    !savedCount
+  );
+}
+
+export function entriesFromBackup(
+  rows: { type: string; value: number; measuredAt: string }[],
+): MeasurementEntry[] {
+  return rows.map(({ type, value, measuredAt }) => ({
+    id: `${type}-${measuredAt}`,
+    type: type as MeasurementType,
+    value,
+    measuredAt,
+  }));
 }
