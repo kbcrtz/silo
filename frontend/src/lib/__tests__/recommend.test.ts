@@ -176,7 +176,24 @@ describe("mannequin", () => {
     expect(patternBands(box, "print", 4)).toEqual([]);
   });
 
-  it("drops the hem lower for longer lengths", () => {
+  it("keeps the hips below the waist, even at the longest legs", () => {
+    for (const shopFor of ["womens", "mens"] as const) {
+      const L = landmarks({ height: 165, inseam: 100 }, shopFor);
+      expect(L.y.hip).toBeGreaterThan(L.y.waist + 0.03 * L.H);
+    }
+  });
+
+  it("weight widens the figure when girths aren't measured, never over real ones", () => {
+    const light = landmarks({ height: 170, weight: 55 }, "womens");
+    const heavy = landmarks({ height: 170, weight: 95 }, "womens");
+    expect(heavy.half.waist).toBeGreaterThan(light.half.waist);
+    const measured = { height: 170, chest: 90, waist: 72, hips: 98 };
+    expect(landmarks({ ...measured, weight: 95 }, "womens").half.waist).toBe(
+      landmarks({ ...measured, weight: 55 }, "womens").half.waist,
+    );
+  });
+
+    it("drops the hem lower for longer lengths", () => {
     expect(hemY(L, "waist")).toBeLessThan(hemY(L, "hip"));
     expect(hemY(L, "hip")).toBeLessThan(hemY(L, "knee"));
     expect(hemY(L, "knee")).toBeLessThan(hemY(L, "midi"));

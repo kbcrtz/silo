@@ -113,14 +113,22 @@ export function landmarks(m: Measurements, shopFor: ShopFor) {
   // the rest still gets a tall figure rather than an average one.
   const k = H / base.height;
   const get = (key: keyof typeof base) => m[key] ?? base[key] * k;
+  // Unmeasured girths also follow weight against the average for this height (weight grows with height squared).
+  const build = m.weight
+    ? clamp(Math.sqrt(m.weight / (base.weight * k * k)), 0.8, 1.35)
+    : 1;
+  const girth = (key: "chest" | "waist" | "hips") =>
+    m[key] ?? base[key] * k * build;
 
   // Chest (around the upper torso) sets the shoulders and under the arms; bust (fullest point) the bust line.
-  const chest = m.chest ?? m.bust ?? base.chest * k;
+  const chest = m.chest ?? m.bust ?? girth("chest");
   const bust = m.bust ?? chest;
-  const waist = get("waist");
-  const hips = get("hips");
+  const waist = girth("waist");
+  const hips = girth("hips");
 
-  const crotch = clamp(H - get("inseam"), 0.44 * H, 0.6 * H);
+  const waistY = (mens ? 0.39 : 0.38) * H;
+  // The hip line (crotch - 0.06 H) has to stay clear of the waist, or the two merge into one ridge.
+  const crotch = clamp(H - get("inseam"), waistY + 0.1 * H, 0.6 * H);
   const ankle = 0.955 * H;
   const knee = lerp(crotch, ankle, 0.47);
   const y = {
@@ -130,7 +138,7 @@ export function landmarks(m: Measurements, shopFor: ShopFor) {
     armpit: 0.245 * H,
     chest: 0.272 * H,
     underbust: 0.31 * H,
-    waist: (mens ? 0.39 : 0.38) * H,
+    waist: waistY,
     hip: crotch - 0.06 * H,
     crotch,
     knee,

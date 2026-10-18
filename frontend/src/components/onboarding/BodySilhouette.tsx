@@ -5,7 +5,6 @@ import {
   Path,
   Skia,
   usePathInterpolation,
-  type SkPath,
 } from "@shopify/react-native-skia";
 import { useEffect, useMemo, useState } from "react";
 import { useSharedValue, withTiming } from "react-native-reanimated";
@@ -32,8 +31,8 @@ export function BodySilhouette({
   const width = height * 0.5;
   const shape = useMemo(() => {
     const L = landmarks(measurements, shopFor);
-    // Drawn against a 2 m frame rather than filled, so taller users look taller.
-    const scale = height / 200;
+    // Drawn against a 2 m frame rather than filled, so taller users look taller; past 2 m the frame grows so the head stays in.
+    const scale = height / Math.max(200, L.H + 2);
     const body = bodyOutlines(L);
     const path = smooth(body.silhouette, scale, true);
     const headR = 0.052 * L.H * scale;
@@ -55,17 +54,31 @@ export function BodySilhouette({
     };
   }, [measurements, shopFor, height]);
 
-  const [pair, setPair] = useState<{ from: SkPath; to: SkPath }>(() => ({
-    from: shape.path,
-    to: shape.path,
-  }));
+  // The outline and its guide lines ease together, so the dashes never run ahead of the body.
+  const [pair, setPair] = useState(() => ({ from: shape, to: shape }));
   const progress = useSharedValue(1);
   useEffect(() => {
-    setPair((p) => (p.to === shape.path ? p : { from: p.to, to: shape.path }));
+    setPair((p) => (p.to === shape ? p : { from: p.to, to: shape }));
     progress.value = 0;
     progress.value = withTiming(1, { duration: 380 });
-  }, [shape.path, progress]);
-  const path = usePathInterpolation(progress, [0, 1], [pair.from, pair.to]);
+  }, [shape, progress]);
+  const range = [0, 1];
+  const path = usePathInterpolation(progress, range, [
+    pair.from.path,
+    pair.to.path,
+  ]);
+  const waist = usePathInterpolation(progress, range, [
+    pair.from.waist,
+    pair.to.waist,
+  ]);
+  const hip = usePathInterpolation(progress, range, [
+    pair.from.hip,
+    pair.to.hip,
+  ]);
+  const legs = usePathInterpolation(progress, range, [
+    pair.from.legs,
+    pair.to.legs,
+  ]);
 
   return (
     <Canvas style={{ width, height }}>
@@ -73,7 +86,7 @@ export function BodySilhouette({
         transform={[{ translateX: width / 2 }, { translateY: shape.offset }]}
       >
         <Path path={path} color={BRAND.ink} />
-        {[shape.waist, shape.hip, shape.legs].map((g, i) => (
+        {[waist, hip, legs].map((g, i) => (
           <Path
             key={i}
             path={g}

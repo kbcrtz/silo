@@ -165,8 +165,8 @@ export function PassportFront({
               />
               <Circle
                 cx={photoRect.x + 15 * u}
-                cy={photoRect.y + 41 * u}
-                r={16 * u}
+                cy={photoRect.y + 37 * u}
+                r={14 * u}
               />
             </Group>
           )}
