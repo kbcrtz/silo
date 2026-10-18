@@ -7,6 +7,7 @@ import { Chip } from "@/components/onboarding/Controls";
 import { Header, stepBadge } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
+import { analysisErrorMessage } from "@/lib/analysisError";
 import { combineTraits, rankSeasons } from "@/lib/colorAnalysis";
 import { photoUri } from "@/lib/photos";
 import {
@@ -89,11 +90,9 @@ export default function Questions() {
         },
       });
       router.push("/onboarding/results");
-    } catch {
-      Alert.alert(
-        "Couldn't read your photo",
-        "Check your connection and try again, or retake the selfie.",
-      );
+    } catch (e) {
+      const { title, body } = analysisErrorMessage(e);
+      Alert.alert(title, body);
     } finally {
       setBusy(false);
     }
