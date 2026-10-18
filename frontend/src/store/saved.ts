@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { findItem, rememberItems, type CatalogItem } from "@/data/catalog";
 import { storage } from "./storage";
 
 export type SavedList = {
@@ -14,6 +15,12 @@ type SavedState = {
   /** Every saved item, newest first. This is the "All saved" list. */
   itemIds: string[];
   lists: SavedList[];
+  /**
+   * Bookmarks of saved live Shopify products (title, store link, image link,
+   * cut), so saved lists still open them after a restart. Only items the user
+   * saved; the feed itself is never stored.
+   */
+  items: Record<string, CatalogItem>;
 
   toggle: (itemId: string) => void;
   /** Creates the list and returns its id. */
@@ -29,11 +36,23 @@ const front = (ids: string[], id: string) => [
   ...ids.filter((x) => x !== id),
 ];
 
+/** `items` plus a bookmark for `id` when it's a live product. */
+function bookmark(items: Record<string, CatalogItem>, id: string) {
+  const item = findItem(id);
+  return item?.source ? { ...items, [id]: item } : items;
+}
+
+function unbookmark(items: Record<string, CatalogItem>, id: string) {
+  const { [id]: _, ...rest } = items;
+  return rest;
+}
+
 export const useSaved = create<SavedState>()(
   persist(
     (set) => ({
       itemIds: [],
       lists: [],
+      items: {},
       toggle: (itemId) =>
         set((s) =>
           s.itemIds.includes(itemId)
@@ -44,8 +63,12 @@ export const useSaved = create<SavedState>()(
                   ...l,
                   itemIds: l.itemIds.filter((x) => x !== itemId),
                 })),
+                items: unbookmark(s.items, itemId),
               }
-            : { itemIds: front(s.itemIds, itemId) },
+            : {
+                itemIds: front(s.itemIds, itemId),
+                items: bookmark(s.items, itemId),
+              },
         ),
       createList: (name, firstItemId) => {
         const id = `list-${Date.now().toString(36)}`;
@@ -60,6 +83,7 @@ export const useSaved = create<SavedState>()(
             },
           ],
           itemIds: firstItemId ? front(s.itemIds, firstItemId) : s.itemIds,
+          items: firstItemId ? bookmark(s.items, firstItemId) : s.items,
         }));
         return id;
       },
@@ -83,12 +107,19 @@ export const useSaved = create<SavedState>()(
               inList || s.itemIds.includes(itemId)
                 ? s.itemIds
                 : front(s.itemIds, itemId),
+            items: inList ? s.items : bookmark(s.items, itemId),
           };
         }),
       deleteList: (listId) =>
         set((s) => ({ lists: s.lists.filter((l) => l.id !== listId) })),
-      clear: () => set({ itemIds: [], lists: [] }),
+      clear: () => set({ itemIds: [], lists: [], items: {} }),
     }),
-    { name: "silo.saved", storage },
+    {
+      name: "silo.saved",
+      storage,
+      // Make bookmarked live products findable again after a restart.
+      onRehydrateStorage: () => (state) =>
+        rememberItems(Object.values(state?.items ?? {})),
+    },
   ),
 );

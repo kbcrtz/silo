@@ -434,8 +434,8 @@ export function shopUrl(item: CatalogItem): string {
   );
 }
 
-// Live listings seen this session, so the item sheet and saved lists can show
-// them. Memory only: Shopify's catalog terms forbid storing results.
+// Live listings seen this session, plus saved bookmarks restored at launch
+// (store/saved), so the item sheet and saved lists can show them.
 const LIVE = new Map<string, CatalogItem>();
 
 export function rememberItems(items: CatalogItem[]) {

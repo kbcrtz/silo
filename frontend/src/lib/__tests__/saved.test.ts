@@ -1,3 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { findItem, rememberItems, type CatalogItem } from "@/data/catalog";
 import { useSaved } from "@/store/saved";
 
 describe("saved store", () => {
@@ -24,5 +26,67 @@ describe("saved store", () => {
     expect(useSaved.getState().lists[0].itemIds).toEqual([]);
     // Taking it out of a list keeps it saved.
     expect(useSaved.getState().itemIds).toEqual(["c"]);
+  });
+});
+
+describe("saved live products", () => {
+  beforeEach(() => useSaved.getState().clear());
+
+  const live = (id: string): CatalogItem => ({
+    id,
+    name: "Linen Overshirt",
+    brand: "Tide",
+    cut: "unisex",
+    colors: ["#9CAF88"],
+    price: 58,
+    priceLabel: "$58.00",
+    aspect: 1.25,
+    sizeChartId: "",
+    imageUrl: "https://cdn.shopify.com/overshirt.jpg",
+    productUrl: "https://tide.example/products/linen-overshirt",
+    source: "shopify",
+    category: "outerwear",
+    silhouette: "relaxed",
+    sleeve: "long",
+    length: "hip",
+  });
+
+  it("keeps a bookmark of a saved live product, and drops it when unsaved", () => {
+    const item = live("shopify-SAVE1");
+    rememberItems([item]);
+    useSaved.getState().toggle(item.id);
+    expect(useSaved.getState().items[item.id]).toEqual(item);
+    useSaved.getState().toggle(item.id);
+    expect(useSaved.getState().items[item.id]).toBeUndefined();
+  });
+
+  it("bookmarks a live product added through a list", () => {
+    const item = live("shopify-SAVE2");
+    rememberItems([item]);
+    const list = useSaved.getState().createList("Fall", item.id);
+    expect(useSaved.getState().items[item.id]).toEqual(item);
+    const other = live("shopify-SAVE3");
+    rememberItems([other]);
+    useSaved.getState().toggleInList(list, other.id);
+    expect(useSaved.getState().items[other.id]).toEqual(other);
+  });
+
+  it("doesn't bookmark bundled demo items; they're always available", () => {
+    useSaved.getState().toggle("w-01");
+    expect(useSaved.getState().items).toEqual({});
+  });
+
+  it("after a restart, saved live products can still be opened", async () => {
+    const item = live("shopify-AFTER-RESTART");
+    await AsyncStorage.setItem(
+      "silo.saved",
+      JSON.stringify({
+        state: { itemIds: [item.id], lists: [], items: { [item.id]: item } },
+        version: 0,
+      }),
+    );
+    expect(findItem(item.id)).toBeUndefined();
+    await useSaved.persist.rehydrate();
+    expect(findItem(item.id)).toEqual(item);
   });
 });
