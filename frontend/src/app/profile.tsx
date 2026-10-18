@@ -1,4 +1,3 @@
-import { Image } from "expo-image";
 import { Link } from "expo-router";
 import { useMemo } from "react";
 import {
@@ -24,17 +23,15 @@ import {
   MEASUREMENT_INFO,
   MEASUREMENT_TYPES,
 } from "@/lib/measurements";
-import { persistPhoto, photoUri } from "@/lib/photos";
-import { pickPhoto } from "@/lib/pickPhoto";
 import { formatMeasurement } from "@/lib/units";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
-import { useTryOn } from "@/store/tryOn";
+import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 
 const FIT_PREFERENCES: FitPreference[] = ["slim", "regular", "relaxed"];
 
-export default function Me() {
+export default function Profile() {
   const t = useTheme();
   const profile = useProfile();
   const entries = useMeasurements((s) => s.entries);
@@ -43,11 +40,6 @@ export default function Me() {
   const season = t.season;
   const passport = usePassportData();
   const { width } = useWindowDimensions();
-
-  const replaceBodyPhoto = async () => {
-    const uri = await pickPhoto("library");
-    if (uri) profile.set({ bodyPhoto: persistPhoto(uri, "body") });
-  };
 
   const redoOnboarding = () =>
     Alert.alert("Redo onboarding?", "Your measurement history is kept.", [
@@ -58,7 +50,7 @@ export default function Me() {
   const resetApp = () =>
     Alert.alert(
       "Reset Silo?",
-      "Clears your profile, measurements and try-ons.",
+      "Clears your profile, measurements and saved items.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -66,7 +58,7 @@ export default function Me() {
           style: "destructive",
           onPress: () => {
             useMeasurements.getState().replaceAll([]);
-            useTryOn.getState().clear();
+            useSaved.getState().clear();
             profile.reset();
           },
         },
@@ -74,8 +66,8 @@ export default function Me() {
     );
 
   return (
-    <Screen>
-      <Text variant="title">Me</Text>
+    <Screen edges={[]}>
+      <Text variant="title">Profile</Text>
 
       {passport && season ? (
         <View style={{ gap: t.space(3), alignItems: "center" }}>
@@ -191,26 +183,6 @@ export default function Me() {
             />
           ))}
         </View>
-      </Card>
-
-      <Card>
-        <Text variant="caption" tone="muted">
-          TRY-ON PHOTO
-        </Text>
-        {profile.bodyPhoto ? (
-          <Image
-            source={photoUri(profile.bodyPhoto)}
-            style={{ width: 120, height: 160, borderRadius: t.radius.md }}
-            contentFit="cover"
-          />
-        ) : (
-          <Text tone="muted">No body photo yet. Try-on needs one.</Text>
-        )}
-        <Button
-          variant="secondary"
-          label={profile.bodyPhoto ? "Replace photo" : "Add photo"}
-          onPress={replaceBodyPhoto}
-        />
       </Card>
 
       <View style={{ gap: t.space(2), marginTop: t.space(2) }}>

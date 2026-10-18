@@ -23,7 +23,6 @@ type ProfileState = {
   displayName?: string;
   /** File names from lib/photos, not uris. */
   selfiePhoto?: string;
-  bodyPhoto?: string;
   photoTraits?: PhotoTraits;
   quizAnswers: QuizAnswers;
   colorProfile?: ColorProfile;
@@ -69,7 +68,6 @@ export const useProfile = create<ProfileState>()(
           ...initial,
           displayName: undefined,
           selfiePhoto: undefined,
-          bodyPhoto: undefined,
           photoTraits: undefined,
           colorProfile: undefined,
         }),

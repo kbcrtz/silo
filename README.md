@@ -1,6 +1,6 @@
 # Silo
 
-Color analysis, body measurements and fit, a feed ranked by your palette, and AI try-on. iOS app plus its backend.
+Color analysis, body measurements and fit, a feed ranked by your palette and shape, mannequin try-on, and saved lists. iOS app plus its backend.
 
 | Folder | What | Start here |
 | --- | --- | --- |

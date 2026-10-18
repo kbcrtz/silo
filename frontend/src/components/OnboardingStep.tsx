@@ -12,7 +12,7 @@ export const ONBOARDING_STEPS = [
   "season",
   "measurements",
   "body-shape",
-  "body-photo",
+  "passport",
 ] as const;
 
 type Props = {

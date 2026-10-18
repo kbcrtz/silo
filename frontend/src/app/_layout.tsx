@@ -3,15 +3,17 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
+import { useSaved } from "@/store/saved";
 import { useHydrated } from "@/store/storage";
-import { usePollPendingJobs, useTryOn } from "@/store/tryOn";
 import { useTheme } from "@/theme";
 
+/** Pushed screens show only the back button; they title themselves. */
+const pushed = { headerShown: true, title: "" };
+
 export default function RootLayout() {
-  const hydrated = useHydrated([useProfile, useMeasurements, useTryOn]);
+  const hydrated = useHydrated([useProfile, useMeasurements, useSaved]);
   const onboarded = useProfile((s) => s.onboarded);
   const t = useTheme();
-  usePollPendingJobs();
 
   // Rendering before hydration would flash onboarding for returning users.
   if (!hydrated) return null;
@@ -34,18 +36,24 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
         <Stack.Protected guard={onboarded}>
-          <Stack.Screen name="(tabs)" />
+          {/* One home screen; everything else opens from its top bar. */}
+          <Stack.Screen name="index" />
           <Stack.Screen
             name="item/[id]"
-            options={{ headerShown: true, title: "" }}
+            options={{
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.78, 1],
+              sheetGrabberVisible: true,
+              sheetCornerRadius: 28,
+              contentStyle: { backgroundColor: t.colors.bg },
+            }}
           />
+          <Stack.Screen name="saved/index" options={pushed} />
+          <Stack.Screen name="saved/[id]" options={pushed} />
+          <Stack.Screen name="profile" options={pushed} />
           <Stack.Screen
             name="measurements"
             options={{ headerShown: true, title: "Measurements" }}
-          />
-          <Stack.Screen
-            name="result/[id]"
-            options={{ presentation: "fullScreenModal" }}
           />
         </Stack.Protected>
       </Stack>

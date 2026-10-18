@@ -1,8 +1,8 @@
 # Silo app
 
-iOS app (Expo SDK 55, expo-router) for color analysis, body measurements and fit, a Pinterest-style feed ranked by your palette, and AI try-on.
+iOS app (Expo SDK 55, expo-router) for color analysis, body measurements and fit, a Pinterest-style feed ranked by your palette and body shape, try-on on a mannequin built from your measurements, and saved lists.
 
-The frontend runs fully on mocks until the backend exists: color analysis and try-on generation are faked in `src/api/`, and the catalog and size charts are fixtures in `src/data/`.
+The frontend runs fully on mocks until the backend exists: color analysis is faked in `src/api/`, and the catalog and size charts are fixtures in `src/data/`. Catalog items have no real product pages yet, so Shop opens a shopping search for the item. `src/api/tryOn.ts` (AI try-on on a body photo) is kept for later but nothing calls it now.
 
 ## Run it
 
@@ -18,7 +18,7 @@ npm start          # later runs: just start Metro and open the installed app
 
 Rebuild (`npm run ios`) only after adding a native package or changing `app.json`. JS changes reload over Metro.
 
-In the app, **Use demo profile** on the welcome screen (or **Load demo profile** on the Me tab) skips onboarding with a finished Soft Autumn profile and measurement history.
+In the app, **Use demo profile** on the welcome screen (or **Load demo profile** on the Profile screen) skips onboarding with a finished Soft Autumn profile and measurement history.
 
 ## Building for phones (EAS)
 
@@ -49,16 +49,21 @@ Set `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_USE_MOCKS=false` in `.env`. The serve
 - `POST /try-on`, multipart `bodyPhoto`, `itemId`, `itemImageUrl?`, `measurements` (JSON, cm/kg) → `{ jobId }`
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`
 
-## Layout
+## How the app is laid out
+
+One home screen, the feed. Its top bar opens **Saved** (left) and **Profile** (right); tapping an item opens a sheet with **Try it on** (the item drawn on your mannequin), **Save** (then add it to any of your lists) and **Shop**. Onboarding ends on the passport, with a first look at your picks.
+
+## Folders
 
 ```
-src/app/          routes: (tabs) Discover / Try On / Me, onboarding/*, item/[id], result/[id], measurements
+src/app/          routes: index (home feed), item/[id] (sheet), saved/, profile, measurements, onboarding/*
 src/api/          backend calls, each with a mock
-src/lib/          pure logic: color math, color analysis, palette match, body shape, fit, units, photos
+src/lib/          pure logic: color math, color analysis, palette match, body shape, silhouette, recommend, mannequin, fit, units
 src/data/         seasons/palettes, catalog, size charts, demo profile
 src/store/        zustand stores persisted to AsyncStorage
 src/theme/        theme built at runtime from the user's season
-src/components/   shared UI; passport/ is the Skia holo passport card on the Me tab
+src/hooks/        shared hooks (ranked feed, latest measurements)
+src/components/   shared UI; Mannequin is the Skia try-on figure, passport/ the holo passport card
 ```
 
 ## Checks

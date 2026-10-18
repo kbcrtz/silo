@@ -42,7 +42,7 @@ const DEMO_HISTORY: { daysAgo: number; values: Measurements }[] = [
 
 /**
  * Skips onboarding with a finished Soft Autumn profile, for demos that start
- * from a fresh install. No body photo: try-on asks for one.
+ * from a fresh install.
  */
 export function loadDemoProfile() {
   const quizTraits = scoreQuiz(DEMO_ANSWERS);

@@ -1,5 +1,21 @@
 export type Category = "top" | "bottom" | "dress" | "outerwear";
 export type Cut = "womens" | "mens" | "unisex";
+export type Silhouette =
+  | "fitted"
+  | "relaxed"
+  | "boxy"
+  | "wrap"
+  | "tailored"
+  | "cropped"
+  | "slip"
+  | "a-line"
+  | "slim"
+  | "straight"
+  | "wide-leg";
+export type Sleeve = "none" | "short" | "long";
+export type Length = "waist" | "hip" | "thigh" | "knee" | "midi" | "ankle";
+export type Detail =
+  "placket" | "belt" | "ribbing" | "lapels" | "crease" | "pleats";
 
 export type CatalogItem = {
   id: string;
@@ -15,6 +31,16 @@ export type CatalogItem = {
   sizeChartId: string;
   /** Remote product photo. Cards fall back to a color block without one. */
   imageUrl?: string;
+  /** Retailer page; affiliate tagging happens server side later. */
+  productUrl?: string;
+  /** The cut, which is what silhouette ranking and the mannequin go by. */
+  silhouette: Silhouette;
+  /** Tops, dresses and outerwear only. Defaults to long. */
+  sleeve?: Sleeve;
+  /** Where the hem lands on the body. */
+  length: Length;
+  /** Construction lines the mannequin draws on the garment. */
+  details?: Detail[];
 };
 
 /** Placeholder catalog spread across all twelve seasons. Brands are fictional. */
@@ -28,6 +54,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#9CAF88"],
     price: 58,
     aspect: 1.3,
+    silhouette: "relaxed",
+    sleeve: "long",
+    length: "hip",
+    details: ["placket"],
     sizeChartId: "womens-tops",
   },
   {
@@ -39,6 +69,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#C19A6B"],
     price: 189,
     aspect: 1.6,
+    silhouette: "wrap",
+    sleeve: "long",
+    length: "knee",
+    details: ["belt"],
     sizeChartId: "womens-tops",
   },
   {
@@ -50,6 +84,9 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#B5541C"],
     price: 96,
     aspect: 1.5,
+    silhouette: "slip",
+    sleeve: "none",
+    length: "midi",
     sizeChartId: "womens-dresses",
   },
   {
@@ -61,6 +98,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#A7C7E7"],
     price: 64,
     aspect: 1.1,
+    silhouette: "fitted",
+    sleeve: "long",
+    length: "hip",
+    details: ["ribbing"],
     sizeChartId: "womens-tops",
   },
   {
@@ -72,6 +113,9 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#E6007E"],
     price: 72,
     aspect: 1.2,
+    silhouette: "wrap",
+    sleeve: "long",
+    length: "hip",
     sizeChartId: "womens-tops",
   },
   {
@@ -83,6 +127,9 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#0B6E4F"],
     price: 110,
     aspect: 1.5,
+    silhouette: "wide-leg",
+    length: "ankle",
+    details: ["crease"],
     sizeChartId: "womens-bottoms",
   },
   {
@@ -94,6 +141,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#F9C8A0"],
     price: 28,
     aspect: 1.0,
+    silhouette: "fitted",
+    sleeve: "none",
+    length: "hip",
+    details: ["ribbing"],
     sizeChartId: "womens-tops",
   },
   {
@@ -105,6 +156,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#C49A9A"],
     price: 68,
     aspect: 1.2,
+    silhouette: "relaxed",
+    sleeve: "long",
+    length: "hip",
+    details: ["placket"],
     sizeChartId: "womens-tops",
   },
   {
@@ -116,6 +171,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#0D0D0D"],
     price: 165,
     aspect: 1.4,
+    silhouette: "tailored",
+    sleeve: "long",
+    length: "thigh",
+    details: ["lapels"],
     sizeChartId: "womens-tops",
   },
   {
@@ -127,6 +186,9 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#C9B6E4"],
     price: 74,
     aspect: 1.3,
+    silhouette: "a-line",
+    length: "knee",
+    details: ["pleats"],
     sizeChartId: "womens-bottoms",
   },
   {
@@ -138,6 +200,9 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#D4A017", "#6B8E23"],
     price: 82,
     aspect: 1.6,
+    silhouette: "a-line",
+    sleeve: "none",
+    length: "knee",
     sizeChartId: "womens-dresses",
   },
   {
@@ -149,6 +214,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#FFFFFF"],
     price: 54,
     aspect: 1.1,
+    silhouette: "boxy",
+    sleeve: "long",
+    length: "hip",
+    details: ["placket"],
     sizeChartId: "womens-tops",
   },
   {
@@ -160,6 +229,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#6B8E23"],
     price: 148,
     aspect: 1.4,
+    silhouette: "relaxed",
+    sleeve: "long",
+    length: "hip",
+    details: ["placket"],
     sizeChartId: "mens-tops",
   },
   {
@@ -171,6 +244,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#1C2E6E"],
     price: 62,
     aspect: 1.2,
+    silhouette: "fitted",
+    sleeve: "long",
+    length: "hip",
+    details: ["placket"],
     sizeChartId: "mens-tops",
   },
   {
@@ -182,6 +259,8 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#C4B29B"],
     price: 78,
     aspect: 1.5,
+    silhouette: "slim",
+    length: "ankle",
     sizeChartId: "mens-bottoms",
   },
   {
@@ -193,6 +272,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#7A2E2E"],
     price: 89,
     aspect: 1.1,
+    silhouette: "fitted",
+    sleeve: "long",
+    length: "hip",
+    details: ["ribbing"],
     sizeChartId: "mens-tops",
   },
   {
@@ -204,6 +287,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#6B7480"],
     price: 95,
     aspect: 1.3,
+    silhouette: "boxy",
+    sleeve: "long",
+    length: "hip",
+    details: ["placket"],
     sizeChartId: "mens-tops",
   },
   {
@@ -215,6 +302,9 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#1F3FAF"],
     price: 48,
     aspect: 1.0,
+    silhouette: "fitted",
+    sleeve: "short",
+    length: "hip",
     sizeChartId: "mens-tops",
   },
   {
@@ -226,6 +316,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#FF6F61"],
     price: 58,
     aspect: 1.2,
+    silhouette: "relaxed",
+    sleeve: "short",
+    length: "hip",
+    details: ["placket"],
     sizeChartId: "mens-tops",
   },
   {
@@ -237,6 +331,9 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#4B3621"],
     price: 92,
     aspect: 1.6,
+    silhouette: "straight",
+    length: "ankle",
+    details: ["crease"],
     sizeChartId: "mens-bottoms",
   },
   {
@@ -248,6 +345,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#008C95"],
     price: 70,
     aspect: 1.2,
+    silhouette: "boxy",
+    sleeve: "long",
+    length: "hip",
+    details: ["ribbing"],
     sizeChartId: "mens-tops",
   },
   {
@@ -259,6 +360,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#EFE2CC"],
     price: 98,
     aspect: 1.3,
+    silhouette: "relaxed",
+    sleeve: "long",
+    length: "hip",
+    details: ["ribbing"],
     sizeChartId: "mens-tops",
   },
   {
@@ -270,6 +375,10 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#6E8AA0"],
     price: 120,
     aspect: 1.4,
+    silhouette: "cropped",
+    sleeve: "long",
+    length: "waist",
+    details: ["placket"],
     sizeChartId: "mens-tops",
   },
   {
@@ -281,6 +390,8 @@ export const CATALOG: CatalogItem[] = [
     colors: ["#3A3D42"],
     price: 85,
     aspect: 1.5,
+    silhouette: "straight",
+    length: "ankle",
     sizeChartId: "mens-bottoms",
   },
 ];
@@ -291,6 +402,31 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   dress: "Dresses",
   outerwear: "Outerwear",
 };
+
+export const SILHOUETTE_LABELS: Record<Silhouette, string> = {
+  fitted: "Fitted",
+  relaxed: "Relaxed",
+  boxy: "Boxy",
+  wrap: "Wrap",
+  tailored: "Tailored",
+  cropped: "Cropped",
+  slip: "Slip",
+  "a-line": "A-line",
+  slim: "Slim",
+  straight: "Straight",
+  "wide-leg": "Wide-leg",
+};
+
+/**
+ * Where Shop goes. Without a real product page yet, a shopping search for the
+ * item is the closest honest stand-in.
+ */
+export function shopUrl(item: CatalogItem): string {
+  return (
+    item.productUrl ??
+    `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(item.name)}`
+  );
+}
 
 export function findItem(id: string): CatalogItem | undefined {
   return CATALOG.find((item) => item.id === id);

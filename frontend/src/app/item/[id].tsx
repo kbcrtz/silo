@@ -1,167 +1,281 @@
-import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
+import { SymbolView, type SFSymbol } from "expo-symbols";
+import * as Haptics from "expo-haptics";
 import { useMemo, useState } from "react";
-import { Alert, View } from "react-native";
-import { startTryOn } from "@/api/tryOn";
+import { Alert, Pressable, ScrollView, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
-import { ColorBlock } from "@/components/ItemCard";
-import { Screen } from "@/components/Screen";
-import { Swatches } from "@/components/Swatches";
+import { Chip } from "@/components/Chip";
+import { ProductImage } from "@/components/ItemCard";
+import { Mannequin } from "@/components/Mannequin";
 import { Text } from "@/components/Text";
-import { findItem } from "@/data/catalog";
+import { findItem, shopUrl, SILHOUETTE_LABELS } from "@/data/catalog";
 import { SIZE_CHARTS } from "@/data/sizeCharts";
+import { useLatestMeasurements } from "@/hooks/useRecommendations";
+import { bodyShape } from "@/lib/bodyShape";
 import { recommendSize } from "@/lib/fit";
-import { latestMeasurements, MEASUREMENT_INFO } from "@/lib/measurements";
 import { paletteMatch } from "@/lib/paletteMatch";
-import { photoUri } from "@/lib/photos";
-import { useMeasurements } from "@/store/measurements";
+import { openProduct } from "@/lib/shop";
+import { silhouetteMatch } from "@/lib/silhouette";
 import { useProfile } from "@/store/profile";
-import { useTryOn } from "@/store/tryOn";
+import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 
-export default function ItemDetail() {
+const VISUAL_HEIGHT = 320;
+
+function Pill({ label }: { label: string }) {
+  const t = useTheme();
+  return (
+    <View
+      style={{
+        paddingVertical: t.space(1),
+        paddingHorizontal: t.space(3),
+        borderRadius: t.radius.pill,
+        backgroundColor: t.colors.surface,
+        borderWidth: 1,
+        borderColor: t.colors.border,
+      }}
+    >
+      <Text variant="caption">{label}</Text>
+    </View>
+  );
+}
+
+function IconButton({
+  icon,
+  label,
+  onPress,
+  active,
+}: {
+  icon: SFSymbol;
+  label: string;
+  onPress: () => void;
+  active?: boolean;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: t.space(2),
+        paddingHorizontal: t.space(4),
+        borderRadius: t.radius.pill,
+        borderWidth: 1,
+        borderColor: active ? t.colors.accent : t.colors.border,
+        backgroundColor: t.colors.surface,
+        opacity: pressed ? 0.85 : 1,
+      })}
+    >
+      <SymbolView
+        name={icon}
+        size={18}
+        tintColor={t.colors.accentText}
+        style={{ width: 18, height: 18 }}
+      />
+      <Text variant="heading" style={{ fontSize: 15 }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The item sheet over the feed: photo or the item on the user's mannequin,
+ * why it was picked, their size, and Save / Shop.
+ */
+export default function ItemSheet() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = findItem(id);
   const t = useTheme();
-  const entries = useMeasurements((s) => s.entries);
-  const latest = useMemo(() => latestMeasurements(entries), [entries]);
-  const bodyPhoto = useProfile((s) => s.bodyPhoto);
+  const latest = useLatestMeasurements();
+  const shape = useMemo(() => bodyShape(latest), [latest]);
+  const shopFor = useProfile((s) => s.shopFor);
   const fitPreference = useProfile((s) => s.fitPreference);
-  const [starting, setStarting] = useState(false);
+  const saved = useSaved((s) => (item ? s.itemIds.includes(item.id) : false));
+  const lists = useSaved((s) => s.lists);
+  const [onYou, setOnYou] = useState(false);
 
   if (!item) {
     return (
-      <Screen>
+      <View style={{ padding: t.space(5) }}>
         <Text variant="title">Item not found</Text>
-      </Screen>
+      </View>
     );
   }
 
-  const match = t.season ? paletteMatch(item.colors, t.season) : null;
+  const color = t.season ? paletteMatch(item.colors, t.season) : null;
+  const fit = shape ? silhouetteMatch(item.silhouette, shape.shape) : null;
   const chart = SIZE_CHARTS[item.sizeChartId];
   const size = chart ? recommendSize(latest, chart, fitPreference) : null;
+  const measured = latest.chest && latest.waist && latest.hips;
 
-  const tryOn = async () => {
-    if (!bodyPhoto) {
-      Alert.alert(
-        "Add a body photo first",
-        "Try-on uses a full-length photo of you. Add one on the Me tab.",
-      );
-      return;
-    }
-    setStarting(true);
-    try {
-      const jobId = await startTryOn(photoUri(bodyPhoto), item, latest);
-      useTryOn.getState().add({
-        id: jobId,
-        itemId: item.id,
-        bodyPhoto,
-        status: "queued",
-        createdAt: new Date().toISOString(),
-      });
-      router.push({ pathname: "/result/[id]", params: { id: jobId } });
-    } catch (e) {
-      Alert.alert(
-        "Couldn't start try-on",
-        e instanceof Error ? e.message : String(e),
-      );
-    } finally {
-      setStarting(false);
-    }
+  const toggleSave = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    useSaved.getState().toggle(item.id);
   };
 
+  const newList = () =>
+    Alert.prompt(
+      "New list",
+      "Name it, and this item goes in first.",
+      (name) => {
+        if (name?.trim()) useSaved.getState().createList(name.trim(), item.id);
+      },
+    );
+
   return (
-    <Screen
-      edges={[]}
-      footer={<Button label="Try it on" onPress={tryOn} loading={starting} />}
-    >
-      <View
-        style={{
-          aspectRatio: 1 / item.aspect,
-          borderRadius: t.radius.lg,
-          overflow: "hidden",
-          backgroundColor: item.colors[0],
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: t.space(5),
+          paddingTop: t.space(6),
+          gap: t.space(4),
         }}
       >
-        {item.imageUrl ? (
-          <Image
-            source={item.imageUrl}
-            style={{ flex: 1 }}
-            contentFit="cover"
-          />
-        ) : (
-          <ColorBlock item={item} />
-        )}
-      </View>
+        <View
+          style={{
+            height: VISUAL_HEIGHT,
+            borderRadius: t.radius.lg,
+            overflow: "hidden",
+            backgroundColor: onYou ? t.colors.surface : item.colors[0],
+            borderWidth: onYou ? 1 : 0,
+            borderColor: t.colors.border,
+          }}
+        >
+          {onYou ? (
+            <Animated.View
+              key="mannequin"
+              entering={FadeIn.duration(250)}
+              style={{
+                flex: 1,
+                alignItems: "center",
+                paddingTop: t.space(4),
+              }}
+            >
+              <Mannequin
+                measurements={latest}
+                shopFor={shopFor}
+                item={item}
+                height={VISUAL_HEIGHT - t.space(14)}
+              />
+              <Text
+                variant="caption"
+                tone="muted"
+                style={{ position: "absolute", bottom: t.space(3) }}
+              >
+                {measured
+                  ? `${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
+                  : "Average figure · add measurements for yours"}
+              </Text>
+            </Animated.View>
+          ) : (
+            <Animated.View
+              key="photo"
+              entering={FadeIn.duration(250)}
+              style={{ flex: 1 }}
+            >
+              <ProductImage item={item} />
+            </Animated.View>
+          )}
+        </View>
 
-      <View style={{ gap: t.space(1) }}>
-        <Text variant="title">{item.name}</Text>
-        <Text tone="muted">
-          {item.brand} · ${item.price}
-        </Text>
-      </View>
+        <View style={{ gap: t.space(1) }}>
+          <Text variant="title">{item.name}</Text>
+          <Text tone="muted">
+            {item.brand} · ${item.price}
+          </Text>
+        </View>
 
-      {match && t.season ? (
-        <Card>
-          <Text variant="caption" tone="muted">
-            COLOR MATCH
-          </Text>
-          <Text variant="heading">
-            {match.label} for {t.season.name} · {match.score}%
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: t.space(3),
-            }}
-          >
-            <Swatches colors={item.colors} size={28} />
-            <Text tone="muted">vs your palette</Text>
-            <Swatches colors={t.season.best.slice(0, 4)} size={20} />
-          </View>
-        </Card>
-      ) : null}
+        <View
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space(2) }}
+        >
+          {color && t.season ? (
+            <Pill label={`${color.score}% ${t.season.name} match`} />
+          ) : null}
+          {fit && shape ? (
+            <Pill label={`${fit.label} · ${shape.name}`} />
+          ) : null}
+          <Pill label={SILHOUETTE_LABELS[item.silhouette]} />
+        </View>
 
-      {size ? (
-        <Card>
-          <Text variant="caption" tone="muted">
-            YOUR SIZE
-          </Text>
-          {size.kind === "size" ? (
-            <>
-              <Text variant="title">{size.size}</Text>
+        {size ? (
+          size.kind === "size" ? (
+            <Text>
+              Your size <Text variant="heading">{size.size}</Text>
               <Text tone="muted">
+                {"  ·  "}
                 {size.confidence === "high"
                   ? "Should fit well"
                   : size.confidence === "medium"
                     ? "Close fit"
                     : "Between sizes"}
-                {fitPreference !== "regular" ? ` · ${fitPreference} fit` : ""}
               </Text>
-              {size.notes.map((note) => (
-                <Text key={note}>• {note}</Text>
-              ))}
-            </>
+            </Text>
           ) : (
-            <>
-              <Text>
-                Add your{" "}
-                {size.missing
-                  .map((m) => MEASUREMENT_INFO[m].label.toLowerCase())
-                  .join(", ")}{" "}
-                to get a size.
-              </Text>
-              <Button
-                variant="secondary"
-                label="Add measurements"
-                onPress={() => router.push("/measurements")}
-              />
-            </>
-          )}
-        </Card>
-      ) : null}
-    </Screen>
+            <Pressable onPress={() => router.push("/measurements")}>
+              <Text tone="accent">Add measurements to get your size ›</Text>
+            </Pressable>
+          )
+        ) : null}
+
+        {saved ? (
+          <Animated.View entering={FadeIn} style={{ gap: t.space(2) }}>
+            <Text variant="caption" tone="muted">
+              ADD TO A LIST
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: t.space(2),
+              }}
+            >
+              {lists.map((list) => (
+                <Chip
+                  key={list.id}
+                  label={list.name}
+                  selected={list.itemIds.includes(item.id)}
+                  onPress={() =>
+                    useSaved.getState().toggleInList(list.id, item.id)
+                  }
+                />
+              ))}
+              <Chip label="+ New list" onPress={newList} />
+            </View>
+          </Animated.View>
+        ) : null}
+      </ScrollView>
+
+      <View
+        style={{
+          flexDirection: "row",
+          gap: t.space(2),
+          paddingHorizontal: t.space(5),
+          paddingTop: t.space(2),
+          paddingBottom: t.space(8),
+        }}
+      >
+        <Button
+          label={onYou ? "See photo" : "Try it on"}
+          onPress={() => setOnYou((v) => !v)}
+          style={{ flex: 1, paddingHorizontal: t.space(4) }}
+        />
+        <IconButton
+          icon={saved ? "heart.fill" : "heart"}
+          label={saved ? "Saved" : "Save"}
+          active={saved}
+          onPress={toggleSave}
+        />
+        <IconButton
+          icon="bag"
+          label="Shop"
+          onPress={() => openProduct(shopUrl(item), t.colors.accentText)}
+        />
+      </View>
+    </View>
   );
 }

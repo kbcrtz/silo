@@ -1,23 +1,29 @@
 import { Image } from "expo-image";
 import { Link } from "expo-router";
 import { SymbolView } from "expo-symbols";
+import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import type { CatalogItem } from "@/data/catalog";
 import { readableOn } from "@/lib/color";
-import type { PaletteMatch } from "@/lib/paletteMatch";
+import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 import { Text } from "./Text";
 
 export function ItemCard({
   item,
   width,
-  match,
+  score,
+  footer,
 }: {
   item: CatalogItem;
   width: number;
-  match?: PaletteMatch;
+  /** 0-100 recommendation score; the badge is hidden without one. */
+  score?: number;
+  /** Below the caption, e.g. a Shop link on saved items. */
+  footer?: ReactNode;
 }) {
   const t = useTheme();
+  const saved = useSaved((s) => s.itemIds.includes(item.id));
   const height = width * item.aspect;
   return (
     <Link href={{ pathname: "/item/[id]", params: { id: item.id } }} asChild>
@@ -30,17 +36,8 @@ export function ItemCard({
             backgroundColor: item.colors[0],
           }}
         >
-          {item.imageUrl ? (
-            <Image
-              source={item.imageUrl}
-              style={{ flex: 1 }}
-              contentFit="cover"
-              transition={200}
-            />
-          ) : (
-            <ColorBlock item={item} />
-          )}
-          {match ? (
+          <ProductImage item={item} />
+          {score !== undefined ? (
             <View
               style={{
                 position: "absolute",
@@ -53,9 +50,23 @@ export function ItemCard({
               }}
             >
               <Text variant="caption" style={{ color: "#141414" }}>
-                {match.score}% match
+                {score}% match
               </Text>
             </View>
+          ) : null}
+          {saved ? (
+            <SymbolView
+              name="heart.fill"
+              size={18}
+              tintColor="#FFFFFF"
+              style={{
+                position: "absolute",
+                top: t.space(2),
+                right: t.space(2),
+                width: 18,
+                height: 18,
+              }}
+            />
           ) : null}
         </View>
         <View style={{ paddingHorizontal: t.space(1) }}>
@@ -65,9 +76,24 @@ export function ItemCard({
           <Text variant="caption" tone="muted">
             {item.brand} · ${item.price}
           </Text>
+          {footer}
         </View>
       </Pressable>
     </Link>
+  );
+}
+
+/** The product photo, or a color block until the catalog has photos. */
+export function ProductImage({ item }: { item: CatalogItem }) {
+  return item.imageUrl ? (
+    <Image
+      source={item.imageUrl}
+      style={{ flex: 1 }}
+      contentFit="cover"
+      transition={200}
+    />
+  ) : (
+    <ColorBlock item={item} />
   );
 }
 

@@ -1,18 +1,23 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 import type { CatalogItem } from "@/data/catalog";
-import type { PaletteMatch } from "@/lib/paletteMatch";
 import { useTheme } from "@/theme";
 import { ItemCard } from "./ItemCard";
 
-type Entry = { item: CatalogItem; match?: PaletteMatch };
+type Entry = { item: CatalogItem; score?: number };
 
 /**
  * Two-column Pinterest-style grid. Each item goes into whichever column is
  * currently shorter, so rank order is roughly preserved top to bottom. Fine
  * for a catalog of dozens; swap for a virtualized list once it is hundreds.
  */
-export function MasonryGrid({ entries }: { entries: Entry[] }) {
+export function MasonryGrid({
+  entries,
+  footer,
+}: {
+  entries: Entry[];
+  footer?: (item: CatalogItem) => ReactNode;
+}) {
   const t = useTheme();
   const gap = t.space(3);
   const [width, setWidth] = useState(0);
@@ -23,7 +28,7 @@ export function MasonryGrid({ entries }: { entries: Entry[] }) {
   for (const entry of entries) {
     const col = heights[0] <= heights[1] ? 0 : 1;
     columns[col].push(entry);
-    heights[col] += entry.item.aspect + 0.25; // + caption
+    heights[col] += entry.item.aspect + (footer ? 0.4 : 0.25); // + caption
   }
 
   return (
@@ -34,12 +39,13 @@ export function MasonryGrid({ entries }: { entries: Entry[] }) {
       {width > 0 &&
         columns.map((column, i) => (
           <View key={i} style={{ flex: 1, gap: t.space(4) }}>
-            {column.map(({ item, match }) => (
+            {column.map(({ item, score }) => (
               <ItemCard
                 key={item.id}
                 item={item}
                 width={columnWidth}
-                match={match}
+                score={score}
+                footer={footer?.(item)}
               />
             ))}
           </View>

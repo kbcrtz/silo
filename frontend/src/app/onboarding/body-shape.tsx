@@ -15,7 +15,7 @@ export default function BodyShapeStep() {
   );
   const next = {
     label: "Continue",
-    onPress: () => router.push("/onboarding/body-photo"),
+    onPress: () => router.push("/onboarding/passport"),
   };
 
   if (!shape) {
@@ -23,7 +23,7 @@ export default function BodyShapeStep() {
       <OnboardingStep
         step="body-shape"
         title="Body shape"
-        subtitle="Add your chest, waist and hips to see your shape. You can do this later from the Me tab."
+        subtitle="Add your chest, waist and hips to see your shape. You can do this later from your profile."
         primary={next}
         secondary={{
           label: "Back to measurements",
