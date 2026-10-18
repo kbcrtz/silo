@@ -20,6 +20,7 @@ const Item = z.strictObject({
   silhouette: z.enum(SILHOUETTES),
   length: z.enum(LENGTHS),
   sleeve: z.enum(SLEEVES).nullable(),
+  clothing: z.boolean(),
   evidence: z.string().max(200),
 });
 // Gemini takes a JSON Schema; the draft URI is not part of its supported subset.
@@ -30,6 +31,8 @@ export type Insight = {
   hex: string | null;
   confidence: "high" | "medium" | "low";
   cut: { category: (typeof GARMENTS)[number]; silhouette: (typeof SILHOUETTES)[number]; length: (typeof LENGTHS)[number]; sleeve?: (typeof SLEEVES)[number] };
+  /** False for shoes, bags and other non-garments that slip through Shopify's clothing filter. */
+  clothing: boolean;
   /** The listing's own words the estimate rests on. */
   evidence: string;
 };
@@ -45,8 +48,9 @@ For each listing, by its index i:
 - confidence: high when the text names a specific color, medium when the name is vague or fanciful, low when you are inferring from very little.
 - category: top, bottom, dress, or outerwear (jackets, coats, blazers, cardigans).
 - silhouette: the closest of fitted, relaxed, boxy, wrap, tailored, cropped, slip, a-line, slim, straight, wide-leg.
-- length: where the hem falls on the body: waist, hip, thigh, knee, midi or ankle.
+- length: where the hem falls on the body: waist, hip, thigh, knee, midi or ankle. "Tall", "long" or "longline" means longer, never cropped; only "crop" or "cropped" means waist.
 - sleeve: none, short or long. Null for bottoms.
+- clothing: false for anything that isn't a garment worn on the body: shoes, sneakers, boots, bags, jewelry, hats, socks, belts. Fill the other fields anyway.
 - evidence: the few words from the listing you relied on, under 10 words.`;
 
 /**
@@ -88,8 +92,8 @@ export function createEnricher(opts: { create: CreateInteraction; model: string;
     for (const raw of items) {
       const item = Item.safeParse(raw);
       if (!item.success || item.data.i >= out.length || out[item.data.i]) continue;
-      const { hex, confidence, category, silhouette, length, sleeve, evidence } = item.data;
-      out[item.data.i] = { hex, confidence, cut: { category, silhouette, length, ...(sleeve && category !== "bottom" && { sleeve }) }, evidence };
+      const { hex, confidence, category, silhouette, length, sleeve, clothing, evidence } = item.data;
+      out[item.data.i] = { hex, confidence, cut: { category, silhouette, length, ...(sleeve && category !== "bottom" && { sleeve }) }, clothing, evidence };
     }
     return out;
   }

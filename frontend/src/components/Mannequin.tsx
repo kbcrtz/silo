@@ -11,13 +11,8 @@ import {
 } from "@shopify/react-native-skia";
 import { useMemo, type ReactNode } from "react";
 import type { CatalogItem } from "@/data/catalog";
-import { mix } from "@/lib/color";
-import {
-  bodyOutlines,
-  landmarks,
-  outfit,
-  type Garment,
-} from "@/lib/mannequin";
+import { deltaE, mix } from "@/lib/color";
+import { bodyOutlines, landmarks, outfit, type Garment } from "@/lib/mannequin";
 import type { Measurements } from "@/lib/measurements";
 import type { ShopFor } from "@/store/profile";
 import { useTheme, type Theme } from "@/theme";
@@ -104,9 +99,21 @@ export function MannequinFigure({
 
   const skin = mix(colors.surface, colors.border, 0.5);
   const skinDark = mix(colors.border, colors.textMuted, 0.5);
+  // No known color: neutral, never the season accent, which would look like the item's color.
+  const itemColor =
+    item?.colors[0] ?? mix(colors.surface, colors.textMuted, 0.5);
+  // The plain pieces take whichever of a light or dark tone stands apart from the item.
+  const apart = (light: string, dark: string) =>
+    deltaE(itemColor, light) >= deltaE(itemColor, dark) ? light : dark;
   const base = {
-    top: mix(colors.surface, colors.textMuted, 0.18),
-    bottom: mix(colors.text, colors.surface, 0.45),
+    top: apart(
+      mix(colors.surface, colors.textMuted, 0.18),
+      mix(colors.text, colors.surface, 0.25),
+    ),
+    bottom: apart(
+      mix(colors.surface, colors.textMuted, 0.35),
+      mix(colors.text, colors.surface, 0.45),
+    ),
   };
 
   return (
@@ -149,7 +156,7 @@ export function MannequinFigure({
       {paths.layers.map((layer, li) => {
         const fill =
           layer.role === "item"
-            ? (item?.colors[0] ?? colors.accent)
+            ? itemColor
             : layer.role === "baseTop"
               ? base.top
               : base.bottom;

@@ -149,6 +149,7 @@ describe("toCatalogItem with the backend's AI estimate", () => {
       silhouette: "wide-leg" as const,
       length: "ankle" as const,
     },
+    clothing: true,
     evidence: "Tobacco; relaxed wide leg",
     source: "ai" as const,
   };

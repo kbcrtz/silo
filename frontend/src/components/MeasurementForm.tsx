@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { TextInput, View } from "react-native";
 import {
+  isPlausible,
   MEASUREMENT_INFO,
   MEASUREMENT_TYPES,
   type Measurements,
   type MeasurementType,
 } from "@/lib/measurements";
 import {
+  rangeHint,
   fromDisplay,
   toDisplay,
   unitLabel,
@@ -42,8 +44,10 @@ export function MeasurementForm({
     setText((prev) => ({ ...prev, [type]: raw }));
     const n = parseFloat(raw.replace(",", "."));
     const next = { ...values };
-    if (Number.isFinite(n) && n > 0)
-      next[type] = fromDisplay(type, n, unitSystem);
+    const cm =
+      Number.isFinite(n) && n > 0 ? fromDisplay(type, n, unitSystem) : NaN;
+    // Out-of-range numbers are shown as a hint, never saved.
+    if (isPlausible(type, cm)) next[type] = cm;
     else delete next[type];
     setValues(next);
     onChange(next);
@@ -100,9 +104,13 @@ export function MeasurementForm({
                 padding: t.space(3),
               }}
             />
-            <Text variant="caption" tone="muted">
-              {info.howTo}
-            </Text>
+            {text[type] && values[type] === undefined ? (
+              <Text variant="caption">{rangeHint(type, unitSystem)}</Text>
+            ) : (
+              <Text variant="caption" tone="muted">
+                {info.howTo}
+              </Text>
+            )}
           </View>
         );
       })}

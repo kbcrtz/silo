@@ -1,4 +1,4 @@
-import type { MeasurementType } from "./measurements";
+import { PLAUSIBLE, type MeasurementType } from "./measurements";
 
 export type UnitSystem = "metric" | "imperial";
 
@@ -45,4 +45,10 @@ export function formatMeasurement(
 
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
+}
+
+/** "Use 47–91 in": the plausible range in the user's units, for a value that's out of it. */
+export function rangeHint(type: MeasurementType, system: UnitSystem): string {
+  const [min, max] = PLAUSIBLE[type];
+  return `Use ${Math.ceil(toDisplay(type, min, system))}–${Math.floor(toDisplay(type, max, system))} ${unitLabel(type, system)}`;
 }

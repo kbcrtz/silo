@@ -181,7 +181,6 @@ export default function ItemSheet() {
                   ? `${estimated}${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
                   : "Average figure · add measurements for yours"}
                 {item.source ? " · cut estimated from the listing" : ""}
-                {item.evidence ? `\nFrom the listing: ${item.evidence}` : ""}
               </Text>
             </Animated.View>
           ) : (
@@ -218,6 +217,11 @@ export default function ItemSheet() {
             <Pill label={`Popular with ${t.season.name}s this week`} />
           ) : null}
         </View>
+        {item.evidence ? (
+          <Text variant="caption" tone="muted">
+            From the listing: {item.evidence}
+          </Text>
+        ) : null}
 
         {size ? (
           <Glass

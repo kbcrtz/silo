@@ -128,6 +128,8 @@ export async function discover(
     const insights = await enrich(raws.map((raw) => listingFacts(raw)!));
     insights.forEach((insight, k) => insight && (products[k].estimate = { ...insight, source: "ai" }));
     page.estimated = insights.filter(Boolean).length;
+    // Shoes and bags tagged as clothing by Shopify can't go on the mannequin.
+    page.products = products.filter((p) => p.estimate?.clothing !== false);
   } catch (e) {
     page.estimateError = e instanceof HttpError ? e.code : "estimate_failed";
   }

@@ -69,11 +69,32 @@ export function upperGirth(m: Measurements): number | undefined {
   return m.bust ?? m.chest;
 }
 
-/** Most recent value per type. */
+/**
+ * Adult ranges in cm/kg. Anything outside is a typo, like feet typed into an
+ * inches box, and is ignored rather than drawn or sized from.
+ */
+export const PLAUSIBLE: Record<MeasurementType, [number, number]> = {
+  height: [120, 230],
+  weight: [30, 250],
+  chest: [60, 170],
+  bust: [60, 170],
+  waist: [45, 170],
+  hips: [60, 180],
+  inseam: [50, 105],
+  armLength: [40, 85],
+};
+
+export function isPlausible(type: MeasurementType, value: number): boolean {
+  const [min, max] = PLAUSIBLE[type];
+  return value >= min && value <= max;
+}
+
+/** Most recent plausible value per type. */
 export function latestMeasurements(entries: MeasurementEntry[]): Measurements {
   const latest: Measurements = {};
   const seenAt: Partial<Record<MeasurementType, string>> = {};
   for (const entry of entries) {
+    if (!isPlausible(entry.type, entry.value)) continue;
     const prev = seenAt[entry.type];
     if (!prev || entry.measuredAt > prev) {
       latest[entry.type] = entry.value;

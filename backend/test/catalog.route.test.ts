@@ -204,7 +204,7 @@ test("each product gets the AI's estimate of its color and cut from the listing 
     seen.push(facts);
     return facts.map((f, i) =>
       i === 0
-        ? { hex: "#6B7A3A", confidence: "high" as const, cut: { category: "bottom" as const, silhouette: "relaxed" as const, length: "ankle" as const }, evidence: "Olive Green; relaxed fit" }
+        ? { hex: "#6B7A3A", confidence: "high" as const, cut: { category: "bottom" as const, silhouette: "relaxed" as const, length: "ankle" as const }, clothing: true, evidence: "Olive Green; relaxed fit" }
         : null,
     );
   };
@@ -216,6 +216,7 @@ test("each product gets the AI's estimate of its color and cut from the listing 
     hex: "#6B7A3A",
     confidence: "high",
     cut: { category: "bottom", silhouette: "relaxed", length: "ankle" },
+    clothing: true,
     evidence: "Olive Green; relaxed fit",
     source: "ai",
   });
@@ -245,4 +246,18 @@ test("past the per-device budget, pages load without spending Gemini", async () 
   assert.equal(second.json().products.length, 2);
   assert.equal(calls, 1);
   assert.equal(logs.filter((l) => l.catalog).at(-1).catalog.estimateError, "estimate_budget");
+});
+
+test("listings the AI says aren't clothing (sneakers, bags) are dropped from the feed", async () => {
+  const enrich: Enrich = async (facts) =>
+    facts.map((_, i) => ({
+      hex: null,
+      confidence: "low" as const,
+      cut: { category: "bottom" as const, silhouette: "straight" as const, length: "ankle" as const },
+      clothing: i !== 0,
+      evidence: i === 0 ? "sneaker" : "trouser",
+    }));
+  const { get } = setup({ products: [trouser, sweater], enrich });
+  const body = (await get("/catalog/discover?category=all")).json();
+  assert.deepEqual(body.products.map((p: any) => p.id), [sweater.id]);
 });

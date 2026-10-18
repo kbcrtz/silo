@@ -10,11 +10,13 @@ import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { familyOf } from "@/data/families";
 import {
+  isPlausible,
   latestMeasurements,
   type Measurements,
   type MeasurementType,
 } from "@/lib/measurements";
 import {
+  rangeHint,
   fromDisplay,
   toDisplay,
   unitLabel,
@@ -175,8 +177,10 @@ export default function BodyProfile() {
     const n = parseFloat(raw.replace(",", "."));
     setValues((v) => {
       const next = { ...v };
-      if (Number.isFinite(n) && n > 0)
-        next[type] = fromDisplay(type, n, unitSystem);
+      const cm =
+        Number.isFinite(n) && n > 0 ? fromDisplay(type, n, unitSystem) : NaN;
+      // Out-of-range numbers (feet in an inches box) are shown as a hint, never saved or drawn.
+      if (isPlausible(type, cm)) next[type] = cm;
       else delete next[type];
       return next;
     });
@@ -238,7 +242,11 @@ export default function BodyProfile() {
           <MeasureCard
             key={f.type}
             label={f.label}
-            hint={f.hint}
+            hint={
+              text[f.type] && values[f.type] === undefined
+                ? rangeHint(f.type, unitSystem)
+                : f.hint
+            }
             unit={unitLabel(f.type, unitSystem)}
             value={text[f.type]}
             onChange={(v) => edit(f.type, v)}

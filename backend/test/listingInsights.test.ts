@@ -14,6 +14,7 @@ const insight = (i: number, patch: Record<string, unknown> = {}) => ({
   silhouette: "relaxed",
   length: "ankle",
   sleeve: null,
+  clothing: true,
   evidence: "Olive Green; Relaxed fit & drawstring waist",
   ...patch,
 });
@@ -64,6 +65,7 @@ test("answers line up with listings by index; a bad item is skipped, not fatal",
     hex: "#333333",
     confidence: "high",
     cut: { category: "top", silhouette: "fitted", length: "hip", sleeve: "long" },
+    clothing: true,
     evidence: "Olive Green; Relaxed fit & drawstring waist",
   });
 });
@@ -104,4 +106,11 @@ test("if every batch fails, the error is reported", async () => {
     throw Object.assign(new Error("overloaded"), { status: 503 });
   });
   await assert.rejects(enrich([listingFacts(trouser)!]), (e: unknown) => e instanceof HttpError && e.code === "gemini_failed");
+});
+
+test("the prompt asks whether it's a garment and treats Tall as longer, not cropped", async () => {
+  let prompt = "";
+  await enricher(async (p: any) => ((prompt = p.input[0].text), { output_text: JSON.stringify({ items: [insight(0)] }) }))([listingFacts(trouser)!]);
+  assert.match(prompt, /clothing: false for/);
+  assert.match(prompt, /Tall/);
 });
