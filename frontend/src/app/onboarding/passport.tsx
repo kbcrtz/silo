@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { TextInput, useWindowDimensions, View } from "react-native";
+import { Text as RNText, useWindowDimensions, View } from "react-native";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -8,13 +8,18 @@ import Animated, {
   ZoomIn,
 } from "react-native-reanimated";
 import { ProductImage } from "@/components/ItemCard";
-import { OnboardingStep } from "@/components/OnboardingStep";
+import { PrimaryButton } from "@/components/onboarding/Buttons";
+import { Header } from "@/components/onboarding/Header";
+import { Headline } from "@/components/onboarding/Headline";
+import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { CARD_ASPECT, PassportCard } from "@/components/passport/PassportCard";
 import { usePassportData } from "@/components/passport/usePassportData";
 import { Text } from "@/components/Text";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import { useProfile } from "@/store/profile";
+import { familyOf } from "@/data/families";
 import { useTheme } from "@/theme";
+import { BRAND, TYPE } from "@/theme/brand";
 
 /** When the "ISSUED" stamp lands, after the card has slid up. */
 const STAMP_AT_MS = 900;
@@ -26,14 +31,14 @@ const GOOD_PICK = 70;
 /**
  * Onboarding's finale: the passport is "issued" with everything collected so
  * far. The card slides up and its foil sweeps (PassportCard does that on
- * mount), a stamp lands with a haptic, and the user can put their name on it.
+ * mount) and a stamp lands with a haptic.
  * Below it, a first look at the feed shows what all those answers bought them.
  */
 export default function PassportStep() {
   const t = useTheme();
   const { width } = useWindowDimensions();
   const data = usePassportData();
-  const displayName = useProfile((s) => s.displayName);
+  const seasonId = useProfile((s) => s.colorProfile?.seasonId);
   const set = useProfile((s) => s.set);
   const [stamp, setStamp] = useState(false);
   const { ranked } = useRecommendations();
@@ -61,12 +66,16 @@ export default function PassportStep() {
   const finish = () => set({ onboarded: true });
 
   return (
-    <OnboardingStep
-      step="passport"
-      title="Your Silo passport"
-      subtitle="Your colors, your fit, all in one place. Tilt to see it shimmer."
-      primary={{ label: "Enter Silo", onPress: finish }}
+    <OnboardingScreen
+      backdrop={seasonId ? familyOf(seasonId) : "neutral"}
+      contentStyle={{ gap: t.space(5) }}
     >
+      <Header wordmark badge="SILO ID" />
+      <Headline
+        size="medium"
+        eyebrow="Your colors, your fit"
+        title={"Your Silo\n*passport.*"}
+      />
       {data ? (
         <Animated.View
           entering={SlideInDown.springify().damping(16)}
@@ -107,41 +116,14 @@ export default function PassportStep() {
         </Text>
       )}
 
-      <Animated.View
-        entering={FadeIn.delay(STAMP_AT_MS + 300)}
-        style={{ gap: t.space(2) }}
-      >
-        <Text variant="caption" tone="muted">
-          NAME ON YOUR PASSPORT
-        </Text>
-        <TextInput
-          value={displayName ?? ""}
-          onChangeText={(name) => set({ displayName: name })}
-          placeholder="Your name"
-          placeholderTextColor={t.colors.textMuted}
-          autoCapitalize="words"
-          returnKeyType="done"
-          maxLength={24}
-          style={{
-            ...t.type.body,
-            color: t.colors.text,
-            backgroundColor: t.colors.surface,
-            borderColor: t.colors.border,
-            borderWidth: 1,
-            borderRadius: t.radius.sm,
-            padding: t.space(3),
-          }}
-        />
-      </Animated.View>
-
       {preview.length ? (
         <Animated.View
           entering={FadeIn.delay(STAMP_AT_MS + 700)}
           style={{ gap: t.space(2) }}
         >
-          <Text variant="heading">
+          <RNText style={TYPE.question}>
             {goodPicks || preview.length} pieces already picked for you
-          </Text>
+          </RNText>
           <View style={{ flexDirection: "row", gap: t.space(2) }}>
             {preview.map(({ item }) => (
               <View
@@ -158,13 +140,13 @@ export default function PassportStep() {
               </View>
             ))}
           </View>
-          <Text tone="muted">
+          <RNText style={[TYPE.body, { color: BRAND.inkSoft }]}>
             Ranked by your colors and your shape. Try any of them on your
             mannequin.
-          </Text>
+          </RNText>
         </Animated.View>
       ) : null}
-      <View style={{ height: t.space(2) }} />
-    </OnboardingStep>
+      <PrimaryButton label="Enter Silo" onPress={finish} />
+    </OnboardingScreen>
   );
 }

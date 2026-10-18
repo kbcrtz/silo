@@ -1,6 +1,13 @@
 /** Lengths are stored in cm and weight in kg; units.ts converts for display. */
 export type MeasurementType =
-  "height" | "weight" | "chest" | "waist" | "hips" | "inseam" | "armLength";
+  | "height"
+  | "weight"
+  | "chest"
+  | "bust"
+  | "waist"
+  | "hips"
+  | "inseam"
+  | "armLength";
 
 export type MeasurementEntry = {
   id: string;
@@ -15,6 +22,7 @@ export const MEASUREMENT_TYPES: MeasurementType[] = [
   "height",
   "weight",
   "chest",
+  "bust",
   "waist",
   "hips",
   "inseam",
@@ -31,8 +39,12 @@ export const MEASUREMENT_INFO: Record<
   },
   weight: { label: "Weight", howTo: "Morning, before eating." },
   chest: {
-    label: "Chest / bust",
-    howTo: "Around the fullest part of your chest, tape level under your arms.",
+    label: "Chest",
+    howTo: "Around your upper torso, tape level under your arms.",
+  },
+  bust: {
+    label: "Bust",
+    howTo: "Around the fullest point of your bust.",
   },
   waist: {
     label: "Waist",
@@ -51,6 +63,11 @@ export const MEASUREMENT_INFO: Record<
     howTo: "From the top of your shoulder to your wrist bone, arm relaxed.",
   },
 };
+
+/** The upper-body girth for shape and figure: bust when given, else chest. */
+export function upperGirth(m: Measurements): number | undefined {
+  return m.bust ?? m.chest;
+}
 
 /** Most recent value per type. */
 export function latestMeasurements(entries: MeasurementEntry[]): Measurements {

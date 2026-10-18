@@ -25,7 +25,7 @@ describe("recommendSize", () => {
   it("notes where a between-sizes fit will pull", () => {
     const rec = recommendSize({ chest: 95, waist: 72, armLength: 58 }, tops);
     expect(rec.kind === "size" && rec.notes).toEqual([
-      "May be snug at the chest / bust",
+      "May be snug at the chest",
     ]);
   });
 

@@ -1,96 +1,162 @@
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { useState } from "react";
-import { Alert, View } from "react-native";
-import { analyzeSelfie } from "@/api/colorAnalysis";
-import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
-import { OnboardingStep } from "@/components/OnboardingStep";
-import { Text } from "@/components/Text";
+import { SymbolView } from "expo-symbols";
+import {
+  ActionSheetIOS,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { analyzeSelfieOnce } from "@/api/colorAnalysis";
+import { PrimaryButton } from "@/components/onboarding/Buttons";
+import { Glass } from "@/components/onboarding/Glass";
+import { Header, stepBadge } from "@/components/onboarding/Header";
+import { Headline } from "@/components/onboarding/Headline";
+import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { persistPhoto, photoUri } from "@/lib/photos";
 import { pickPhoto } from "@/lib/pickPhoto";
 import { useProfile } from "@/store/profile";
-import { useTheme } from "@/theme";
+import { BRAND, TYPE } from "@/theme/brand";
 
-const TIPS = [
-  "Face a window, in daylight",
-  "No filters or heavy makeup",
-  "Hair pulled back from your face",
-];
+const CARD_HEIGHT = 407;
 
-export default function SelfieStep() {
-  const t = useTheme();
+/** Step two: the selfie the color analysis reads. */
+export default function Selfie() {
   const selfie = useProfile((s) => s.selfiePhoto);
   const set = useProfile((s) => s.set);
-  const [analyzing, setAnalyzing] = useState(false);
 
   const take = async (source: "camera" | "library") => {
     const uri = await pickPhoto(source, "front");
     if (!uri) return;
     const name = persistPhoto(uri, "selfie");
     set({ selfiePhoto: name, photoTraits: undefined });
-    setAnalyzing(true);
-    try {
-      set({ photoTraits: await analyzeSelfie(photoUri(name)) });
-      router.push("/onboarding/quiz");
-    } catch (e) {
-      Alert.alert(
-        "Couldn't analyze photo",
-        "You can retake it or continue with the quiz only.",
-      );
-    } finally {
-      setAnalyzing(false);
-    }
+    // Errors surface when the user asks for results, not here.
+    analyzeSelfieOnce(photoUri(name)).catch(() => {});
   };
 
+  const choose = () =>
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: ["Take a selfie", "Choose from library", "Cancel"],
+        cancelButtonIndex: 2,
+      },
+      (i) => {
+        if (i === 0) take("camera");
+        if (i === 1) take("library");
+      },
+    );
+
   return (
-    <OnboardingStep
-      step="selfie"
-      title="Take a selfie"
-      subtitle="We read your skin, hair and eye coloring. The quiz next fine-tunes it."
-      primary={{
-        label: selfie ? "Retake selfie" : "Take selfie",
-        onPress: () => take("camera"),
-        loading: analyzing,
-      }}
-      secondary={{
-        label: "Skip photo, quiz only",
-        onPress: () => router.push("/onboarding/quiz"),
-      }}
-    >
-      {selfie ? (
-        <Image
-          source={photoUri(selfie)}
-          style={{
-            width: 160,
-            height: 160,
-            borderRadius: 80,
-            alignSelf: "center",
-          }}
-          contentFit="cover"
-        />
-      ) : null}
-      <Card>
-        {TIPS.map((tip) => (
-          <Text key={tip}>• {tip}</Text>
-        ))}
-      </Card>
-      <View>
-        <Button
-          variant="ghost"
-          label="Choose from library"
-          onPress={() => take("library")}
-          disabled={analyzing}
+    <OnboardingScreen>
+      <Header badge={stepBadge(2)} />
+      <View style={{ marginTop: 56 }}>
+        <Headline
+          eyebrow="Natural light works best"
+          title={"Take a clear\n*selfie.*"}
         />
       </View>
-      {analyzing ? (
-        <Text
-          tone="muted"
-          style={{ textAlign: "center", marginTop: t.space(2) }}
+      <Text style={[TYPE.body, { color: BRAND.inkSoft, marginTop: 14 }]}>
+        Face a window, skip filters and remove tinted glasses. Your photo stays
+        on this device.
+      </Text>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          selfie ? "Change selfie" : "Take or choose a selfie"
+        }
+        onPress={choose}
+        style={{ marginTop: 36 }}
+      >
+        <Glass
+          radius={40}
+          variant="clear"
+          fill="rgba(255,255,255,0.4)"
+          edge={BRAND.outlineSoft}
+          style={{
+            height: CARD_HEIGHT,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
-          Analyzing your coloring…
-        </Text>
-      ) : null}
-    </OnboardingStep>
+          {selfie ? (
+            <Animated.View entering={FadeIn} style={StyleSheet.absoluteFill}>
+              <Image
+                source={photoUri(selfie)}
+                style={{ flex: 1 }}
+                contentFit="cover"
+                accessibilityIgnoresInvertColors
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 18,
+                  alignSelf: "center",
+                }}
+              >
+                <Glass
+                  radius={18}
+                  fill={BRAND.glassFillStrong}
+                  style={{
+                    paddingHorizontal: 16,
+                    height: 36,
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={[TYPE.control, { fontSize: 13 }]}>
+                    Change photo
+                  </Text>
+                </Glass>
+              </View>
+            </Animated.View>
+          ) : (
+            <>
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: "#000000",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <SymbolView
+                  name="camera"
+                  size={24}
+                  weight="regular"
+                  tintColor={BRAND.white}
+                  style={{ width: 28, height: 24 }}
+                />
+              </View>
+              <Text
+                style={[
+                  TYPE.control,
+                  {
+                    fontFamily: TYPE.button.fontFamily,
+                    fontSize: 14,
+                    marginTop: 20,
+                  },
+                ]}
+              >
+                Take or choose a selfie
+              </Text>
+              <Text style={[TYPE.caption, { color: "#959395", marginTop: 10 }]}>
+                JPG, PNG or HEIC
+              </Text>
+            </>
+          )}
+        </Glass>
+      </Pressable>
+
+      <PrimaryButton
+        label="Analyze my colors"
+        onPress={() => router.push("/onboarding/questions")}
+        disabled={!selfie}
+        style={{ marginTop: 21 }}
+      />
+    </OnboardingScreen>
   );
 }
