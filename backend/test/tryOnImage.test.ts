@@ -13,21 +13,17 @@ import { productDetail } from "./fixtures/shopify.ts";
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const SECRET = "test-secret-0123456789";
 
-test("the fixed template completes the outfit with a generic counterpart for each kind of item", () => {
-  const top = tryOnPrompt({ category: "top", department: "mens", cut: "relaxed fit, hip length, short sleeves" });
-  assert.match(top, /male dress-form/);
-  assert.match(top, /chinos/);
-  assert.match(top, /relaxed fit, hip length, short sleeves/);
-  assert.match(top, /head to the feet/);
-  const bottom = tryOnPrompt({ category: "bottom", department: "womens" });
-  assert.match(bottom, /female dress-form/);
-  assert.match(bottom, /white crew-neck t-shirt/);
-  assert.doesNotMatch(bottom, /chinos/);
-  const outer = tryOnPrompt({ category: "outerwear", department: "mens" });
-  assert.match(outer, /t-shirt underneath/);
-  assert.match(outer, /chinos/);
-  const dress = tryOnPrompt({ category: "dress", department: "womens" });
-  assert.doesNotMatch(dress, /chinos|t-shirt/);
+test("the fixed template puts only the selected piece on a bare mannequin, for every kind of item", () => {
+  for (const category of ["top", "bottom", "outerwear", "dress"] as const) {
+    const prompt = tryOnPrompt({ category, department: "mens", cut: "relaxed fit, hip length, short sleeves" });
+    assert.match(prompt, /wears ONLY the/);
+    assert.match(prompt, /bare/);
+    assert.match(prompt, /no shoes/);
+    assert.doesNotMatch(prompt, /chinos|t-shirt|sneakers/);
+  }
+  assert.match(tryOnPrompt({ category: "top", department: "mens", cut: "relaxed fit" }), /male dress-form[\s\S]*relaxed fit/);
+  assert.match(tryOnPrompt({ category: "dress", department: "womens" }), /female dress-form/);
+  assert.match(tryOnPrompt({ category: "bottom", department: "mens" }), /ONLY the bottoms/);
 });
 
 test("only Shopify's image CDN is fetched", () => {
@@ -105,7 +101,7 @@ test("generates from the store photo with the template, then serves the saved im
   assert.equal(first.headers["content-type"], "image/jpeg");
   assert.equal(first.rawPayload.toString(), "generated-jpeg");
   assert.equal(generated.length, 1);
-  assert.match(generated[0].prompt, /white crew-neck t-shirt/); // a bottom gets a generic top
+  assert.match(generated[0].prompt, /ONLY the bottoms/); // the top half stays bare
   assert.match(generated[0].prompt, /relaxed fit/);
   assert.match(fetched[0], /^https:\/\/cdn\.shopify\.com\//);
   assert.equal(saved.size, 1);

@@ -6,36 +6,26 @@ export type Department = "womens" | "mens" | "both";
 type Garment = "top" | "bottom" | "dress" | "outerwear";
 
 /** Bumped when the template changes, so saved images from an older one aren't served. */
-export const TEMPLATE_VERSION = 1;
-
-/** What completes the outfit around the item, kept plain so the item stands out. Null: the item is the outfit. */
-const COUNTERPART: Record<Garment, string | null> = {
-  top: "plain light stone slim chinos and plain white sneakers",
-  bottom: "a plain fitted white crew-neck t-shirt, tucked in, and plain white sneakers",
-  outerwear: "a plain white crew-neck t-shirt underneath, plain light stone slim chinos and plain white sneakers",
-  dress: null,
-};
+export const TEMPLATE_VERSION = 2;
 
 const NOUN: Record<Garment, string> = { top: "top", bottom: "bottoms", outerwear: "jacket or coat", dress: "dress" };
 
 /**
  * The fixed prompt every try-on image uses, so all products come out in one
- * consistent studio style: a full-body faceless mannequin wearing the item
- * from the store photo, plus a generic counterpart so no half is missing.
+ * consistent studio style: a full-body faceless mannequin wearing only the
+ * item from the store photo, bare everywhere else (a shirt leaves the legs
+ * bare, trousers the chest).
  */
 export function tryOnPrompt({ category, department, cut }: { category: Garment; department: Department; cut?: string }): string {
   const form = department === "womens" ? "female" : department === "mens" ? "male" : "gender-neutral";
   const noun = NOUN[category];
-  const counterpart = COUNTERPART[category];
   return [
     "A clean full-body studio product photo for a fashion app's try-on view.",
     `A matte light-gray, faceless ${form} dress-form mannequin, front view, standing straight with arms relaxed at its sides, framed from the top of the head to the feet, plain soft off-white background, soft even studio lighting.`,
-    `The mannequin wears the ${noun} from the store photo. Reproduce it faithfully: the same colors, pattern, fabric, collar, pockets, buttons, sleeve length and overall length${cut ? `, worn as ${cut}` : ""}. Ignore the person, pose, background and any other clothing in the store photo.`,
-    counterpart ? `To complete the outfit it also wears ${counterpart}. Keep these plain and neutral so the ${noun} stands out.` : "",
-    "No text, no watermarks, no extra accessories, no people.",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    `The mannequin wears ONLY the ${noun} from the store photo. Reproduce it faithfully: the same colors, pattern, fabric, collar, pockets, buttons, sleeve length and overall length${cut ? `, worn as ${cut}` : ""}. Ignore the person, pose, background and any other clothing in the store photo.`,
+    `Everywhere the ${noun} doesn't cover, the mannequin is bare: smooth matte light-gray mannequin surface, with no other clothing, no shoes and nothing else.`,
+    "No text, no watermarks, no accessories, no people.",
+  ].join("\n");
 }
 
 /** The only host product photos are fetched from: Shopify's image CDN, over https. */

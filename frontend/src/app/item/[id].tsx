@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { AiTryOn } from "@/components/AiTryOn";
 import { Button } from "@/components/Button";
 import { Chip } from "@/components/Chip";
 import { GlassPill, PILL_EDGE, PILL_FILL } from "@/components/GlassPill";
@@ -21,6 +22,7 @@ import { useLatestMeasurements } from "@/hooks/useRecommendations";
 import { bodyShape } from "@/lib/bodyShape";
 import { recommendSize } from "@/lib/fit";
 import { paletteMatch } from "@/lib/paletteMatch";
+import { tryOnImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
 import { silhouetteMatch } from "@/lib/silhouette";
@@ -116,6 +118,17 @@ export default function ItemSheet() {
   const size = chart ? recommendSize(latest, chart, fitPreference) : null;
   const measured = latest.chest && latest.waist && latest.hips;
 
+  // Live products show the AI try-on image; demo items and mock mode the drawn mannequin.
+  const aiSource = tryOnImageSource(item, shopFor);
+  const drawn = (
+    <Mannequin
+      measurements={latest}
+      shopFor={shopFor}
+      item={item}
+      height={VISUAL_HEIGHT - t.space(14)}
+    />
+  );
+
   const toggleSave = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!saved) track("save", item, t.season?.id);
@@ -150,7 +163,8 @@ export default function ItemSheet() {
             borderColor: PILL_EDGE,
           }}
         >
-          {onYou ? <BackdropFill id={backdrop} /> : null}
+          {/* The AI image brings its own studio background; the season backdrop would frame it as a box. */}
+          {onYou && !aiSource ? <BackdropFill id={backdrop} /> : null}
           {onYou ? (
             <Animated.View
               key="mannequin"
@@ -161,12 +175,11 @@ export default function ItemSheet() {
                 paddingTop: t.space(4),
               }}
             >
-              <Mannequin
-                measurements={latest}
-                shopFor={shopFor}
-                item={item}
-                height={VISUAL_HEIGHT - t.space(14)}
-              />
+              {aiSource ? (
+                <AiTryOn source={aiSource} fallback={drawn} />
+              ) : (
+                drawn
+              )}
               <Text
                 variant="caption"
                 tone="muted"
@@ -177,10 +190,14 @@ export default function ItemSheet() {
                   paddingHorizontal: t.space(4),
                 }}
               >
-                {measured
-                  ? `${estimated}${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
-                  : "Average figure · add measurements for yours"}
-                {item.source ? " · cut estimated from the listing" : ""}
+                {aiSource
+                  ? "AI preview of this item"
+                  : measured
+                    ? `${estimated}${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
+                    : "Average figure · add measurements for yours"}
+                {!aiSource && item.source
+                  ? " · cut estimated from the listing"
+                  : ""}
               </Text>
             </Animated.View>
           ) : (

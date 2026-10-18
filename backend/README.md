@@ -116,7 +116,7 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 
 ## AI try-on images
 
-`GET /catalog/tryon-image?id=<gid>&shopFor=womens|mens|both` returns a JPEG (3:4) of a faceless light-gray dress-form mannequin, head to feet, wearing the product (`src/services/tryOnImage.ts`). It is made from the product's store photo with one fixed prompt template, so every product comes out in the same studio style. The listing reader decides what kind of item it is, and the template adds a plain counterpart so no half is missing: a top gets light stone chinos, bottoms get a tucked-in white tee, outerwear gets both, and a dress stands alone. Sneakers are white throughout.
+`GET /catalog/tryon-image?id=<gid>&shopFor=womens|mens|both` returns a JPEG (3:4) of a faceless light-gray dress-form mannequin, head to feet, wearing only the product (`src/services/tryOnImage.ts`); everywhere else the mannequin is bare, so a shirt leaves the legs bare and trousers the chest. It is made from the product's store photo with one fixed prompt template, so every product comes out in the same studio style. The listing reader decides what kind of item it is (top, bottoms, jacket or coat, dress) and its fit, length and sleeves.
 
 - Model: `TRYON_IMAGE_MODEL`, default `gemini-3.1-flash-lite-image` (about 6 s for a new image in testing).
 - Each image is saved in `tryon_images` (Postgres bytea, keyed by product, department and template version) and served from there next time (about 0.4 s). Without a database it's kept in memory. Bump `TEMPLATE_VERSION` when the template changes.

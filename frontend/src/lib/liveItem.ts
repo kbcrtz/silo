@@ -164,6 +164,7 @@ export function toCatalogItem(
     imageUrl: product.image?.url,
     productUrl: product.url,
     source: "shopify",
+    shopifyId: product.id,
     ...(product.estimate && { evidence: product.estimate.evidence }),
     ...(product.popular && { popular: true }),
     ...(product.estimate?.pattern &&

@@ -174,3 +174,23 @@ async function mockDiscover(params: DiscoverParams): Promise<DiscoverPage> {
     .filter((p) => !q || p.title.toLowerCase().includes(q));
   return { products, cursor: null, source: "demo" };
 }
+
+/**
+ * The AI try-on image for a live product, for expo-image: the item alone on
+ * a bare mannequin. Null for demo items and in mock mode (the app draws the
+ * mannequin instead).
+ *
+ * Backend contract: GET {API_URL}/catalog/tryon-image?id&shopFor,
+ * Authorization: Bearer -> image/jpeg
+ */
+export function tryOnImageSource(
+  item: CatalogItem,
+  shopFor: ShopFor,
+): { uri: string; headers: Record<string, string> } | null {
+  if (USE_MOCKS || !item.shopifyId) return null;
+  const query = new URLSearchParams({ id: item.shopifyId, shopFor });
+  return {
+    uri: `${API_URL}/catalog/tryon-image?${query}`,
+    headers: apiHeaders(),
+  };
+}

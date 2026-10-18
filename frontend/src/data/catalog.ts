@@ -45,6 +45,8 @@ export type CatalogItem = {
   priceLabel?: string;
   /** A live Shopify listing; its cut is estimated from the title (lib/liveItem). */
   source?: "shopify";
+  /** The Shopify product id, for backend calls such as the AI try-on image. */
+  shopifyId?: string;
   /** The listing's own words the backend's AI based color and cut on. */
   evidence?: string;
   /** Popular with the shopper's season this week (from the backend). */
