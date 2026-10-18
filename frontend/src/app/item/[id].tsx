@@ -163,8 +163,7 @@ export default function ItemSheet() {
             borderColor: PILL_EDGE,
           }}
         >
-          {/* The AI image brings its own studio background; the season backdrop would frame it as a box. */}
-          {onYou && !aiSource ? <BackdropFill id={backdrop} /> : null}
+          {onYou ? <BackdropFill id={backdrop} /> : null}
           {onYou ? (
             <Animated.View
               key="mannequin"
