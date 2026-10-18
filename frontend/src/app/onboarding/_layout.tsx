@@ -1,14 +1,18 @@
 import { Stack } from "expo-router";
-import { useTheme } from "@/theme";
+import { StatusBar } from "expo-status-bar";
+import { BRAND } from "@/theme/brand";
 
+/** The status bar is hidden so each step lays out like its design frame. */
 export default function OnboardingLayout() {
-  const t = useTheme();
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: t.colors.bg },
-      }}
-    />
+    <>
+      <StatusBar hidden />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: BRAND.paper },
+        }}
+      />
+    </>
   );
 }

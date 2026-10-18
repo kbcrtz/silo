@@ -6,6 +6,7 @@ import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useHydrated } from "@/store/storage";
 import { useTheme } from "@/theme";
+import { BRAND, useBrandFonts } from "@/theme/brand";
 
 /** Pushed screens show only the back button; they title themselves. */
 const pushed = { headerShown: true, title: "" };
@@ -13,10 +14,11 @@ const pushed = { headerShown: true, title: "" };
 export default function RootLayout() {
   const hydrated = useHydrated([useProfile, useMeasurements, useSaved]);
   const onboarded = useProfile((s) => s.onboarded);
+  const fontsLoaded = useBrandFonts();
   const t = useTheme();
 
   // Rendering before hydration would flash onboarding for returning users.
-  if (!hydrated) return null;
+  if (!hydrated || !fontsLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: t.colors.bg }}>
@@ -45,7 +47,7 @@ export default function RootLayout() {
               sheetAllowedDetents: [0.78, 1],
               sheetGrabberVisible: true,
               sheetCornerRadius: 28,
-              contentStyle: { backgroundColor: t.colors.bg },
+              contentStyle: { backgroundColor: BRAND.white },
             }}
           />
           <Stack.Screen name="saved/index" options={pushed} />

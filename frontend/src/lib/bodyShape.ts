@@ -1,4 +1,4 @@
-import type { Measurements } from "./measurements";
+import { upperGirth, type Measurements } from "./measurements";
 
 export type BodyShape =
   "hourglass" | "pear" | "inverted-triangle" | "apple" | "rectangle";
@@ -57,7 +57,8 @@ const SHAPES: Record<BodyShape, Omit<BodyShapeResult, "shape">> = {
  * Returns null until all three measurements exist.
  */
 export function bodyShape(m: Measurements): BodyShapeResult | null {
-  const { chest, waist, hips } = m;
+  const { waist, hips } = m;
+  const chest = upperGirth(m);
   if (!chest || !waist || !hips) return null;
 
   const narrowest = Math.min(chest, hips);

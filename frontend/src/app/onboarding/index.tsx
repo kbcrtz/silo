@@ -1,46 +1,53 @@
-import { router } from "expo-router";
-import { View } from "react-native";
-import { Button } from "@/components/Button";
-import { Screen } from "@/components/Screen";
-import { Swatches } from "@/components/Swatches";
-import { Text } from "@/components/Text";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useRef } from "react";
+import { Pressable, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { Backdrop } from "@/components/onboarding/Backdrop";
 import { loadDemoProfile } from "@/data/demo";
-import { SEASONS } from "@/data/seasons";
-import { useTheme } from "@/theme";
+import { TYPE } from "@/theme/brand";
 
-const PREVIEW = [
-  SEASONS["light-spring"].signature,
-  SEASONS["true-summer"].signature,
-  SEASONS["soft-autumn"].signature,
-  SEASONS["deep-winter"].signature,
-  SEASONS["bright-spring"].signature,
-];
+/** How long the opening holds before moving on by itself. */
+const HOLD_MS = 2200;
 
-export default function Welcome() {
-  const t = useTheme();
-  return (
-    <Screen
-      scroll={false}
-      contentStyle={{ justifyContent: "center" }}
-      footer={
-        <View style={{ gap: t.space(2), paddingBottom: t.space(2) }}>
-          <Button
-            label="Get started"
-            onPress={() => router.push("/onboarding/shop-for")}
-          />
-          <Button
-            variant="ghost"
-            label="Use demo profile"
-            onPress={loadDemoProfile}
-          />
-        </View>
+/**
+ * The opening: the wordmark, centered over the gradient. It moves on to the
+ * first step by itself, or sooner on a tap. A long press on the wordmark loads
+ * the demo profile, for demos on a fresh install.
+ */
+export default function Opening() {
+  const advanced = useRef(false);
+  const next = useCallback(() => {
+    if (advanced.current) return;
+    advanced.current = true;
+    router.push("/onboarding/essentials");
+  }, []);
+
+  // Only the first visit auto-advances; coming back here waits for a tap.
+  useFocusEffect(
+    useCallback(() => {
+      if (advanced.current) {
+        advanced.current = false;
+        return;
       }
-    >
-      <Swatches colors={PREVIEW} size={44} animated />
-      <Text variant="display">Silo</Text>
-      <Text variant="heading" tone="muted">
-        Find your colors, know your fit, and see yourself in it before you buy.
-      </Text>
-    </Screen>
+      const timer = setTimeout(next, HOLD_MS);
+      return () => clearTimeout(timer);
+    }, [next]),
+  );
+
+  return (
+    <Pressable style={{ flex: 1 }} onPress={next} accessibilityLabel="Continue">
+      <Backdrop id="neutral" />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <Animated.View entering={FadeInDown.duration(600)}>
+          <Pressable onLongPress={loadDemoProfile} delayLongPress={900}>
+            {/* The tight tracking pushes the S and o past the text box, so
+                padding keeps them from being clipped. */}
+            <Text style={[TYPE.wordmarkLarge, { paddingHorizontal: 16 }]}>
+              Silo
+            </Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Pressable>
   );
 }

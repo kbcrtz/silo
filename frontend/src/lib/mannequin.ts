@@ -1,6 +1,6 @@
 import type { CatalogItem, Length, Silhouette } from "@/data/catalog";
 import type { ShopFor } from "@/store/profile";
-import type { Measurements } from "./measurements";
+import { upperGirth, type Measurements } from "./measurements";
 
 /**
  * A front-view mannequin and the clothes drawn on it, in centimeters with the
@@ -43,7 +43,10 @@ export type Cut = Pick<
 >;
 
 /** Average adult figures, used for whatever the user hasn't measured. */
-const DEFAULTS: Record<"womens" | "mens", Required<Measurements>> = {
+const DEFAULTS: Record<
+  "womens" | "mens",
+  Required<Omit<Measurements, "bust">>
+> = {
   womens: {
     height: 165,
     weight: 62,
@@ -104,9 +107,9 @@ export function landmarks(m: Measurements, shopFor: ShopFor) {
   // Unmeasured lengths and girths scale with height, so a tall user without
   // the rest still gets a tall figure rather than an average one.
   const k = H / base.height;
-  const get = (key: keyof Measurements) => m[key] ?? base[key] * k;
+  const get = (key: keyof typeof base) => m[key] ?? base[key] * k;
 
-  const chest = get("chest");
+  const chest = upperGirth(m) ?? base.chest * k;
   const waist = get("waist");
   const hips = get("hips");
 

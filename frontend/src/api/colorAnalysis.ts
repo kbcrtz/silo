@@ -22,3 +22,22 @@ export async function analyzeSelfie(selfieUri: string): Promise<PhotoTraits> {
   }).then(expectOk);
   return res.json();
 }
+
+let pending: { uri: string; result: Promise<PhotoTraits> } | null = null;
+
+/**
+ * Starts (or joins) analysis of a selfie. The selfie step calls this as soon
+ * as a photo is picked, so it runs while the user answers the photo
+ * questions; awaiting it again for the same photo doesn't upload twice.
+ */
+export function analyzeSelfieOnce(selfieUri: string): Promise<PhotoTraits> {
+  if (pending?.uri !== selfieUri) {
+    const result = analyzeSelfie(selfieUri);
+    pending = { uri: selfieUri, result };
+    // A failure is retried by the next call rather than cached.
+    result.catch(() => {
+      if (pending?.result === result) pending = null;
+    });
+  }
+  return pending.result;
+}

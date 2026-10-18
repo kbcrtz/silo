@@ -1,32 +1,40 @@
+import * as Haptics from "expo-haptics";
 import { Pressable } from "react-native";
-import { useTheme } from "@/theme";
+import { BRAND } from "@/theme/brand";
+import { GlassPill } from "./GlassPill";
 import { Text } from "./Text";
 
+/** A glass choice pill; selected turns ink. */
 export function Chip({
   label,
   selected,
   onPress,
+  height = 36,
 }: {
   label: string;
   selected?: boolean;
   onPress: () => void;
+  height?: number;
 }) {
-  const t = useTheme();
   return (
     <Pressable
-      onPress={onPress}
-      style={{
-        paddingVertical: t.space(2),
-        paddingHorizontal: t.space(4),
-        borderRadius: t.radius.pill,
-        backgroundColor: selected ? t.colors.accent : t.colors.surface,
-        borderWidth: 1,
-        borderColor: selected ? t.colors.accent : t.colors.border,
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPress();
       }}
     >
-      <Text variant="caption" tone={selected ? "onAccent" : "default"}>
-        {label}
-      </Text>
+      <GlassPill
+        height={height}
+        fill={selected ? BRAND.ink : undefined}
+        interactive
+        style={{ paddingHorizontal: 15 }}
+      >
+        <Text variant="caption" style={selected && { color: BRAND.white }}>
+          {label}
+        </Text>
+      </GlassPill>
     </Pressable>
   );
 }

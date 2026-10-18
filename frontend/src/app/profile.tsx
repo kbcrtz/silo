@@ -15,7 +15,6 @@ import { usePassportData } from "@/components/passport/usePassportData";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
 import { loadDemoProfile } from "@/data/demo";
-import { SEASONS } from "@/data/seasons";
 import { bodyShape } from "@/lib/bodyShape";
 import type { FitPreference } from "@/lib/fit";
 import {
@@ -110,25 +109,6 @@ export default function Profile() {
               padding: t.space(3),
             }}
           />
-          <Text
-            variant="caption"
-            tone="muted"
-            style={{ marginTop: t.space(2) }}
-          >
-            Not quite your season? Try a close match
-          </Text>
-          <View
-            style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space(2) }}
-          >
-            {profile.colorProfile.ranked.slice(0, 4).map((id) => (
-              <Chip
-                key={id}
-                label={SEASONS[id].name}
-                selected={id === season.id}
-                onPress={() => profile.chooseSeason(id)}
-              />
-            ))}
-          </View>
         </Card>
       ) : null}
 

@@ -155,22 +155,6 @@ export const QUIZ: QuizQuestion[] = [
   },
 ];
 
-/**
- * Asked after the quiz when there is a selfie. Any problem ticked offers a
- * retake or quiz-only: makeup, filters and odd light skew every photo trait.
- */
-export const PHOTO_CHECK = {
-  prompt: "About your selfie",
-  hint: "Check any that apply.",
-  problems: [
-    { id: "makeup", label: "I'm wearing makeup or lipstick" },
-    { id: "filter", label: "I used a filter or beauty mode" },
-    { id: "lighting", label: "The lighting was yellow, dim or uneven" },
-    { id: "skin", label: "I'm sick, sunburned or recently tanned" },
-  ],
-  none: { id: "none", label: "None of these" },
-};
-
 export type QuizAnswers = Record<string, string>;
 
 /** Photo analysis result: the same three axes plus how sure the model is. */
@@ -181,14 +165,18 @@ const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 
 /**
  * Averages each axis over the answered questions that speak to it. A question
- * whose options never mention an axis does not dilute that axis toward zero.
+ * whose options never mention an axis does not dilute that axis toward zero,
+ * and an option with no weights at all ("not sure") counts as unanswered.
  */
-export function scoreQuiz(answers: QuizAnswers): ColorTraits {
+export function scoreQuiz(
+  answers: QuizAnswers,
+  questions: QuizQuestion[] = QUIZ,
+): ColorTraits {
   const sums: ColorTraits = { warmth: 0, depth: 0, clarity: 0 };
   const counts: ColorTraits = { warmth: 0, depth: 0, clarity: 0 };
-  for (const question of QUIZ) {
+  for (const question of questions) {
     const option = question.options.find((o) => o.id === answers[question.id]);
-    if (!option || Object.keys(option.weights).length === 0) continue;
+    if (!option || !Object.keys(option.weights).length) continue;
     for (const axis of AXES) {
       const touchesAxis = question.options.some(
         (o) => o.weights[axis] !== undefined,
