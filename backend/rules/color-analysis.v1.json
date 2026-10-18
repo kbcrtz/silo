@@ -1,0 +1,94 @@
+{
+  "version": "1.1.0",
+  "source": {
+    "name": "Deep Seasonal Color Analysis System (DSCAS)",
+    "repo": "https://github.com/mrcmich/deep-seasonal-color-analysis-system",
+    "files": ["palette_classification/palette.py", "pipeline/user_palette_classification_filter.py"],
+    "license": "No license declared upstream. Only the published method is adapted here; no DSCAS source code or model weights are copied.",
+    "adaptation": "DSCAS segments the face with a trained network, thresholds four metrics into bits and picks one of four seasons. Silo instead localizes regions with Gemini, samples real pixels, and maps the same metrics to continuous warmth/depth/clarity. The app (not this server) picks the season."
+  },
+  "caveats": [
+    "DSCAS cutoffs were derived from its own segmentation and color-extraction pipeline on its own face dataset. They are uncalibrated for Gemini-localized, box-sampled inputs.",
+    "Spreads, weights, penalties, caps and sampling parameters are team-selected provisional starting values, not published DSCAS calibration.",
+    "Outputs are not clinically or scientifically validated. Confidence is an engineering heuristic, not a calibrated probability."
+  ],
+  "axisConventions": {
+    "warmth": "+1 warm, -1 cool (frontend/src/data/seasons.ts)",
+    "depth": "+1 deep/dark, -1 light (frontend/src/data/seasons.ts)",
+    "clarity": "+1 bright/clear, -1 soft/muted (frontend/src/data/seasons.ts)"
+  },
+  "referenceColors": {
+    "peach": [255, 230, 182],
+    "purple": [210, 120, 180],
+    "note": "DSCAS compute_subtone: lips closer to peach in CIELAB = warm, closer to purple = cool."
+  },
+  "metrics": {
+    "subtone": "CIELAB deltaE76 from the lip color to peach and to purple. Input: lips.",
+    "intensity": "HSV saturation (0..1) of the skin color. Input: skin.",
+    "value": "Mean HSV value (0..1) of skin, hair and iris colors, over those available. DSCAS uses skin + eyes when hair is missing; using skin + hair when eyes are missing, or skin alone, is a Silo adaptation.",
+    "contrast": "|HSV value(hair) - HSV value(iris)|. Requires both hair and iris."
+  },
+  "cutoffs": {
+    "intensity": 0.422,
+    "value": 0.39,
+    "contrast": 0.2,
+    "note": "DSCAS UserPaletteClassificationFilter default thresholds (contrast, intensity, value) = (0.200, 0.422, 0.390), hand-picked from median values on its training data."
+  },
+  "normalization": {
+    "warmthSpread": 40,
+    "depthSpread": 0.2,
+    "intensitySpread": 0.2,
+    "contrastSpread": 0.15,
+    "intensityWeight": 0.7,
+    "contrastWeight": 0.3,
+    "formulas": {
+      "warmth": "clamp((deltaE(lips, purple) - deltaE(lips, peach)) / warmthSpread, -1, 1)",
+      "depth": "clamp((cutoffs.value - value) / depthSpread, -1, 1)",
+      "clarity": "clamp(intensityWeight * (intensity - cutoffs.intensity) / intensitySpread + contrastWeight * (contrast - cutoffs.contrast) / contrastSpread, -1, 1); intensity term alone when contrast is unavailable"
+    }
+  },
+  "measurements": {
+    "required": ["skin"],
+    "optional": ["lips", "hair", "iris"],
+    "missingValueBehavior": {
+      "skin": "No usable face: respond 422 no_usable_face so the app offers retake or quiz-only.",
+      "lips": "Missing, unsampleable or makeup detected: warmth = 0, confidence capped at caps.lips.",
+      "hair": "Value from remaining regions, contrast unavailable, confidence capped at caps.hair.",
+      "iris": "Value from remaining regions, contrast unavailable, confidence capped at caps.iris."
+    }
+  },
+  "confidence": {
+    "start": 1,
+    "penalties": {
+      "colorCast": 0.3,
+      "unevenLighting": 0.2,
+      "blur": 0.2,
+      "beautyFilter": 0.35,
+      "questionableLocalization": 0.25,
+      "occlusion": 0.2,
+      "overexposed": 0.2,
+      "underexposed": 0.2
+    },
+    "caps": {
+      "lips": 0.2,
+      "hair": 0.55,
+      "iris": 0.6
+    },
+    "note": "Penalties are summed and subtracted from start, then the lowest applicable cap applies, then clamped to [0, 1]. questionableLocalization applies once if Gemini flags unreliable regions or a returned box fails plausibility checks. lipMakeup is not a penalty: it removes the lip sample, so the lips cap applies."
+  },
+  "sampling": {
+    "dscasPixelSumBounds": [20, 700],
+    "minPixels": 25,
+    "regions": {
+      "skin": { "innerShrink": 0.2, "trimDark": 0.1, "trimBright": 0.1 },
+      "lips": { "innerShrink": 0.2, "trimDark": 0.1, "trimBright": 0.1 },
+      "hair": { "innerShrink": 0.2, "trimDark": 0.1, "trimBright": 0.1 },
+      "iris": { "innerShrink": 0.15, "trimDark": 0.1, "trimBright": 0.3 }
+    },
+    "note": "Provisional. Each box is shrunk by innerShrink per side, pixels whose R+G+B fall outside dscasPixelSumBounds are dropped (DSCAS discards too-dark/too-bright candidates the same way), the darkest trimDark and brightest trimBright fractions by luma are dropped to cut shadows and highlights, and the per-channel median of the rest is the region color. Iris trims more highlights to drop sclera and reflections."
+  },
+  "plausibility": {
+    "maxOverlapFraction": 0.25,
+    "note": "Provisional. skin, lips and iris centers must lie inside the face box; iris must sit above lips; any two of skin, lips, iris may not overlap by more than maxOverlapFraction of the smaller box."
+  }
+}
