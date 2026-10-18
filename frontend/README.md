@@ -43,12 +43,12 @@ The first device build asks you to sign in to Apple and creates the bundle id (`
 
 ## Connecting the backend
 
-Set `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_USE_MOCKS=false` in `.env`. The server lives in [`../backend`](../backend/README.md). The app expects:
+Set `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_API_SECRET` (the backend's `API_SECRET`), and `EXPO_PUBLIC_USE_MOCKS=false` in `.env`. The server lives in [`../backend`](../backend/README.md). Live requests send `Authorization: Bearer`. The app expects:
 
 - `POST /color-analysis`, multipart `selfie` → `{ warmth, depth, clarity, confidence }` (axes -1..1, see `src/data/seasons.ts`)
 - `POST /try-on`, multipart `bodyPhoto`, `itemId`, `itemImageUrl?`, `measurements` (JSON, cm/kg) → `{ jobId }`
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`
-- `GET /catalog/discover?category&q&shopFor&style&palette&neutrals&priceMin&priceMax&cursor` → `{ products, cursor, source }`, live Shopify listings (`src/api/catalog.ts`). The mock serves the bundled fixtures as `source: "demo"`. `src/lib/liveItem.ts` turns each listing into a catalog item; its cut for the mannequin is estimated from the title, and the item sheet says so.
+- `GET /catalog/discover?category&q&shopFor&style&palette&neutrals&priceMin&priceMax&cursor` → `{ products, cursor, source }`, live Shopify listings (`src/api/catalog.ts`). The mock serves the bundled fixtures as `source: "demo"`. `src/lib/liveItem.ts` turns each listing into a catalog item. Its color and cut come from the backend's `estimate` (Gemini reading the listing text) when present, else from the color name and a title guess; the item sheet says the cut is estimated.
 - `GET /catalog/product?id&selected` → `{ product }`
 
 ## How the app is laid out

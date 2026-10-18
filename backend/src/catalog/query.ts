@@ -1,5 +1,5 @@
 import { rgbToLab } from "../analysis/color.ts";
-import { hexToRgb, nameForHex } from "./colors.ts";
+import { familyFor, hexToRgb, nameForHex, type Family } from "./colors.ts";
 
 export const CATEGORIES = ["for-you", "all", "tops", "bottoms", "jeans", "shorts", "sweats", "dresses", "outerwear"] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -16,7 +16,8 @@ export type DiscoverParams = {
   palette: string[];
   neutrals: string[];
 };
-export type QueryStep = { query: string; category: Category };
+/** `color` is the Shopify color family a For You search filters on. */
+export type QueryStep = { query: string; category: Category; color?: Family };
 
 // Shopify search is natural language and products carry no reliable category,
 // so a category is a phrase in the query, plus the clothing taxonomy filter.
@@ -81,7 +82,8 @@ export function buildQueryPlan(params: DiscoverParams): QueryStep[] {
   const size = names.length ? PLAN_SIZE : garments.length;
   const plan = Array.from({ length: size }, (_, i) => {
     const [garment, garmentCategory] = garments[i % garments.length];
-    return { query: join(dept, names[i % names.length], word, garment), category: garmentCategory };
+    const name = names[i % names.length];
+    return { query: join(dept, name, word, garment), category: garmentCategory, ...(name && { color: familyFor(name) }) };
   });
   // Few distinct colors repeat (color, garment) pairs; repeated searches return the same products.
   return plan.filter((step, i) => plan.findIndex((s) => s.query === step.query) === i);

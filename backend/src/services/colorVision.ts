@@ -27,6 +27,13 @@ Set a warning to true only when it is clearly present:
 - blur: the face is noticeably out of focus or motion blurred.
 - unreliableRegions: you are unsure about any box you returned.`;
 
+/** A failed Gemini call as the HttpError the app receives; the provider status is kept for logs. */
+export function providerError(e: unknown): HttpError {
+  const timedOut = e instanceof Error && ["APIConnectionTimeoutError", "RequestTimeoutError", "TimeoutError", "AbortError"].includes(e.name);
+  const status = (e as { status?: unknown }).status;
+  return timedOut ? new HttpError("gemini_timeout", 504) : new HttpError("gemini_failed", 502, typeof status === "number" ? status : undefined);
+}
+
 // Gemini takes a JSON Schema; the draft URI is not part of its supported subset.
 const { $schema: _, ...RESPONSE_SCHEMA } = z.toJSONSchema(ObservationSchema);
 
@@ -51,11 +58,7 @@ export async function locateRegions(
     );
     text = interaction.output_text;
   } catch (e) {
-    const timedOut = e instanceof Error && ["APIConnectionTimeoutError", "RequestTimeoutError", "TimeoutError", "AbortError"].includes(e.name);
-    const status = (e as { status?: unknown }).status;
-    throw timedOut
-      ? new HttpError("gemini_timeout", 504)
-      : new HttpError("gemini_failed", 502, typeof status === "number" ? status : undefined);
+    throw providerError(e);
   }
 
   let parsed: z.infer<typeof ObservationSchema>;

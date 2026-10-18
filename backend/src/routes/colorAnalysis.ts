@@ -2,8 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { evaluate, type Colors, type Region, type Rules } from "../analysis/evaluate.ts";
 import { checkRegions, sampleRegion, toPixels } from "../analysis/regions.ts";
 import type { Locate } from "../app.ts";
-import { ColorAnalysisResponseSchema } from "../schemas/index.ts";
 import { HttpError } from "../errors.ts";
+import type { Gate } from "../guard.ts";
+import { ColorAnalysisResponseSchema } from "../schemas/index.ts";
 import { MAX_BYTES, prepareSelfie } from "../services/image.ts";
 
 const REGIONS: Region[] = ["skin", "lips", "hair", "iris"];
@@ -22,12 +23,19 @@ function toHttpError(e: unknown): HttpError | null {
  * Gemini localizes regions, the server samples real pixels, and the versioned
  * rules compute the traits. The app picks the season.
  */
-export async function colorAnalysisRoute(app: FastifyInstance, { rules, locate, model }: { rules: Rules; locate: Locate; model: string }) {
+export async function colorAnalysisRoute(
+  app: FastifyInstance,
+  { rules, locate, model, gate }: { rules: Rules; locate: Locate; model: string; gate: Gate },
+) {
   app.post("/color-analysis", async (req, reply) => {
     const started = performance.now();
     // Operational facts only: no images, colors, metric values or traits.
     const diag: Record<string, unknown> = { model, rulesVersion: rules.version };
+    let entered = false;
     try {
+      const slot = gate.tryEnter(req.ip);
+      if (slot !== "ok") throw new HttpError(slot === "rate" ? "rate_limited" : "busy", slot === "rate" ? 429 : 503);
+      entered = true;
       const file = await req.file({ limits: { fileSize: MAX_BYTES, files: 1 } });
       if (!file || file.fieldname !== "selfie") throw new HttpError("missing_selfie", 400);
       const image = await prepareSelfie(await file.toBuffer());
@@ -66,6 +74,7 @@ export async function colorAnalysisRoute(app: FastifyInstance, { rules, locate, 
       if (err.providerStatus) diag.providerStatus = err.providerStatus;
       return reply.code(err.status).send({ error: err.code });
     } finally {
+      if (entered) gate.leave();
       diag.durationMs = Math.round(performance.now() - started);
       req.log.info({ colorAnalysis: diag }, "color_analysis");
     }

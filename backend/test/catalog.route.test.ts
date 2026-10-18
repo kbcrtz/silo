@@ -5,14 +5,18 @@ import { test } from "node:test";
 import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp } from "../src/app.ts";
 import { HttpError } from "../src/errors.ts";
+import { createGate } from "../src/guard.ts";
+import type { Enrich } from "../src/services/listingInsights.ts";
 import type { Catalog, SearchInput } from "../src/services/shopifyCatalog.ts";
+
+const SECRET = "test-secret-0123456789";
 import { noUrl, productDetail, sweater, trouser } from "./fixtures/shopify.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const softAutumn = "palette=%23B07D62,%239CAF88,%23C9A66B,%237E8C6A&neutrals=%23EDE4D8,%235C5046";
 
 /** A catalog that answers every search with `products` and a cursor named after the query. */
-function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean } = {}) {
+function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean; enrich?: Enrich } = {}) {
   const searches: SearchInput[] = [];
   const lookups: { id: string; selected?: unknown }[] = [];
   const catalog: Catalog = {
@@ -34,8 +38,17 @@ function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown
       done();
     },
   });
-  const app = buildApp({ rules, model: "m", logger: { level: "info", stream }, locate: async () => assert.fail("no Gemini here"), catalog });
-  const get = (url: string) => app.inject({ method: "GET", url });
+  const app = buildApp({
+    rules,
+    model: "m",
+    logger: { level: "info", stream },
+    locate: async () => assert.fail("no Gemini here"),
+    catalog,
+    secret: SECRET,
+    gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
+    enrich: opts.enrich,
+  });
+  const get = (url: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${SECRET}` } });
   return { get, searches, lookups, logs };
 }
 
@@ -87,6 +100,7 @@ test("For You makes two searches per page, interleaved and deduplicated", async 
   assert.equal(res.statusCode, 200);
   assert.equal(searches.length, 2);
   assert.ok(searches.every((s) => s.limit === 10 && s.cursor === undefined));
+  assert.ok(searches.every((s) => s.colors?.length === 1), "each For You search filters on its color family");
   assert.notEqual(searches[0].query, searches[1].query);
   assert.deepEqual(res.json().products.map((p: any) => p.id), [trouser.id, sweater.id]);
 });
@@ -181,4 +195,41 @@ test("product ids must be Shopify ids", async () => {
     assert.equal((await get(url)).statusCode, 400, url);
   }
   assert.equal(lookups.length, 0);
+});
+
+test("each product gets the AI's estimate of its color and cut from the listing text", async () => {
+  const seen: unknown[][] = [];
+  const enrich: Enrich = async (facts) => {
+    seen.push(facts);
+    return facts.map((f, i) =>
+      i === 0
+        ? { hex: "#6B7A3A", confidence: "high" as const, cut: { category: "bottom" as const, silhouette: "relaxed" as const, length: "ankle" as const }, evidence: "Olive Green; relaxed fit" }
+        : null,
+    );
+  };
+  const { get, logs } = setup({ products: [trouser, sweater], enrich });
+  const body = (await get("/catalog/discover?category=bottoms")).json();
+  assert.equal(seen.length, 1, "one call for the page");
+  assert.equal(seen[0].length, 2);
+  assert.deepEqual(body.products[0].estimate, {
+    hex: "#6B7A3A",
+    confidence: "high",
+    cut: { category: "bottom", silhouette: "relaxed", length: "ankle" },
+    evidence: "Olive Green; relaxed fit",
+    source: "ai",
+  });
+  assert.equal(body.products[1].estimate, undefined);
+  assert.equal(logs.find((l) => l.catalog)?.catalog.estimated, 1);
+});
+
+test("if the AI fails the page still loads, without estimates", async () => {
+  const { get, logs } = setup({
+    enrich: async () => {
+      throw new HttpError("gemini_timeout", 504);
+    },
+  });
+  const res = await get("/catalog/discover?category=bottoms");
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.json().products.every((p: any) => p.estimate === undefined));
+  assert.equal(logs.find((l) => l.catalog)?.catalog.estimateError, "gemini_timeout");
 });

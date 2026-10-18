@@ -7,6 +7,9 @@ import sharp from "sharp";
 import { buildApp, type Locate } from "../src/app.ts";
 import { evaluate, loadRules, type Warnings } from "../src/analysis/evaluate.ts";
 import type { Box } from "../src/analysis/regions.ts";
+import { createGate } from "../src/guard.ts";
+
+const SECRET = "test-secret-0123456789";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const none: Warnings = {
@@ -63,14 +66,27 @@ function setup(locate: Locate) {
   });
   let calls = 0;
   const catalog = { search: async () => assert.fail("no catalog here"), getProduct: async () => assert.fail("no catalog here") };
-  const app = buildApp({ rules, model: "gemini-test", logger: { level: "info", stream }, catalog, locate: (jpeg) => (calls++, locate(jpeg)) });
+  const app = buildApp({
+    rules,
+    model: "gemini-test",
+    logger: { level: "info", stream },
+    catalog,
+    secret: SECRET,
+    gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
+    locate: (jpeg) => (calls++, locate(jpeg)),
+  });
   return { app, logs, calls: () => calls };
 }
 
 const found: Locate = async () => ({ regions: BOXES, warnings: none });
 
 async function post(app: ReturnType<typeof buildApp>, body: { payload: Buffer; headers: Record<string, string> }) {
-  return app.inject({ method: "POST", url: "/color-analysis", ...body });
+  return app.inject({
+    method: "POST",
+    url: "/color-analysis",
+    payload: body.payload,
+    headers: { ...body.headers, authorization: `Bearer ${SECRET}` },
+  });
 }
 
 test("a selfie flows through localization, pixel sampling and the rules to the exact contract", async () => {

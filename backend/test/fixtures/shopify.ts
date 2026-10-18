@@ -22,7 +22,7 @@ export const trouser = {
     { name: "Waist size", values: [{ label: "30\"" }, { label: "32\"" }] },
     { name: "Inseam length", values: [{ label: "30\"" }, { label: "32\"" }] },
   ],
-  metadata: { top_features: ["Drawstring waist"] },
+  metadata: { top_features: ["Drawstring waist"], tech_specs: ["Fit: Relaxed", "Length: Full", "Material: Linen blend", "Care: Machine wash"] },
   variants: [
     {
       id: "gid://shopify/ProductVariant/5001",

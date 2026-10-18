@@ -2,8 +2,16 @@ import { readFileSync } from "node:fs";
 import { GoogleGenAI } from "@google/genai";
 import { loadRules } from "./analysis/evaluate.ts";
 import { buildApp } from "./app.ts";
+import { createGate } from "./guard.ts";
 import { locateRegions, type CreateInteraction } from "./services/colorVision.ts";
+import { createEnricher } from "./services/listingInsights.ts";
 import { createCatalog } from "./services/shopifyCatalog.ts";
+
+const secret = process.env.API_SECRET ?? "";
+if (secret.length < 16) {
+  console.error("API_SECRET must be at least 16 characters. Copy .env.template to .env.");
+  process.exit(1);
+}
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -37,5 +45,26 @@ const catalog = createCatalog({
   timeoutMs: catalogTimeoutMs,
 });
 
-const app = buildApp({ rules, model, logger: true, catalog, locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }) });
+// One Gemini call per feed page reads the listings' text for color and cut. CATALOG_AI=off skips it.
+const enrichTimeoutMs = Number(process.env.CATALOG_AI_TIMEOUT_MS ?? 3_000);
+if (!(enrichTimeoutMs > 0)) {
+  console.error("CATALOG_AI_TIMEOUT_MS must be a positive number of milliseconds.");
+  process.exit(1);
+}
+// Flash-Lite: on a 20-listing page it took ~1.5 s against ~4 s for Flash, agreeing on category and cut (2026-10-18).
+const enrichModel = process.env.CATALOG_AI_MODEL ?? "gemini-3.5-flash-lite";
+const enrich = process.env.CATALOG_AI === "off" ? undefined : createEnricher({ create, model: enrichModel, timeoutMs: enrichTimeoutMs });
+
+// One person retaking a selfie stays under this. A loop does not, and only two Gemini calls run at once.
+const gate = createGate({ windowMs: 10 * 60_000, max: 8, concurrency: 2 });
+const app = buildApp({
+  rules,
+  model,
+  logger: true,
+  catalog,
+  secret,
+  gate,
+  enrich,
+  locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }),
+});
 await app.listen({ port: Number(process.env.PORT ?? 8080), host: "0.0.0.0" });

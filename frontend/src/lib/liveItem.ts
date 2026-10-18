@@ -156,7 +156,7 @@ export function toCatalogItem(
     name: product.title,
     brand: product.merchant.name,
     cut: shopFor === "both" ? "unisex" : shopFor,
-    colors: product.color?.hex ? [product.color.hex] : [],
+    colors: colorOf(product),
     price: product.price ? product.price.minor / 100 : 0,
     priceLabel: product.price?.formatted ?? "See price at store",
     aspect: LIVE_ASPECT,
@@ -164,6 +164,14 @@ export function toCatalogItem(
     imageUrl: product.image?.url,
     productUrl: product.url,
     source: "shopify",
-    ...inferCut(product.title, product.category),
+    ...(product.estimate && { evidence: product.estimate.evidence }),
+    // The backend's reading of the full listing beats a guess from the title alone.
+    ...(product.estimate?.cut ?? inferCut(product.title, product.category)),
   };
+}
+
+/** The AI's color unless it says it's guessing, else the swatch for the merchant's color name, else none. */
+function colorOf({ estimate, color }: CatalogProduct): string[] {
+  if (estimate?.hex && estimate.confidence !== "low") return [estimate.hex];
+  return color?.hex ? [color.hex] : [];
 }

@@ -4,6 +4,7 @@ import { discover } from "../catalog/discover.ts";
 import { normalizeProduct } from "../catalog/normalize.ts";
 import { CATEGORIES, STYLES } from "../catalog/query.ts";
 import { HttpError } from "../errors.ts";
+import type { Enrich } from "../services/listingInsights.ts";
 import type { Catalog } from "../services/shopifyCatalog.ts";
 
 const hexList = z
@@ -26,7 +27,8 @@ const DiscoverQuery = z.strictObject({
   neutrals: hexList.default([]),
   priceMin: dollars,
   priceMax: dollars,
-  cursor: z.string().max(4000).optional(),
+  // Room for the HMAC suffix on the opaque cursor.
+  cursor: z.string().max(4500).optional(),
 });
 
 const Selected = z.array(z.object({ name: z.string().max(100), label: z.string().max(100) })).max(10);
@@ -63,7 +65,7 @@ const cents = (dollars?: number) => (dollars === undefined ? undefined : dollars
  * listings, normalized for the app. Nothing is cached or stored, per Shopify's
  * catalog rules.
  */
-export async function catalogRoute(app: FastifyInstance, { catalog }: { catalog: Catalog }) {
+export async function catalogRoute(app: FastifyInstance, { catalog, secret, enrich }: { catalog: Catalog; secret: string; enrich?: Enrich }) {
   async function handle(route: string, req: { log: FastifyInstance["log"] }, reply: FastifyReply, run: (diag: Record<string, unknown>) => Promise<unknown>) {
     const started = performance.now();
     // Counts only: no queries, palette colors or search text, which describe the shopper.
@@ -89,8 +91,9 @@ export async function catalogRoute(app: FastifyInstance, { catalog }: { catalog:
       if (!query.success) throw new HttpError("invalid_request", 400);
       const { cursor, priceMin, priceMax, ...params } = query.data;
       diag.category = params.category;
-      const page = await discover(catalog, { ...params, priceMin: cents(priceMin), priceMax: cents(priceMax) }, cursor, clientSignal(reply));
-      Object.assign(diag, { upstreamCalls: page.upstreamCalls, returned: page.products.length, dropped: page.dropped });
+      const page = await discover(catalog, { ...params, priceMin: cents(priceMin), priceMax: cents(priceMax) }, cursor, secret, clientSignal(reply), enrich);
+      const { upstreamCalls, dropped, estimated, estimateError } = page;
+      Object.assign(diag, { upstreamCalls, returned: page.products.length, dropped, estimated, estimateError });
       return { products: page.products, cursor: page.cursor, source: "shopify" };
     }),
   );

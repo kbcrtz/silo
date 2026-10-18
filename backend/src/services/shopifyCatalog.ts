@@ -8,6 +8,8 @@ export type SearchInput = {
   /** Minor currency units, like Shopify's own price filter. */
   priceMin?: number;
   priceMax?: number;
+  /** Shopify color families ("Green", "Brown"); matching listings come back on a variant in that color. */
+  colors?: string[];
 };
 export type Choice = { name: string; label: string };
 
@@ -139,13 +141,14 @@ export function createCatalog(cfg: CatalogConfig): Catalog {
 
   const context = { address_country: cfg.country };
   return {
-    async search({ query, limit, cursor, priceMin, priceMax }, signal) {
+    async search({ query, limit, cursor, priceMin, priceMax, colors }, signal) {
       const price = priceMin !== undefined || priceMax !== undefined ? { price: { min: priceMin, max: priceMax } } : {};
+      const color = colors?.length ? { attributes: [{ name: "Color", values: colors }] } : {};
       const content = await call(
         "search_catalog",
         {
           query,
-          filters: { available: true, ships_to: { country: cfg.country }, categories: [CLOTHING], ...price },
+          filters: { available: true, ships_to: { country: cfg.country }, categories: [CLOTHING], ...price, ...color },
           context,
           pagination: { limit, ...(cursor && { cursor }) },
         },

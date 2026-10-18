@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Insight } from "../services/listingInsights.ts";
 import { colorFromName } from "./colors.ts";
 import type { Category } from "./query.ts";
 
@@ -26,6 +27,7 @@ const RawProduct = z.object({
   price_range: z.object({ min: Money }).optional(),
   rating: z.object({ value: z.number(), scale_max: z.number(), count: z.number() }).optional(),
   selected: z.array(Choice).optional(),
+  metadata: z.object({ top_features: z.array(z.string()).optional(), tech_specs: z.array(z.string()).optional() }).optional(),
 });
 
 export type Price = { minor: number; currency: string; formatted: string };
@@ -54,6 +56,11 @@ export type CatalogProduct = {
   selected: { name: string; label: string }[];
   available: boolean;
   rating?: { value: number; max: number; count: number };
+  /**
+   * Gemini's reading of the listing text (never images): the garment's main
+   * color, its cut, and the words it went on. An estimate, not a measurement.
+   */
+  estimate?: Insight & { source: "ai" };
   // Detail only:
   images?: { url: string; alt: string }[];
   description?: string;
@@ -144,5 +151,42 @@ export function normalizeProduct(raw: unknown, category?: Category, opts: { deta
         ? [{ id: v.id, title: v.title ?? p.title, url: v.url, price: price(v.price), available: v.availability?.available ?? true, options: v.options ?? [] }]
         : [],
     ),
+  };
+}
+
+/** What a shopper would read on the listing: the text Gemini estimates color and cut from. No links or images. */
+export type ListingFacts = {
+  title: string;
+  color?: string;
+  options?: Record<string, string[]>;
+  description?: string;
+  features?: string[];
+  /** Shopify's labeled specs ("Fit: Relaxed", "Length: Mini"), minus care and sizing lines. */
+  specs?: string[];
+};
+
+export function listingFacts(raw: unknown): ListingFacts | null {
+  const parsed = RawProduct.safeParse(raw);
+  if (!parsed.success) return null;
+  const p = parsed.data;
+  const shown = p.variants.find((v) => v.url) ?? p.variants[0];
+  const color = shown.options?.find((o) => isColor(o.name))?.label;
+  // Sizes say nothing about cut; fit, length, rise and sleeve options do.
+  const options = Object.fromEntries(
+    (p.options ?? []).filter((o) => /fit|length|rise|sleeve|cut/i.test(o.name)).map((o) => [o.name, o.values.slice(0, 6).map((v) => v.label)]),
+  );
+  const text = p.description?.plain ?? p.description?.html;
+  const features = p.metadata?.top_features?.slice(0, 3).map((f) => f.slice(0, 120));
+  const specs = p.metadata?.tech_specs
+    ?.filter((line) => !/^(care|available|size)/i.test(line))
+    .slice(0, 8)
+    .map((line) => line.slice(0, 100));
+  return {
+    title: p.title,
+    ...(color && { color }),
+    ...(Object.keys(options).length && { options }),
+    ...(text && { description: toText(text).slice(0, 300) }),
+    ...(features?.length && { features }),
+    ...(specs?.length && { specs }),
   };
 }

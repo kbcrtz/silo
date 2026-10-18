@@ -1,10 +1,10 @@
 import type { PhotoTraits } from "@/lib/colorAnalysis";
-import { API_URL, USE_MOCKS, expectOk, fileField, sleep } from "./config";
+import { API_URL, USE_MOCKS, apiHeaders, expectOk, fileField, sleep } from "./config";
 
 /**
  * Estimates color traits from a selfie.
  *
- * Backend contract: POST {API_URL}/color-analysis, multipart field "selfie",
+ * Backend contract: POST {API_URL}/color-analysis, Authorization: Bearer, multipart field "selfie",
  * responds { warmth, depth, clarity, confidence } with axes in -1..1 and
  * confidence in 0..1 (see data/seasons.ts for what the axes mean).
  */
@@ -17,6 +17,7 @@ export async function analyzeSelfie(selfieUri: string): Promise<PhotoTraits> {
   body.append("selfie", fileField(selfieUri, "selfie.jpg"));
   const res = await fetch(`${API_URL}/color-analysis`, {
     method: "POST",
+    headers: apiHeaders(),
     body,
   }).then(expectOk);
   return res.json();

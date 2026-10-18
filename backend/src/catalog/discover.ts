@@ -1,7 +1,9 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { HttpError } from "../errors.ts";
+import type { Enrich } from "../services/listingInsights.ts";
 import type { Catalog } from "../services/shopifyCatalog.ts";
-import { normalizeProduct, type CatalogProduct } from "./normalize.ts";
+import { listingFacts, normalizeProduct, type CatalogProduct } from "./normalize.ts";
 import { buildQueryPlan, type DiscoverParams } from "./query.ts";
 
 export const PAGE_SIZE = 20;
@@ -18,16 +20,39 @@ const PER_PAGE = 2;
 const Cursor = z.object({ p: z.int().min(0).max(10_000), c: z.record(z.string(), z.string().max(2000).nullable()) });
 type Cursor = z.infer<typeof Cursor>;
 
-const encode = (c: Cursor) => Buffer.from(JSON.stringify(c)).toString("base64url");
-function decode(raw: string): Cursor {
+function mac(body: string, secret: string) {
+  return createHmac("sha256", secret).update(body).digest("base64url");
+}
+
+/** `body.sig`. A cursor is only resumed when this server signed it with the current secret. */
+const encode = (c: Cursor, secret: string) => {
+  const body = Buffer.from(JSON.stringify(c)).toString("base64url");
+  return `${body}.${mac(body, secret)}`;
+};
+
+function decode(raw: string, secret: string): Cursor {
+  const dot = raw.lastIndexOf(".");
+  if (dot <= 0) throw new HttpError("invalid_cursor", 400);
+  const body = raw.slice(0, dot);
+  const sig = Buffer.from(raw.slice(dot + 1));
+  const expected = Buffer.from(mac(body, secret));
+  if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) throw new HttpError("invalid_cursor", 400);
   try {
-    return Cursor.parse(JSON.parse(Buffer.from(raw, "base64url").toString("utf8")));
+    return Cursor.parse(JSON.parse(Buffer.from(body, "base64url").toString("utf8")));
   } catch {
     throw new HttpError("invalid_cursor", 400);
   }
 }
 
-export type DiscoverPage = { products: CatalogProduct[]; cursor: string | null; upstreamCalls: number; dropped: number };
+export type DiscoverPage = {
+  products: CatalogProduct[];
+  cursor: string | null;
+  upstreamCalls: number;
+  dropped: number;
+  /** How many products got an AI estimate, or why none did. */
+  estimated?: number;
+  estimateError?: string;
+};
 
 /**
  * One feed page. A category or search is a single 20-item search; For You
@@ -39,10 +64,12 @@ export async function discover(
   catalog: Catalog,
   params: DiscoverParams & { priceMin?: number; priceMax?: number },
   rawCursor: string | undefined,
+  secret: string,
   signal?: AbortSignal,
+  enrich?: Enrich,
 ): Promise<DiscoverPage> {
   const plan = buildQueryPlan(params);
-  const state = rawCursor ? decode(rawCursor) : { p: 0, c: {} };
+  const state = rawCursor ? decode(rawCursor, secret) : { p: 0, c: {} };
   const perQuery = plan.length > 1 ? PAGE_SIZE / PER_PAGE : PAGE_SIZE;
   const want = plan.length > 1 ? PER_PAGE : 1;
 
@@ -57,7 +84,14 @@ export async function discover(
   const results = await Promise.all(
     picks.map((i) =>
       catalog.search(
-        { query: plan[i].query, limit: perQuery, cursor: state.c[i] ?? undefined, priceMin: params.priceMin, priceMax: params.priceMax },
+        {
+          query: plan[i].query,
+          limit: perQuery,
+          cursor: state.c[i] ?? undefined,
+          priceMin: params.priceMin,
+          priceMax: params.priceMax,
+          ...(plan[i].color && { colors: [plan[i].color] }),
+        },
         signal,
       ),
     ),
@@ -70,6 +104,7 @@ export async function discover(
   const seen = new Set<string>();
   const perMerchant = new Map<string, number>();
   const products: CatalogProduct[] = [];
+  const raws: unknown[] = [];
   let dropped = 0;
   const longest = Math.max(0, ...results.map((r) => r.products.length));
   for (let row = 0; row < longest; row++) {
@@ -82,7 +117,19 @@ export async function discover(
       seen.add(product.id);
       perMerchant.set(product.merchant.name, shown + 1);
       products.push(product);
+      raws.push(r.products[row]);
     });
   }
-  return { products, cursor: picks.length && more ? encode(next) : null, upstreamCalls: picks.length, dropped };
+  const page: DiscoverPage = { products, cursor: picks.length && more ? encode(next, secret) : null, upstreamCalls: picks.length, dropped };
+  if (!enrich || !products.length) return page;
+
+  // Best effort: the page is complete without estimates, so a slow or failed call never blocks the feed.
+  try {
+    const insights = await enrich(raws.map((raw) => listingFacts(raw)!));
+    insights.forEach((insight, k) => insight && (products[k].estimate = { ...insight, source: "ai" }));
+    page.estimated = insights.filter(Boolean).length;
+  } catch (e) {
+    page.estimateError = e instanceof HttpError ? e.code : "estimate_failed";
+  }
+  return page;
 }

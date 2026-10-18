@@ -1,6 +1,6 @@
 import type { CatalogItem } from "@/data/catalog";
 import type { Measurements } from "@/lib/measurements";
-import { API_URL, USE_MOCKS, expectOk, fileField, sleep } from "./config";
+import { API_URL, USE_MOCKS, apiHeaders, expectOk, fileField, sleep } from "./config";
 
 export type TryOnStatus = "queued" | "running" | "succeeded" | "failed";
 
@@ -35,16 +35,18 @@ export async function startTryOn(
   body.append("itemId", item.id);
   if (item.imageUrl) body.append("itemImageUrl", item.imageUrl);
   body.append("measurements", JSON.stringify(measurements));
-  const res = await fetch(`${API_URL}/try-on`, { method: "POST", body }).then(
-    expectOk,
-  );
+  const res = await fetch(`${API_URL}/try-on`, {
+    method: "POST",
+    headers: apiHeaders(),
+    body,
+  }).then(expectOk);
   const { jobId } = await res.json();
   return jobId;
 }
 
 export async function getTryOn(jobId: string): Promise<TryOnState> {
   if (USE_MOCKS) return mockState(jobId);
-  const res = await fetch(`${API_URL}/try-on/${jobId}`).then(expectOk);
+  const res = await fetch(`${API_URL}/try-on/${jobId}`, { headers: apiHeaders() }).then(expectOk);
   return res.json();
 }
 

@@ -68,6 +68,12 @@ test("search sends one JSON-RPC search_catalog call with the agent profile and c
   assert.equal(out.cursor, "c1");
 });
 
+test("a color family becomes Shopify's Color attribute filter", async () => {
+  const { catalog, calls } = setup([json(searchResult([trouser]))]);
+  await catalog.search({ query: "women's sage trousers", limit: 10, colors: ["Green"] });
+  assert.deepEqual(calls[0].body.params.arguments.catalog.filters.attributes, [{ name: "Color", values: ["Green"] }]);
+});
+
 test("the last page has no cursor", async () => {
   const { catalog } = setup([json(searchResult([trouser], null))]);
   assert.equal((await catalog.search({ query: "x", limit: 10 })).cursor, null);

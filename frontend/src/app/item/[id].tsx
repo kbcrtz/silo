@@ -168,12 +168,18 @@ export default function ItemSheet() {
               <Text
                 variant="caption"
                 tone="muted"
-                style={{ position: "absolute", bottom: t.space(3) }}
+                style={{
+                  position: "absolute",
+                  bottom: t.space(3),
+                  textAlign: "center",
+                  paddingHorizontal: t.space(4),
+                }}
               >
                 {measured
                   ? `${estimated}${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
                   : "Average figure · add measurements for yours"}
                 {item.source ? " · cut estimated from the listing" : ""}
+                {item.evidence ? `\nFrom the listing: ${item.evidence}` : ""}
               </Text>
             </Animated.View>
           ) : (

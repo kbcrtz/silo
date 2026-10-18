@@ -1,7 +1,7 @@
 import { CATALOG, shopUrl, type CatalogItem } from "@/data/catalog";
 import type { Season } from "@/data/seasons";
 import type { ShopFor } from "@/store/profile";
-import { API_URL, USE_MOCKS, expectOk, sleep } from "./config";
+import { API_URL, USE_MOCKS, apiHeaders, expectOk, sleep } from "./config";
 
 export type FeedCategory =
   | "for-you"
@@ -41,6 +41,14 @@ export type CatalogProduct = {
   selected: Choice[];
   available: boolean;
   rating?: { value: number; max: number; count: number };
+  /** The backend's AI reading of the listing text (never images): estimated color and cut, with the words it used. */
+  estimate?: {
+    hex: string | null;
+    confidence: "high" | "medium" | "low";
+    cut: Pick<CatalogItem, "category" | "silhouette" | "length" | "sleeve">;
+    evidence: string;
+    source: "ai";
+  };
   images?: { url: string; alt: string }[];
   description?: string;
   variants?: {
@@ -76,7 +84,7 @@ export type DiscoverParams = {
  * One page of the Discover feed. Only fashion attributes leave the phone:
  * category, search text, department, style and the season's palette colors.
  *
- * Backend contract: GET {API_URL}/catalog/discover?category&q&shopFor&style
+ * Backend contract: GET {API_URL}/catalog/discover, Authorization: Bearer, ?category&q&shopFor&style
  * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&cursor
  * -> { products, cursor, source }
  */
@@ -101,6 +109,7 @@ export async function discoverProducts(
     query.set("priceMax", String(params.priceMax));
   if (params.cursor) query.set("cursor", params.cursor);
   const res = await fetch(`${API_URL}/catalog/discover?${query}`, {
+    headers: apiHeaders(),
     signal,
   }).then(expectOk);
   return res.json();
@@ -126,6 +135,7 @@ export async function getCatalogProduct(
   const query = new URLSearchParams({ id });
   if (selected?.length) query.set("selected", JSON.stringify(selected));
   const res = await fetch(`${API_URL}/catalog/product?${query}`, {
+    headers: apiHeaders(),
     signal,
   }).then(expectOk);
   return (await res.json()).product;

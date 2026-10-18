@@ -111,6 +111,7 @@ describe("toCatalogItem", () => {
     expect(item.cut).toBe("womens");
     expect(item.source).toBe("shopify");
     expect(item.sizeChartId).toBe(""); // no brand chart, so no size advice
+    expect(item.evidence).toBeUndefined();
   });
 
   it("invents no color when the name has no swatch", () => {
@@ -136,6 +137,50 @@ describe("toCatalogItem", () => {
     expect(findItem(item.id)).toBeUndefined();
     rememberItems([item]);
     expect(findItem(item.id)).toBe(item);
+  });
+});
+
+describe("toCatalogItem with the backend's AI estimate", () => {
+  const estimate = {
+    hex: "#71553A",
+    confidence: "medium" as const,
+    cut: {
+      category: "bottom" as const,
+      silhouette: "wide-leg" as const,
+      length: "ankle" as const,
+    },
+    evidence: "Tobacco; relaxed wide leg",
+    source: "ai" as const,
+  };
+
+  it("uses the estimated color and cut over the name table and title guess", () => {
+    const item = toCatalogItem(
+      product({
+        title: "The Ridgeline",
+        color: { name: "Tobacco", hex: null, source: "variant" },
+        estimate,
+      }),
+      "womens",
+    );
+    expect(item.colors).toEqual(["#71553A"]);
+    expect(item).toMatchObject({
+      category: "bottom",
+      silhouette: "wide-leg",
+      length: "ankle",
+    });
+    expect(item.evidence).toBe("Tobacco; relaxed wide leg");
+  });
+
+  it("ignores a low-confidence color but still takes the cut", () => {
+    const item = toCatalogItem(
+      product({
+        color: { name: "Olive Green", hex: "#6B7A3A", source: "variant" },
+        estimate: { ...estimate, confidence: "low" },
+      }),
+      "womens",
+    );
+    expect(item.colors).toEqual(["#6B7A3A"]);
+    expect(item.silhouette).toBe("wide-leg");
   });
 });
 

@@ -45,6 +45,8 @@ export type CatalogItem = {
   priceLabel?: string;
   /** A live Shopify listing; its cut is estimated from the title (lib/liveItem). */
   source?: "shopify";
+  /** The listing's own words the backend's AI based color and cut on. */
+  evidence?: string;
 };
 
 /** Placeholder catalog spread across all twelve seasons. Brands are fictional. */

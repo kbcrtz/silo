@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { colorFromName, nameForHex } from "../src/catalog/colors.ts";
+import { colorFromName, familyFor, nameForHex } from "../src/catalog/colors.ts";
 import { buildQueryPlan, type DiscoverParams } from "../src/catalog/query.ts";
 
 // Soft Autumn from frontend/src/data/seasons.ts, as the app sends it.
@@ -69,4 +69,20 @@ test("without a palette For You still works from the style alone", () => {
   const plan = buildQueryPlan({ ...base, shopFor: "mens", style: "dark" });
   assert.ok(plan.length >= 4);
   for (const step of plan) assert.match(step.query, /^men's dark /);
+});
+
+test("each color word has the Shopify color family its filter understands", () => {
+  assert.equal(familyFor("sage"), "Green");
+  assert.equal(familyFor("camel"), "Brown");
+  assert.equal(familyFor("off white"), "White");
+  assert.equal(familyFor("dusty pink"), "Pink");
+  assert.equal(familyFor("navy"), "Navy");
+});
+
+test("For You searches filter on the family of their color word; other feeds don't filter", () => {
+  const plan = buildQueryPlan({ ...base, ...softAutumn });
+  for (const step of plan) assert.equal(step.color, familyFor(colorFromName(step.query)!.name), step.query);
+  assert.equal(buildQueryPlan({ ...base, category: "tops" })[0].color, undefined);
+  assert.equal(buildQueryPlan({ ...base, q: "linen" })[0].color, undefined);
+  assert.equal(buildQueryPlan({ ...base, style: "dark" })[0].color, undefined); // no palette
 });

@@ -8,13 +8,15 @@ Stack: Node 24+ running TypeScript directly (type stripping, no build step), Fas
 
 ```sh
 npm install
-cp .env.template .env   # set GEMINI_API_KEY
+cp .env.template .env   # set GEMINI_API_KEY and API_SECRET
 npm start               # http://0.0.0.0:8080
 ```
 
 In Google AI Studio, turn off project-level logging for the key used here, so selfies are not kept as logs.
 
-The endpoint has no auth yet and every request is a billed Gemini call. Keep it on your local network; add auth or a shared secret before exposing it publicly. A 502 log line carries `providerStatus` (429 quota or spend cap, 402 billing, 503 overload).
+Every route requires `Authorization: Bearer <API_SECRET>`. The server listens on all interfaces so a phone on the LAN can reach it; the secret is what stops everyone else. Set the same value as `EXPO_PUBLIC_API_SECRET` in the app. That value is compiled into the app, so it only keeps other devices on the network out. Use HTTPS before putting this anywhere public: the secret and the selfie both travel with the request.
+
+Color analysis allows 8 calls per 10 minutes from one client, and at most 2 Gemini calls run at once. A 502 log line carries `providerStatus` (429 quota or spend cap, 402 billing, 503 overload). Catalog cursors are HMAC-signed with `API_SECRET`; a cursor this process did not sign is `invalid_cursor`.
 
 Point the app at it with `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_USE_MOCKS=false` in `frontend/.env`. A phone needs your machine's LAN IP or a deployed HTTPS URL, not `localhost`.
 
@@ -47,7 +49,10 @@ Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non
 | 422 | `no_usable_face` | No single face, or no usable skin sample |
 | 502 | `gemini_failed`, `gemini_invalid_output` | Gemini errored or returned output that fails the schema |
 | 504 | `gemini_timeout` | Gemini took longer than `GEMINI_TIMEOUT_MS` |
-| 400 | `invalid_request`, `invalid_cursor` | Catalog query parameters fail validation, or a cursor this server didn't issue |
+| 401 | `unauthorized` | Missing or wrong bearer token |
+| 429 | `rate_limited` | More than 8 color analyses from this client in 10 minutes |
+| 503 | `busy` | Two color analyses are already running |
+| 400 | `invalid_request`, `invalid_cursor` | Catalog query parameters fail validation, or a cursor this process did not sign |
 | 404 | `product_not_found` | The id doesn't resolve, or the listing has no merchant link |
 | 502 | `catalog_unavailable`, `catalog_invalid_response` | Shopify errored, or answered in a shape we can't read |
 | 503 | `catalog_rate_limited` | Shopify's shared anonymous rate limit, after one retry |
@@ -85,7 +90,7 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 | `cursor` | The previous page's `cursor`; null means no more pages |
 
 - **A category** (`src/catalog/query.ts`) is one 20-item search such as "men's jeans". Search text narrows it ("women's wool jackets and coats"). Every search has Shopify's clothing taxonomy filter (`aa-1`), ships to `CATALOG_COUNTRY` and asks for available items.
-- **For You** with no search text is a fixed plan of up to 8 searches pairing palette color words with garments, e.g. "women's sage knit sweater". The style picks which colors lead: neutrals for `minimal` (which also adds "minimalist"), the most saturated for `colorful`, the darkest for `dark`. Palette hexes become search words through the nearest entry in `src/catalog/colors.ts`. Each page runs two plan searches of 10 and interleaves them. After the first pass through the plan, each search resumes from its own Shopify cursor, all carried in the opaque `cursor`.
+- **For You** with no search text is a fixed plan of up to 8 searches pairing palette color words with garments, e.g. "women's sage knit sweater". Each also filters on Shopify's Color attribute with that word's color family (sage → Green, camel → Brown; `src/catalog/colors.ts`), so results come back on a variant in that color. Shopify maps merchant names into families itself ("Espresso" → Brown); the 13 families were checked live, and a few are noisy (Yellow returns some white items). The style picks which colors lead: neutrals for `minimal` (which also adds "minimalist"), the most saturated for `colorful`, the darkest for `dark`. Palette hexes become search words through the nearest entry in `src/catalog/colors.ts`. Each page runs two plan searches of 10 and interleaves them. After the first pass through the plan, each search resumes from its own Shopify cursor, all carried in the opaque `cursor`.
 - **Each page** is deduplicated by product id and capped at 2 products per merchant, so page sizes vary and can be under 20.
 - Changing `category`, `q`, `shopFor`, `style` or the palette starts a new feed: drop the old cursor.
 
@@ -97,6 +102,7 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 - **`price`** comes from minor units in the listing's own currency (`JPY` has none). Listings can come back in non-US currencies even with US shipping.
 - **`color`** is `{ name, hex, source }`: the merchant's color option for the shown variant (`variant`), or a color word in the title (`title`). Shopify gives names, never hex, so `hex` is an approximate swatch from the name table and is null for names like "Bering Sea". Use it for broad ranking only. Nothing reads product images.
 - **`sizes`** are the labels of options named like "size" (S, 32"). They are not garment measurements.
+- **`estimate`** (optional) is Gemini's reading of the listing text: `{ hex, confidence, cut: { category, silhouette, length, sleeve? }, evidence, source: "ai" }`. Each page's title, color, fit options, description and Shopify feature notes go to Gemini in parallel batches of 5 (`src/services/listingInsights.ts`): text only, no images and nothing about the shopper. Labeled specs ("Fit: Relaxed", "Length: Mini") are sent too, minus care and sizing lines. It uses `CATALOG_AI_MODEL` (default `gemini-3.5-flash-lite`, about 1.5 s for a 20-item page; Flash took about 4 s). The color is the model's idea of the color name, such as a stock "olive", not the store's actual shade. If Gemini fails or passes `CATALOG_AI_TIMEOUT_MS` (default 3 s), the page returns without estimates. `CATALOG_AI=off` turns it off.
 - **`selected`** is the shown variant's options. Pass it to `/catalog/product` so the detail opens on the same variant.
 - Shopify returns no image dimensions, so the app learns each image's aspect ratio when it loads.
 
@@ -104,7 +110,7 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 
 - Nothing is cached or stored, and images are never downloaded: Shopify's catalog terms forbid caching results and allow images only alongside their listing. The app should show them with `cachePolicy="none"`.
 - Anonymous access has shared, low rate limits. The server keeps at most 2 Shopify calls open and retries a 429 or 5xx once, after `Retry-After` (up to 3 s) or 500 ms. Timeouts aren't retried. A request the app abandons cancels its Shopify call.
-- Only fashion attributes go to Shopify: category, search text, department, style words and palette color words. Never selfies or measurements. Logs carry counts and the category only.
+- Only fashion attributes go to Shopify: category, search text, department, style words and palette color words. Never selfies or measurements. Logs carry counts and the category only, plus how many products got an estimate or why none did.
 
 ## Attribution and limits
 
