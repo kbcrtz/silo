@@ -11,19 +11,25 @@ export function ChoiceList({
   onSelect,
 }: {
   options: Option[];
-  selected?: string;
+  /** An array makes it a checklist. */
+  selected?: string | string[];
   onSelect: (id: string) => void;
 }) {
   const t = useTheme();
   return (
     <View style={{ gap: t.space(3) }}>
       {options.map((option) => {
-        const isSelected = option.id === selected;
+        const multi = Array.isArray(selected);
+        const isSelected = multi
+          ? selected.includes(option.id)
+          : option.id === selected;
         return (
           <Pressable
             key={option.id}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: isSelected }}
+            accessibilityRole={multi ? "checkbox" : "radio"}
+            accessibilityState={
+              multi ? { checked: isSelected } : { selected: isSelected }
+            }
             onPress={() => {
               Haptics.selectionAsync();
               onSelect(option.id);

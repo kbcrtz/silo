@@ -55,7 +55,10 @@ export default function SelfieStep() {
       }}
       secondary={{
         label: "Skip photo, quiz only",
-        onPress: () => router.push("/onboarding/quiz"),
+        onPress: () => {
+          set({ photoTraits: undefined });
+          router.push("/onboarding/quiz");
+        },
       }}
     >
       {selfie ? (

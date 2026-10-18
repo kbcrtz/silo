@@ -10,32 +10,32 @@ import {
 // Strongly warm and moderately soft: sits between True and Soft Autumn.
 const warmSoftMedium: QuizAnswers = {
   veins: "green",
-  jewelry: "gold",
   sun: "both",
   hair: "brown",
   eyes: "hazel",
+  lips: "peach",
+  foundation: "warm",
   contrast: "low",
-  white: "cream",
 };
 
 const coolDeepClear: QuizAnswers = {
   veins: "blue",
-  jewelry: "silver",
   sun: "both",
   hair: "black",
   eyes: "dark-brown",
+  lips: "berry",
+  foundation: "cool",
   contrast: "high",
-  white: "pure",
 };
 
 const coolLight: QuizAnswers = {
   veins: "blue",
-  jewelry: "silver",
   sun: "burn",
   hair: "platinum",
   eyes: "grey",
+  lips: "pale-pink",
+  foundation: "none",
   contrast: "medium",
-  white: "pure",
 };
 
 describe("scoreQuiz", () => {
@@ -45,8 +45,26 @@ describe("scoreQuiz", () => {
   });
 
   it("ignores unanswered questions instead of pulling toward zero", () => {
-    expect(scoreQuiz({ jewelry: "gold" }).warmth).toBe(1);
+    expect(scoreQuiz({ foundation: "warm" }).warmth).toBe(1);
     expect(scoreQuiz({})).toEqual({ warmth: 0, depth: 0, clarity: 0 });
+  });
+
+  it('treats "Not sure" and "I don\'t wear foundation" as skipped, not neutral', () => {
+    expect(
+      scoreQuiz({ veins: "green", lips: "unsure", foundation: "none" }).warmth,
+    ).toBe(1);
+  });
+
+  it("asks only factual questions, never which colors look better on you", () => {
+    expect(QUIZ.map((q) => q.id)).toEqual([
+      "veins",
+      "sun",
+      "hair",
+      "eyes",
+      "lips",
+      "foundation",
+      "contrast",
+    ]);
   });
 
   it("only uses option ids that exist", () => {

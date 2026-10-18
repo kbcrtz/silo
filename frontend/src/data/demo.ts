@@ -15,12 +15,12 @@ import { useProfile } from "@/store/profile";
 /** Clearly soft and warm-leaning; tested to land on Soft Autumn. */
 export const DEMO_ANSWERS: QuizAnswers = {
   veins: "mix",
-  jewelry: "gold",
   sun: "both",
   hair: "brown",
   eyes: "hazel",
+  lips: "peach",
+  foundation: "none",
   contrast: "low",
-  white: "cream",
 };
 
 /** Two check-ins a month apart, so the history screen has something to show. */

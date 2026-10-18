@@ -10,6 +10,7 @@ type Axis = keyof ColorTraits;
 export type QuizOption = {
   id: string;
   label: string;
+  /** Empty for "Not sure"-style answers: they count as skipped, not neutral. */
   weights: Partial<ColorTraits>;
 };
 
@@ -32,15 +33,6 @@ export const QUIZ: QuizQuestion[] = [
     ],
   },
   {
-    id: "jewelry",
-    prompt: "Which jewelry flatters you more?",
-    options: [
-      { id: "silver", label: "Silver", weights: { warmth: -1 } },
-      { id: "gold", label: "Gold", weights: { warmth: 1 } },
-      { id: "both", label: "Both look good", weights: { warmth: 0 } },
-    ],
-  },
-  {
     id: "sun",
     prompt: "How does your skin react to the sun?",
     options: [
@@ -54,12 +46,17 @@ export const QUIZ: QuizQuestion[] = [
         label: "Burns, then tans",
         weights: { warmth: 0, depth: 0 },
       },
-      { id: "tan", label: "Tans easily", weights: { warmth: 0.5, depth: 0.5 } },
+      {
+        id: "tan",
+        label: "Tans easily, rarely burns",
+        weights: { warmth: 0.5, depth: 0.5 },
+      },
     ],
   },
   {
     id: "hair",
-    prompt: "What's your natural hair color?",
+    prompt: "What is your natural hair color?",
+    hint: "Your roots, if you dye it.",
     options: [
       {
         id: "platinum",
@@ -114,39 +111,65 @@ export const QUIZ: QuizQuestion[] = [
     ],
   },
   {
+    id: "lips",
+    prompt: "What color are your lips with no lipstick or balm?",
+    options: [
+      {
+        id: "pale-pink",
+        label: "Pale or light pink",
+        weights: { warmth: -0.5 },
+      },
+      { id: "berry", label: "Rosy or berry pink", weights: { warmth: -1 } },
+      { id: "peach", label: "Peachy or coral", weights: { warmth: 1 } },
+      { id: "brown", label: "Brownish or deep", weights: { warmth: 0.5 } },
+      { id: "unsure", label: "Not sure", weights: {} },
+    ],
+  },
+  {
+    id: "foundation",
+    prompt: "If you wear foundation, what undertone is your shade?",
+    hint: "C or P on the label means cool, W or Y warm, N neutral.",
+    options: [
+      { id: "cool", label: "Cool or pink", weights: { warmth: -1 } },
+      { id: "warm", label: "Warm, yellow or golden", weights: { warmth: 1 } },
+      { id: "neutral", label: "Neutral", weights: { warmth: 0 } },
+      { id: "none", label: "I don't wear foundation", weights: {} },
+    ],
+  },
+  {
     id: "contrast",
-    prompt: "How much contrast is there between your hair, skin and eyes?",
+    prompt: "How much do your hair, skin and eyes stand out from each other?",
     options: [
       {
         id: "low",
-        label: "Low, everything blends together",
+        label: "Low: they blend together",
         weights: { clarity: -1 },
       },
       { id: "medium", label: "Medium", weights: { clarity: 0 } },
       {
         id: "high",
-        label: "High, they stand out from each other",
+        label: "High: they stand out from each other",
         weights: { clarity: 1 },
       },
     ],
   },
-  {
-    id: "white",
-    prompt: "Which looks better next to your face?",
-    options: [
-      {
-        id: "pure",
-        label: "Pure bright white",
-        weights: { warmth: -0.5, clarity: 0.5 },
-      },
-      {
-        id: "cream",
-        label: "Cream or ivory",
-        weights: { warmth: 0.5, clarity: -0.3 },
-      },
-    ],
-  },
 ];
+
+/**
+ * Asked after the quiz when there is a selfie. Any problem ticked offers a
+ * retake or quiz-only: makeup, filters and odd light skew every photo trait.
+ */
+export const PHOTO_CHECK = {
+  prompt: "About your selfie",
+  hint: "Check any that apply.",
+  problems: [
+    { id: "makeup", label: "I'm wearing makeup or lipstick" },
+    { id: "filter", label: "I used a filter or beauty mode" },
+    { id: "lighting", label: "The lighting was yellow, dim or uneven" },
+    { id: "skin", label: "I'm sick, sunburned or recently tanned" },
+  ],
+  none: { id: "none", label: "None of these" },
+};
 
 export type QuizAnswers = Record<string, string>;
 
@@ -165,7 +188,7 @@ export function scoreQuiz(answers: QuizAnswers): ColorTraits {
   const counts: ColorTraits = { warmth: 0, depth: 0, clarity: 0 };
   for (const question of QUIZ) {
     const option = question.options.find((o) => o.id === answers[question.id]);
-    if (!option) continue;
+    if (!option || Object.keys(option.weights).length === 0) continue;
     for (const axis of AXES) {
       const touchesAxis = question.options.some(
         (o) => o.weights[axis] !== undefined,

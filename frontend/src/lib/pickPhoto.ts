@@ -22,6 +22,9 @@ export async function pickPhoto(
   const options: ImagePicker.ImagePickerOptions = {
     mediaTypes: ["images"],
     quality: 0.8,
+    // The backend can't decode HEIC; Compatible makes iOS hand over a JPEG instead.
+    preferredAssetRepresentationMode:
+      ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     cameraType:
       camera === "front"
         ? ImagePicker.CameraType.front
