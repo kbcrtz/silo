@@ -45,7 +45,8 @@ export function PrimaryButton({
           paddingHorizontal: 23,
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
+          // A lone label sits centered; with an arrow it leads.
+          justifyContent: arrow || loading ? "space-between" : "center",
           backgroundColor: disabled ? BRAND.disabled : BRAND.ink,
           opacity: pressed ? 0.88 : 1,
           transform: [{ scale: pressed ? 0.985 : 1 }],
@@ -104,6 +105,7 @@ export function GlassButton({
         interactive
         style={{
           height: HEIGHT,
+          alignItems: "center",
           justifyContent: "center",
           paddingHorizontal: 20,
         }}
