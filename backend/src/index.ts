@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import postgres from "postgres";
 import { GoogleGenAI } from "@google/genai";
 import { loadRules } from "./analysis/evaluate.ts";
 import { buildApp } from "./app.ts";
@@ -6,6 +7,7 @@ import { createGate } from "./guard.ts";
 import { locateRegions, type CreateInteraction } from "./services/colorVision.ts";
 import { createEnricher } from "./services/listingInsights.ts";
 import { createCatalog } from "./services/shopifyCatalog.ts";
+import { createUserData, migrate } from "./services/userData.ts";
 
 const secret = process.env.API_SECRET ?? "";
 if (secret.length < 16) {
@@ -55,6 +57,17 @@ if (!(enrichTimeoutMs > 0)) {
 const enrichModel = process.env.CATALOG_AI_MODEL ?? "gemini-3.5-flash-lite";
 const enrich = process.env.CATALOG_AI === "off" ? undefined : createEnricher({ create, model: enrichModel, timeoutMs: enrichTimeoutMs });
 
+// Tiger Cloud Postgres backs up the app's on-device data. Without it, /me answers 503 and everything else works.
+const databaseUrl = process.env.TIGER_DATABASE_URL;
+let userData;
+if (databaseUrl) {
+  const sql = postgres(databaseUrl, { ssl: "require", max: 5, idle_timeout: 30 });
+  await migrate(sql);
+  userData = createUserData(sql);
+} else {
+  console.warn("TIGER_DATABASE_URL is not set; /me routes are off.");
+}
+
 // One person retaking a selfie stays under this. A loop does not, and only two Gemini calls run at once.
 const gate = createGate({ windowMs: 10 * 60_000, max: 8, concurrency: 2 });
 const app = buildApp({
@@ -65,6 +78,7 @@ const app = buildApp({
   secret,
   gate,
   enrich,
+  userData,
   locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }),
 });
 await app.listen({ port: Number(process.env.PORT ?? 8080), host: "0.0.0.0" });

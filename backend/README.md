@@ -36,6 +36,7 @@ The app already calls these, behind mocks, in `frontend/src/api/`. Match these s
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`. Not implemented yet.
 - `GET /catalog/discover` → `{ products: CatalogProduct[], cursor: string | null, source: "shopify" }`. **Implemented**; see [Catalog](#catalog).
 - `GET /catalog/product?id=<gid>&selected=<JSON>` → `{ product: CatalogProduct }` with images, description and variants. **Implemented.**
+- `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`: back up the app's on-device data to Postgres on Tiger Cloud, keyed by an anonymous `x-device-id` UUID. **Implemented**; see [User data](#user-data).
 
 Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non-2xx as "couldn't analyze", offering retake or quiz-only.
 
@@ -111,6 +112,19 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 - Nothing is cached or stored, and images are never downloaded: Shopify's catalog terms forbid caching results and allow images only alongside their listing. The app should show them with `cachePolicy="none"`.
 - Anonymous access has shared, low rate limits. The server keeps at most 2 Shopify calls open and retries a 429 or 5xx once, after `Retry-After` (up to 3 s) or 500 ms. Timeouts aren't retried. A request the app abandons cancels its Shopify call.
 - Only fashion attributes go to Shopify: category, search text, department, style words and palette color words. Never selfies or measurements. Logs carry counts and the category only, plus how many products got an estimate or why none did.
+
+## User data
+
+The app backs up what it stores on the phone to Postgres on Tiger Cloud (`TIGER_DATABASE_URL`; without it the `/me` routes answer 503 `data_unavailable` and everything else works). Each install makes a random UUID and sends it as `x-device-id`; there are no accounts, so a reinstall starts fresh. Selfie photos never leave the phone.
+
+| Route | Body | Table |
+| --- | --- | --- |
+| `PUT /me/profile` | `{ data }`, the profile store without the selfie file name (≤ 32 KB) | `profiles` (jsonb) |
+| `PUT /me/saved` | `{ data }`, saved ids, lists and bookmarks (≤ 256 KB) | `saved` (jsonb) |
+| `POST /me/measurements` | `{ entries: [{ type, value, measuredAt }] }` → `{ added }`; resending is a no-op | `measurements`, a TimescaleDB hypertable on `measured_at` |
+| `GET /me` | → `{ profile, saved, measurements }` | |
+
+Tables are created on startup (`src/services/userData.ts`). Logs carry counts only. Errors: 400 `invalid_device` or `invalid_request`, 413 `too_large`, 502 `data_failed`.
 
 ## Attribution and limits
 

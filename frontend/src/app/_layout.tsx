@@ -5,6 +5,7 @@ import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useHydrated } from "@/store/storage";
+import { useCloudSync } from "@/hooks/useCloudSync";
 import { useTheme } from "@/theme";
 import { BRAND, useBrandFonts } from "@/theme/brand";
 
@@ -13,6 +14,7 @@ const pushed = { headerShown: true, title: "" };
 
 export default function RootLayout() {
   const hydrated = useHydrated([useProfile, useMeasurements, useSaved]);
+  useCloudSync(hydrated);
   const onboarded = useProfile((s) => s.onboarded);
   const fontsLoaded = useBrandFonts();
   const t = useTheme();

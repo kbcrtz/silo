@@ -50,6 +50,7 @@ Set `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_API_SECRET` (the backend's `API_SECRET`)
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`
 - `GET /catalog/discover?category&q&shopFor&style&palette&neutrals&priceMin&priceMax&cursor` → `{ products, cursor, source }`, live Shopify listings (`src/api/catalog.ts`). The mock serves the bundled fixtures as `source: "demo"`. `src/lib/liveItem.ts` turns each listing into a catalog item. Its color and cut come from the backend's `estimate` (Gemini reading the listing text) when present, else from the color name and a title guess; the item sheet says the cut is estimated. The feed is kept in memory only; a live product the user saves is kept as a small bookmark (title, store and image links, price label, cut) in `src/store/saved.ts`, so saved lists survive a restart.
 - `GET /catalog/product?id&selected` → `{ product }`
+- `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`, `GET /me` with `x-device-id`: `src/hooks/useCloudSync.ts` backs up the profile (without the selfie), saved items and measurements two seconds after each change; the phone stays the source of truth (`src/api/userData.ts`).
 
 ## How the app is laid out
 
