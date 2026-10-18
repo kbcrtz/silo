@@ -81,7 +81,7 @@ export default function Me() {
         <View style={{ gap: t.space(3), alignItems: "center" }}>
           <PassportCard data={passport} width={width - t.space(10)} />
           <Text variant="caption" tone="muted">
-            Tilt your phone or drag sideways · Tap to flip
+            Tilt to shimmer · Drag to turn · Tap to flip
           </Text>
         </View>
       ) : (

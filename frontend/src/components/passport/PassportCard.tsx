@@ -35,16 +35,19 @@ export function PassportCard({
   width: number;
 }) {
   const height = width * CARD_ASPECT;
-  const { tiltX, tiltY, flip, dragX, gesture } = useCardTilt(width, height);
+  const { dragX, dragY, foilX, foilY, sweep, flip, gesture } = useCardTilt(
+    width,
+    height,
+  );
 
   // One shimmer sweep on mount, so the foil announces itself.
   useEffect(() => {
-    dragX.value = -0.9;
-    dragX.value = withTiming(0, {
+    sweep.value = -0.9;
+    sweep.value = withTiming(0, {
       duration: 1600,
       easing: Easing.out(Easing.cubic),
     });
-  }, [dragX]);
+  }, [sweep]);
 
   const { signature, best } = data.season;
   const tints = {
@@ -54,7 +57,7 @@ export function PassportCard({
   };
   const fillUniforms = useDerivedValue(() => ({
     resolution: [width, height],
-    tilt: [tiltX.value, tiltY.value],
+    tilt: [foilX.value, foilY.value],
     ...tints,
     glitter: 1,
   }));
@@ -72,8 +75,8 @@ export function PassportCard({
       opacity: showing ? 1 : 0,
       transform: [
         { perspective: PERSPECTIVE },
-        { rotateX: `${-tiltY.value * MAX_ROTATE_X}deg` },
-        { rotateY: `${tiltX.value * MAX_ROTATE_Y + turn}deg` },
+        { rotateX: `${-dragY.value * MAX_ROTATE_X}deg` },
+        { rotateY: `${dragX.value * MAX_ROTATE_Y + turn}deg` },
       ],
     };
   };
