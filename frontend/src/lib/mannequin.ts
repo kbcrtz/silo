@@ -1,6 +1,6 @@
 import type { CatalogItem, Length, Silhouette } from "@/data/catalog";
 import type { ShopFor } from "@/store/profile";
-import { upperGirth, type Measurements } from "./measurements";
+import type { Measurements } from "./measurements";
 
 /**
  * A front-view mannequin and the clothes drawn on it, in centimeters with the
@@ -103,13 +103,20 @@ export type Landmarks = ReturnType<typeof landmarks>;
 export function landmarks(m: Measurements, shopFor: ShopFor) {
   const mens = shopFor === "mens";
   const base = DEFAULTS[mens ? "mens" : "womens"];
-  const H = clamp(m.height ?? base.height, 140, 210);
+  // No height but a leg length: legs are a steady share of height, so estimate it from them.
+  const fromLegs =
+    m.height === undefined && m.inseam !== undefined
+      ? m.inseam * (base.height / base.inseam)
+      : undefined;
+  const H = clamp(m.height ?? fromLegs ?? base.height, 140, 210);
   // Unmeasured lengths and girths scale with height, so a tall user without
   // the rest still gets a tall figure rather than an average one.
   const k = H / base.height;
   const get = (key: keyof typeof base) => m[key] ?? base[key] * k;
 
-  const chest = upperGirth(m) ?? base.chest * k;
+  // Chest (around the upper torso) sets the shoulders and under the arms; bust (fullest point) the bust line.
+  const chest = m.chest ?? m.bust ?? base.chest * k;
+  const bust = m.bust ?? chest;
   const waist = get("waist");
   const hips = get("hips");
 
@@ -134,14 +141,15 @@ export function landmarks(m: Measurements, shopFor: ShopFor) {
   const half = {
     neck: (mens ? 0.036 : 0.031) * H,
     shoulder: chest / 4.8,
-    chest: chest / 6.2,
+    underarm: chest / 6.2,
+    chest: bust / 6.2,
     waist: waist / 6.3,
     hip: hips / 6.0,
   };
 
   const torsoStops: [number, number][] = [
     [y.shoulder, half.shoulder],
-    [y.armpit, half.chest * 0.98],
+    [y.armpit, half.underarm * 0.98],
     [y.chest, half.chest],
     [y.underbust, lerp(half.chest, half.waist, mens ? 0.3 : 0.45)],
     [y.waist, half.waist],

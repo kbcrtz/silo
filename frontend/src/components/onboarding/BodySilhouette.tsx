@@ -17,7 +17,7 @@ import { smooth } from "../skia/smooth";
 
 /**
  * The figure on the body profile: the user's proportions as a solid shape,
- * with dashed guides at the waist and hips. It eases between shapes as the
+ * with dashed guides at the waist, hips and where the legs start. It eases between shapes as the
  * measurements change, so typing a number visibly reshapes it.
  */
 export function BodySilhouette({
@@ -49,6 +49,8 @@ export function BodySilhouette({
       path,
       waist: guide(L.y.waist),
       hip: guide(L.y.hip),
+      // Where the legs start, so a leg-length change is visible.
+      legs: guide(L.y.crotch),
       offset: height - L.H * scale,
     };
   }, [measurements, shopFor, height]);
@@ -71,7 +73,7 @@ export function BodySilhouette({
         transform={[{ translateX: width / 2 }, { translateY: shape.offset }]}
       >
         <Path path={path} color={BRAND.ink} />
-        {[shape.waist, shape.hip].map((g, i) => (
+        {[shape.waist, shape.hip, shape.legs].map((g, i) => (
           <Path
             key={i}
             path={g}

@@ -141,6 +141,28 @@ describe("mannequin", () => {
     expect(roles("w-09")).toEqual(["baseBottom", "baseTop", "item"]); // blazer
   });
 
+  it("without a height, leg length sets the figure's height", () => {
+    const short = landmarks({ inseam: 70 }, "womens");
+    const long = landmarks({ inseam: 86 }, "womens");
+    expect(long.H).toBeGreaterThan(short.H + 20);
+    // With a height, leg length moves where the legs start, not the height.
+    const a = landmarks({ height: 170, inseam: 74 }, "womens");
+    const b = landmarks({ height: 170, inseam: 82 }, "womens");
+    expect(a.H).toBe(b.H);
+    expect(b.y.crotch).toBeLessThan(a.y.crotch);
+  });
+
+  it("chest shapes the shoulders and bust the bust line, so both fields count", () => {
+    const base = { height: 165, bust: 92 };
+    const narrow = landmarks({ ...base, chest: 82 }, "womens");
+    const broad = landmarks({ ...base, chest: 96 }, "womens");
+    expect(broad.half.shoulder).toBeGreaterThan(narrow.half.shoulder);
+    expect(broad.half.chest).toBe(narrow.half.chest); // the bust line follows bust
+    expect(
+      landmarks({ ...base, chest: 82, bust: 100 }, "womens").half.chest,
+    ).toBeGreaterThan(narrow.half.chest);
+  });
+
   it("drops the hem lower for longer lengths", () => {
     expect(hemY(L, "waist")).toBeLessThan(hemY(L, "hip"));
     expect(hemY(L, "hip")).toBeLessThan(hemY(L, "knee"));
