@@ -1,17 +1,36 @@
 import { Link } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  View,
+} from "react-native";
+import type { FeedCategory } from "@/api/catalog";
+import { Button } from "@/components/Button";
 import { Chip } from "@/components/Chip";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
-import { CATEGORY_LABELS, type Category } from "@/data/catalog";
-import { useRecommendations } from "@/hooks/useRecommendations";
+import { useDiscover } from "@/hooks/useDiscover";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 
-const CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
+const CATEGORIES: [FeedCategory, string][] = [
+  ["for-you", "For You"],
+  ["all", "All"],
+  ["tops", "Tops"],
+  ["bottoms", "Bottoms"],
+  ["jeans", "Jeans"],
+  ["shorts", "Shorts"],
+  ["sweats", "Sweats"],
+  ["dresses", "Dresses"],
+  ["outerwear", "Outerwear"],
+];
+/** Start fetching the next page this far (pt) before the bottom. */
+const LOAD_AHEAD = 800;
 
 function BarButton({
   href,
@@ -75,20 +94,20 @@ function BarButton({
 /** The app's one home screen: the feed, with Saved and Profile in its top bar. */
 export default function Home() {
   const t = useTheme();
-  const { ranked, shape, season } = useRecommendations();
   const savedCount = useSaved((s) => s.itemIds.length);
-  const [category, setCategory] = useState<Category | null>(null);
+  const [category, setCategory] = useState<FeedCategory>("for-you");
+  const feed = useDiscover(category);
+  const { shape, season } = feed;
 
   const entries = useMemo(
     () =>
-      ranked
-        .filter((r) => !category || r.item.category === category)
-        .map((r) => ({
-          item: r.item,
-          score: r.color || r.silhouette ? r.score : undefined,
-        })),
-    [ranked, category],
+      feed.entries.map((r) => ({
+        item: r.item,
+        score: r.color || r.silhouette ? r.score : undefined,
+      })),
+    [feed.entries],
   );
+  const loading = feed.status === "loading";
 
   const pickedFor = [
     season ? `your ${season.name} palette` : null,
@@ -98,7 +117,24 @@ export default function Home() {
     .join(" and ");
 
   return (
-    <Screen>
+    <Screen
+      scrollProps={{
+        scrollEventThrottle: 200,
+        onScroll: ({ nativeEvent: e }) => {
+          if (
+            e.layoutMeasurement.height + e.contentOffset.y >
+            e.contentSize.height - LOAD_AHEAD
+          )
+            feed.loadMore();
+        },
+        refreshControl: (
+          <RefreshControl
+            refreshing={loading && feed.mode === "refresh"}
+            onRefresh={feed.refresh}
+          />
+        ),
+      }}
+    >
       <View
         style={{
           flexDirection: "row",
@@ -126,6 +162,7 @@ export default function Home() {
         {pickedFor
           ? `Picked for ${pickedFor}`
           : "Finish color analysis to personalize this feed"}
+        {feed.source === "demo" ? " · demo catalog" : ""}
       </Text>
 
       <ScrollView
@@ -133,25 +170,33 @@ export default function Home() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: t.space(2) }}
       >
-        <Chip
-          label="All"
-          selected={!category}
-          onPress={() => setCategory(null)}
-        />
-        {CATEGORIES.map((c) => (
+        {CATEGORIES.map(([id, label]) => (
           <Chip
-            key={c}
-            label={CATEGORY_LABELS[c]}
-            selected={category === c}
-            onPress={() => setCategory(c)}
+            key={id}
+            label={label}
+            selected={category === id}
+            onPress={() => setCategory(id)}
           />
         ))}
       </ScrollView>
-      {entries.length ? (
-        <MasonryGrid entries={entries} />
-      ) : (
+      {entries.length ? <MasonryGrid entries={entries} /> : null}
+      {feed.status === "error" ? (
+        <View style={{ alignItems: "center", gap: t.space(3) }}>
+          <Text tone="muted" style={{ textAlign: "center" }}>
+            {entries.length
+              ? "Couldn't load more clothes."
+              : "Couldn't reach the store catalog."}
+          </Text>
+          <Button label="Try again" variant="secondary" onPress={feed.retry} />
+        </View>
+      ) : loading && feed.mode !== "refresh" ? (
+        <ActivityIndicator
+          color={t.colors.textMuted}
+          style={{ marginVertical: t.space(6) }}
+        />
+      ) : !entries.length ? (
         <Text tone="muted">Nothing here for this filter yet.</Text>
-      )}
+      ) : null}
     </Screen>
   );
 }

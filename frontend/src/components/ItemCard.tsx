@@ -50,6 +50,7 @@ export function ItemCard({
               }}
             >
               <Text variant="caption" style={{ color: "#141414" }}>
+                {item.source ? "≈" : ""}
                 {score}% match
               </Text>
             </View>
@@ -74,7 +75,7 @@ export function ItemCard({
             {item.name}
           </Text>
           <Text variant="caption" tone="muted">
-            {item.brand} · ${item.price}
+            {item.brand} · {item.priceLabel ?? `$${item.price}`}
           </Text>
           {footer}
         </View>
@@ -91,6 +92,8 @@ export function ProductImage({ item }: { item: CatalogItem }) {
       style={{ flex: 1 }}
       contentFit="cover"
       transition={200}
+      // Shopify catalog images may not be stored: memory only, never disk.
+      cachePolicy={item.source ? "memory" : undefined}
     />
   ) : (
     <ColorBlock item={item} />

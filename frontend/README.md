@@ -2,7 +2,7 @@
 
 iOS app (Expo SDK 55, expo-router) for color analysis, body measurements and fit, a Pinterest-style feed ranked by your palette and body shape, try-on on a mannequin built from your measurements, and saved lists.
 
-The frontend runs fully on mocks until the backend exists: color analysis is faked in `src/api/`, and the catalog and size charts are fixtures in `src/data/`. Catalog items have no real product pages yet, so Shop opens a shopping search for the item. `src/api/tryOn.ts` (AI try-on on a body photo) is kept for later but nothing calls it now.
+The frontend runs on mocks unless a backend URL is set: color analysis and the catalog are faked in `src/api/`, and size charts are fixtures in `src/data/`. With the backend, the feed shows live Shopify listings (`src/hooks/useDiscover.ts`) and Shop opens the merchant's own page; in mock mode it shows the bundled demo items, labeled "demo catalog", and Shop opens a shopping search. `src/api/tryOn.ts` (AI try-on on a body photo) is kept for later but nothing calls it now.
 
 ## Run it
 
@@ -48,7 +48,7 @@ Set `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_USE_MOCKS=false` in `.env`. The serve
 - `POST /color-analysis`, multipart `selfie` → `{ warmth, depth, clarity, confidence }` (axes -1..1, see `src/data/seasons.ts`)
 - `POST /try-on`, multipart `bodyPhoto`, `itemId`, `itemImageUrl?`, `measurements` (JSON, cm/kg) → `{ jobId }`
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`
-- `GET /catalog/discover?category&q&shopFor&style&palette&neutrals&priceMin&priceMax&cursor` → `{ products, cursor, source }`, live Shopify listings (`src/api/catalog.ts`; not wired into a screen yet). The mock serves the bundled fixtures as `source: "demo"`.
+- `GET /catalog/discover?category&q&shopFor&style&palette&neutrals&priceMin&priceMax&cursor` → `{ products, cursor, source }`, live Shopify listings (`src/api/catalog.ts`). The mock serves the bundled fixtures as `source: "demo"`. `src/lib/liveItem.ts` turns each listing into a catalog item; its cut for the mannequin is estimated from the title, and the item sheet says so.
 - `GET /catalog/product?id&selected` → `{ product }`
 
 ## How the app is laid out

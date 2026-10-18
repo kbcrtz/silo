@@ -41,6 +41,10 @@ export type CatalogItem = {
   length: Length;
   /** Construction lines the mannequin draws on the garment. */
   details?: Detail[];
+  /** Price as the merchant lists it, in its own currency; shown instead of `price`. */
+  priceLabel?: string;
+  /** A live Shopify listing; its cut is estimated from the title (lib/liveItem). */
+  source?: "shopify";
 };
 
 /** Placeholder catalog spread across all twelve seasons. Brands are fictional. */
@@ -428,6 +432,14 @@ export function shopUrl(item: CatalogItem): string {
   );
 }
 
+// Live listings seen this session, so the item sheet and saved lists can show
+// them. Memory only: Shopify's catalog terms forbid storing results.
+const LIVE = new Map<string, CatalogItem>();
+
+export function rememberItems(items: CatalogItem[]) {
+  for (const item of items) if (item.source) LIVE.set(item.id, item);
+}
+
 export function findItem(id: string): CatalogItem | undefined {
-  return CATALOG.find((item) => item.id === id);
+  return CATALOG.find((item) => item.id === id) ?? LIVE.get(id);
 }

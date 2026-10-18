@@ -107,7 +107,10 @@ export default function ItemSheet() {
     );
   }
 
-  const color = t.season ? paletteMatch(item.colors, t.season) : null;
+  const color =
+    t.season && item.colors.length ? paletteMatch(item.colors, t.season) : null;
+  // Live listings: color comes from the merchant's color name, cut from the title.
+  const estimated = item.source ? "≈ " : "";
   const fit = shape ? silhouetteMatch(item.silhouette, shape.shape) : null;
   const chart = SIZE_CHARTS[item.sizeChartId];
   const size = chart ? recommendSize(latest, chart, fitPreference) : null;
@@ -168,8 +171,9 @@ export default function ItemSheet() {
                 style={{ position: "absolute", bottom: t.space(3) }}
               >
                 {measured
-                  ? `${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
+                  ? `${estimated}${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
                   : "Average figure · add measurements for yours"}
+                {item.source ? " · cut estimated from the listing" : ""}
               </Text>
             </Animated.View>
           ) : (
@@ -186,7 +190,7 @@ export default function ItemSheet() {
         <View style={{ gap: t.space(1) }}>
           <Text variant="title">{item.name}</Text>
           <Text tone="muted">
-            {item.brand} · ${item.price}
+            {item.brand} · {item.priceLabel ?? `$${item.price}`}
           </Text>
         </View>
 
@@ -194,7 +198,9 @@ export default function ItemSheet() {
           style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space(2) }}
         >
           {color && t.season ? (
-            <Pill label={`${color.score}% ${t.season.name} match`} />
+            <Pill
+              label={`${estimated}${color.score}% ${t.season.name} match`}
+            />
           ) : null}
           {fit && shape ? (
             <Pill label={`${fit.label} · ${shape.name}`} />

@@ -1,5 +1,10 @@
 import type { ReactNode } from "react";
-import { ScrollView, View, type ViewStyle } from "react-native";
+import {
+  ScrollView,
+  View,
+  type ScrollViewProps,
+  type ViewStyle,
+} from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { useTheme } from "@/theme";
 
@@ -10,6 +15,8 @@ type Props = {
   footer?: ReactNode;
   edges?: Edge[];
   contentStyle?: ViewStyle;
+  /** Extra ScrollView props, e.g. pull-to-refresh or infinite scroll. */
+  scrollProps?: ScrollViewProps;
 };
 
 export function Screen({
@@ -18,6 +25,7 @@ export function Screen({
   footer,
   edges = ["top"],
   contentStyle,
+  scrollProps,
 }: Props) {
   const t = useTheme();
   const padding = {
@@ -32,6 +40,7 @@ export function Screen({
     >
       {scroll ? (
         <ScrollView
+          {...scrollProps}
           contentContainerStyle={[padding, contentStyle]}
           keyboardShouldPersistTaps="handled"
         >

@@ -27,7 +27,11 @@ export function recommend(
 ): Recommendation[] {
   return items
     .map((item) => {
-      const color = season ? paletteMatch(item.colors, season) : undefined;
+      // Live items without a known color get no color score, not 0%.
+      const color =
+        season && item.colors.length
+          ? paletteMatch(item.colors, season)
+          : undefined;
       const silhouette = shape
         ? silhouetteMatch(item.silhouette, shape)
         : undefined;
