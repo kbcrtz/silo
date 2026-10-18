@@ -6,22 +6,24 @@ import {
   LinearGradient,
   Oval,
   Path,
+  Shadow,
   Skia,
   vec,
   type SkPath,
 } from "@shopify/react-native-skia";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { CatalogItem } from "@/data/catalog";
 import { mix } from "@/lib/color";
 import {
   bodyOutlines,
-  garmentOutlines,
   landmarks,
+  outfit,
+  type Garment,
   type Pt,
 } from "@/lib/mannequin";
 import type { Measurements } from "@/lib/measurements";
 import type { ShopFor } from "@/store/profile";
-import { useTheme } from "@/theme";
+import { useTheme, type Theme } from "@/theme";
 
 /**
  * Catmull-Rom through the points, as cubic beziers. A `sharp` point gets a
@@ -59,136 +61,280 @@ function smooth(points: Pt[], scale: number, closed: boolean): SkPath {
 
 const clampIndex = (i: number, n: number) => Math.min(n - 1, Math.max(0, i));
 
-/**
- * A front-view mannequin built from the user's measurements, wearing the
- * item in its cut and color. With no item it is just the figure.
- */
-export function Mannequin({
-  measurements,
-  shopFor,
-  item,
-  height,
-}: {
+type Props = {
   measurements: Measurements;
   shopFor: ShopFor;
   item?: CatalogItem;
   height: number;
-}) {
+};
+
+/**
+ * A front-view mannequin built from the user's measurements, wearing the
+ * item in its cut and color, with plain pieces to complete the outfit.
+ * With no item it is just the figure.
+ */
+export function Mannequin(props: Props) {
   const t = useTheme();
+  return (
+    <Canvas style={{ width: props.height * 0.5, height: props.height }}>
+      <MannequinFigure {...props} colors={t.colors} />
+    </Canvas>
+  );
+}
+
+/** The drawing itself, without a canvas, so it can render offscreen too. */
+export function MannequinFigure({
+  measurements,
+  shopFor,
+  item,
+  height,
+  colors,
+}: Props & { colors: Theme["colors"] }) {
   const L = useMemo(
     () => landmarks(measurements, shopFor),
     [measurements, shopFor],
   );
   const body = useMemo(() => bodyOutlines(L), [L]);
-  const garment = useMemo(
-    () => (item ? garmentOutlines(L, item) : null),
-    [L, item],
-  );
+  const layers = useMemo(() => (item ? outfit(L, item) : []), [L, item]);
 
   // A little headroom above and floor below for the shadow.
   const scale = (height * 0.92) / L.H;
   const width = height * 0.5;
-  const halfSpan = (width / 2) * 0.98;
+  // Shading is sized in centimeters so it looks the same at any size.
+  const cm = (n: number) => n * scale;
 
   const paths = useMemo(
     () => ({
-      body: body.parts.map((o) => smooth(o, scale, true)),
-      garment: garment?.parts.map((o) => smooth(o, scale, true)) ?? [],
-      lines: garment?.lines.map((l) => smooth(l, scale, false)) ?? [],
+      head: smooth(body.head, scale, true),
+      silhouette: smooth(body.silhouette, scale, true),
+      contours: body.contours.map((c) => smooth(c, scale, false)),
+      layers: layers.map((layer) => ({
+        role: layer.role,
+        ...garmentPaths(layer.garment, scale),
+      })),
     }),
-    [body, garment, scale],
+    [body, layers, scale],
   );
 
-  const skinLight = mix(t.colors.surface, t.colors.border, 0.55);
-  const skinDark = mix(t.colors.border, t.colors.textMuted, 0.55);
-  const fabric = item?.colors[0] ?? t.colors.accent;
-  const fabricLight = mix(fabric, "#FFFFFF", 0.2);
-  const fabricDark = mix(fabric, "#000000", 0.28);
-  const seam = mix(fabric, "#000000", 0.45);
-  const button = item?.colors[1] ?? mix(fabric, "#000000", 0.55);
-
+  // Light comes from the upper left, so the right-hand side falls off.
+  const halfSpan = width / 2;
   const shade = (light: string, dark: string) => (
     <LinearGradient
       start={vec(-halfSpan, 0)}
       end={vec(halfSpan, 0)}
-      colors={[dark, light, light, dark]}
-      positions={[0, 0.38, 0.55, 1]}
+      colors={[mix(light, dark, 0.35), light, light, dark]}
+      positions={[0, 0.3, 0.5, 1]}
     />
   );
+  // Inner shadows round every edge off, so flat outlines read as volume.
+  const volume = (rim: string, glow: string, depth: number) => (
+    <>
+      <Shadow dx={-cm(0.9)} dy={-cm(0.5)} blur={cm(depth)} color={rim} inner />
+      <Shadow
+        dx={cm(0.5)}
+        dy={cm(0.4)}
+        blur={cm(depth * 0.8)}
+        color={glow}
+        inner
+      />
+    </>
+  );
+
+  const skin = mix(colors.surface, colors.border, 0.5);
+  const skinDark = mix(colors.border, colors.textMuted, 0.5);
+  const base = {
+    top: mix(colors.surface, colors.textMuted, 0.18),
+    bottom: mix(colors.text, colors.surface, 0.45),
+  };
 
   return (
-    <Canvas style={{ width, height }}>
-      <Group
-        transform={[{ translateX: width / 2 }, { translateY: height * 0.03 }]}
+    <Group
+      transform={[{ translateX: width / 2 }, { translateY: height * 0.03 }]}
+    >
+      <Oval
+        x={-width * 0.26}
+        y={cm(L.H) - height * 0.014}
+        width={width * 0.52}
+        height={height * 0.035}
+        color={colors.text}
+        opacity={0.16}
       >
-        <Oval
-          x={-width * 0.22}
-          y={L.H * scale - height * 0.012}
-          width={width * 0.44}
-          height={height * 0.035}
-          color={t.colors.text}
-          opacity={0.14}
-        >
-          <BlurMask blur={6} style="normal" />
-        </Oval>
+        <BlurMask blur={cm(2.5)} style="normal" />
+      </Oval>
 
-        {paths.body.map((p, i) => (
-          <Path key={`b${i}`} path={p}>
-            {shade(skinLight, skinDark)}
-          </Path>
-        ))}
-        {body.feet.map((f, i) => (
-          <Oval
-            key={`f${i}`}
-            x={(f.cx - f.rx) * scale}
-            y={(f.cy - f.ry) * scale}
-            width={f.rx * 2 * scale}
-            height={f.ry * 2 * scale}
-            color={skinDark}
+      <Path path={paths.silhouette}>
+        {shade(skin, skinDark)}
+        {volume("rgba(0,0,0,0.28)", "rgba(255,255,255,0.55)", 2.2)}
+      </Path>
+      {paths.contours.map((p, i) => (
+        <Path
+          key={`c${i}`}
+          path={p}
+          style="stroke"
+          strokeWidth={cm(0.35)}
+          strokeCap="round"
+          color={skinDark}
+          opacity={0.45}
+        >
+          <BlurMask blur={cm(0.4)} style="normal" />
+        </Path>
+      ))}
+      <Path path={paths.head}>
+        {shade(skin, skinDark)}
+        {volume("rgba(0,0,0,0.26)", "rgba(255,255,255,0.6)", 2.6)}
+      </Path>
+
+      {paths.layers.map((layer, li) => {
+        const fill =
+          layer.role === "item"
+            ? (item?.colors[0] ?? colors.accent)
+            : layer.role === "baseTop"
+              ? base.top
+              : base.bottom;
+        return (
+          <Fabric
+            key={li}
+            color={fill}
+            trim={layer.role === "item" ? item?.colors[1] : undefined}
+            paths={layer}
+            cm={cm}
+            shade={shade}
+            volume={volume}
           />
-        ))}
-        <Oval
-          x={(body.head.cx - body.head.rx) * scale}
-          y={(body.head.cy - body.head.ry) * scale}
-          width={body.head.rx * 2 * scale}
-          height={body.head.ry * 2 * scale}
-        >
-          {shade(skinLight, skinDark)}
-        </Oval>
+        );
+      })}
+    </Group>
+  );
+}
 
-        {paths.garment.map((p, i) => (
-          <Group key={`g${i}`}>
-            <Path path={p}>{shade(fabricLight, fabricDark)}</Path>
-            <Path
-              path={p}
-              style="stroke"
-              strokeWidth={1}
-              color={seam}
-              opacity={0.6}
+function garmentPaths(g: Garment, scale: number) {
+  return {
+    parts: g.parts.map((o) => smooth(o, scale, true)),
+    lines: g.lines.map((l) => smooth(l, scale, false)),
+    folds: g.folds.map((l) => ({
+      path: smooth(l, scale, false),
+      from: vec(l[0].x * scale, l[0].y * scale),
+      to: vec(l[l.length - 1].x * scale, l[l.length - 1].y * scale),
+    })),
+    buttons: g.buttons,
+  };
+}
+
+/** A crease fades in from where it starts and softens toward its end. */
+function fade(
+  f: { from: ReturnType<typeof vec>; to: ReturnType<typeof vec> },
+  color: string,
+) {
+  return (
+    <LinearGradient
+      start={f.from}
+      end={f.to}
+      colors={[`${color}00`, color, `${color}99`]}
+      positions={[0, 0.4, 1]}
+    />
+  );
+}
+
+/** One garment: shaded panels, soft creases, seams and buttons. */
+function Fabric({
+  color,
+  trim,
+  paths,
+  cm,
+  shade,
+  volume,
+}: {
+  color: string;
+  trim?: string;
+  paths: ReturnType<typeof garmentPaths>;
+  cm: (n: number) => number;
+  shade: (light: string, dark: string) => ReactNode;
+  volume: (rim: string, glow: string, depth: number) => ReactNode;
+}) {
+  const light = mix(color, "#FFFFFF", 0.14);
+  const dark = mix(color, "#000000", 0.3);
+  const seam = mix(color, "#000000", 0.45);
+  const button = trim ?? mix(color, "#000000", 0.5);
+  return (
+    <Group>
+      {paths.parts.map((p, i) => (
+        <Group key={`p${i}`}>
+          {/* The garment's shadow on whatever is under it. */}
+          <Path path={p} color="rgba(0,0,0,0.22)">
+            <Shadow
+              dx={cm(0.2)}
+              dy={cm(0.5)}
+              blur={cm(0.8)}
+              color="rgba(0,0,0,0.35)"
+              shadowOnly
             />
-          </Group>
-        ))}
-        {paths.lines.map((p, i) => (
+          </Path>
+          <Path path={p}>
+            {shade(light, dark)}
+            {volume("rgba(0,0,0,0.32)", "rgba(255,255,255,0.28)", 1.6)}
+          </Path>
           <Path
-            key={`l${i}`}
             path={p}
             style="stroke"
-            strokeWidth={1}
-            strokeCap="round"
+            strokeWidth={cm(0.18)}
             color={seam}
-            opacity={0.55}
+            opacity={0.5}
           />
-        ))}
-        {garment?.buttons.map((b, i) => (
+        </Group>
+      ))}
+      {paths.folds.map((f, i) => (
+        <Group key={`f${i}`}>
+          <Path
+            path={f.path}
+            style="stroke"
+            strokeWidth={cm(0.7)}
+            strokeCap="round"
+            opacity={0.6}
+          >
+            {fade(f, dark)}
+            <BlurMask blur={cm(0.6)} style="normal" />
+          </Path>
+          <Group transform={[{ translateX: -cm(0.45) }]}>
+            <Path
+              path={f.path}
+              style="stroke"
+              strokeWidth={cm(0.4)}
+              strokeCap="round"
+              opacity={0.5}
+            >
+              {fade(f, light)}
+              <BlurMask blur={cm(0.5)} style="normal" />
+            </Path>
+          </Group>
+        </Group>
+      ))}
+      {paths.lines.map((p, i) => (
+        <Path
+          key={`l${i}`}
+          path={p}
+          style="stroke"
+          strokeWidth={cm(0.18)}
+          strokeCap="round"
+          color={seam}
+          opacity={0.6}
+        />
+      ))}
+      {paths.buttons.map((b, i) => (
+        <Group key={`b${i}`}>
           <Circle
-            key={`d${i}`}
-            cx={b.x * scale}
-            cy={b.y * scale}
-            r={Math.max(1.4, 0.55 * scale)}
+            cx={cm(b.x)}
+            cy={cm(b.y)}
+            r={Math.max(1.4, cm(0.55))}
             color={button}
           />
-        ))}
-      </Group>
-    </Canvas>
+          <Circle
+            cx={cm(b.x) - cm(0.15)}
+            cy={cm(b.y) - cm(0.15)}
+            r={Math.max(0.5, cm(0.18))}
+            color="rgba(255,255,255,0.45)"
+          />
+        </Group>
+      ))}
+    </Group>
   );
 }
