@@ -7,9 +7,11 @@ import { bearerOk, type Gate } from "./guard.ts";
 import { catalogRoute } from "./routes/catalog.ts";
 import { colorAnalysisRoute } from "./routes/colorAnalysis.ts";
 import { meRoute } from "./routes/me.ts";
+import { tryOnImageRoute } from "./routes/tryOnImage.ts";
 import type { Enrich } from "./services/listingInsights.ts";
 import type { Catalog } from "./services/shopifyCatalog.ts";
 import type { Trends } from "./services/trends.ts";
+import type { TryOn } from "./services/tryOnImage.ts";
 import type { UserData } from "./services/userData.ts";
 
 /** Finds facial regions in the model-sized JPEG (Gemini in production, a fake in tests). */
@@ -33,6 +35,10 @@ export function buildApp(deps: {
   userData?: UserData;
   /** Season popularity from app events (Tiger Cloud); the feed works without it. */
   trends?: Trends;
+  /** AI try-on images from store photos; /catalog/tryon-image answers 503 without it. */
+  tryOn?: TryOn;
+  /** Per-device budget for generating those images. */
+  tryOnGate?: Gate;
 }) {
   // Request logs keep the path only: discover's query string carries palette colors and search text.
   const req = (r: { method: string; url: string }) => ({ method: r.method, url: r.url.split("?")[0] });
@@ -62,5 +68,6 @@ export function buildApp(deps: {
   app.register(colorAnalysisRoute, deps);
   app.register(catalogRoute, deps);
   app.register(meRoute, deps);
+  app.register(tryOnImageRoute, deps);
   return app;
 }

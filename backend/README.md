@@ -36,6 +36,7 @@ The app already calls these, behind mocks, in `frontend/src/api/`. Match these s
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`. Not implemented yet.
 - `GET /catalog/discover` → `{ products: CatalogProduct[], cursor: string | null, source: "shopify" }`. **Implemented**; see [Catalog](#catalog).
 - `GET /catalog/product?id=<gid>&selected=<JSON>` → `{ product: CatalogProduct }` with images, description and variants. **Implemented.**
+- `GET /catalog/tryon-image?id=<gid>&shopFor=` → `image/jpeg`: a full-body mannequin wearing the product. **Implemented**; see [AI try-on images](#ai-try-on-images).
 - `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`: back up the app's on-device data to Postgres on Tiger Cloud, keyed by an anonymous `x-device-id` UUID. **Implemented**; see [User data](#user-data).
 
 Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non-2xx as "couldn't analyze", offering retake or quiz-only.
@@ -112,6 +113,16 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 - Nothing is cached or stored, and images are never downloaded: Shopify's catalog terms forbid caching results and allow images only alongside their listing. The app should show them with `cachePolicy="none"`.
 - Anonymous access has shared, low rate limits. The server keeps at most 2 Shopify calls open and retries a 429 or 5xx once, after `Retry-After` (up to 3 s) or 500 ms. Timeouts aren't retried. A request the app abandons cancels its Shopify call.
 - Only fashion attributes go to Shopify: category, search text, department, style words and palette color words. Never selfies or measurements. Logs carry counts and the category only, plus how many products got an estimate or why none did.
+
+## AI try-on images
+
+`GET /catalog/tryon-image?id=<gid>&shopFor=womens|mens|both` returns a JPEG (3:4) of a faceless light-gray dress-form mannequin, head to feet, wearing the product (`src/services/tryOnImage.ts`). It is made from the product's store photo with one fixed prompt template, so every product comes out in the same studio style. The listing reader decides what kind of item it is, and the template adds a plain counterpart so no half is missing: a top gets light stone chinos, bottoms get a tucked-in white tee, outerwear gets both, and a dress stands alone. Sneakers are white throughout.
+
+- Model: `TRYON_IMAGE_MODEL`, default `gemini-3.1-flash-lite-image` (about 6 s for a new image in testing).
+- Each image is saved in `tryon_images` (Postgres bytea, keyed by product, department and template version) and served from there next time (about 0.4 s). Without a database it's kept in memory. Bump `TEMPLATE_VERSION` when the template changes.
+- Photos are fetched only from `https://cdn.shopify.com`, at most 8 MB, and never written to disk.
+- New images are capped at 20 per device per 10 minutes, 3 at once (429 `rate_limited`, 503 `busy`); saved ones don't count.
+- Errors: 400 `invalid_request`, 404 `product_not_found`, 422 `no_photo` or `not_clothing` (shoes, bags), 502/504 for Gemini failures.
 
 ## User data
 

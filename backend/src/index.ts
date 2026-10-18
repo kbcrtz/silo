@@ -8,6 +8,7 @@ import { locateRegions, type CreateInteraction } from "./services/colorVision.ts
 import { createEnricher } from "./services/listingInsights.ts";
 import { createCatalog } from "./services/shopifyCatalog.ts";
 import { createTrends, migrateTrends } from "./services/trends.ts";
+import { createTryOn, memoryStore, migrateTryOn, postgresStore, type TryOnStore } from "./services/tryOnImage.ts";
 import { createUserData, migrate } from "./services/userData.ts";
 
 const secret = process.env.API_SECRET ?? "";
@@ -64,16 +65,31 @@ const estimateGate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 4
 const databaseUrl = process.env.TIGER_DATABASE_URL;
 let userData;
 let trends;
+let tryOnStore: TryOnStore = memoryStore();
 if (databaseUrl) {
   // onnotice: the migrations' "already exists, skipping" notices are expected on every start.
   const sql = postgres(databaseUrl, { ssl: "require", max: 5, idle_timeout: 30, onnotice: () => {} });
   await migrate(sql);
   await migrateTrends(sql);
+  await migrateTryOn(sql);
   userData = createUserData(sql);
   trends = createTrends(sql);
+  tryOnStore = postgresStore(sql);
 } else {
   console.warn("TIGER_DATABASE_URL is not set; /me routes are off.");
 }
+
+// AI try-on images: Gemini image generation from the store photo, saved once per product and department.
+// Flash-lite image took ~3-4 s in tests (2026-10-18); TRYON_IMAGE_MODEL switches it.
+const tryOn = createTryOn({
+  generateContent: (request) => client.models.generateContent(request as never) as never,
+  model: process.env.TRYON_IMAGE_MODEL ?? "gemini-3.1-flash-lite-image",
+  timeoutMs: 30_000,
+  fetch,
+  store: tryOnStore,
+});
+// 20 new images per device per 10 minutes, 3 at once; saved images don't count.
+const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 3 });
 
 // One person retaking a selfie stays under this. A loop does not, and only two Gemini calls run at once.
 const gate = createGate({ windowMs: 10 * 60_000, max: 8, concurrency: 2 });
@@ -88,6 +104,8 @@ const app = buildApp({
   estimateGate,
   userData,
   trends,
+  tryOn,
+  tryOnGate,
   locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }),
 });
 await app.listen({ port: Number(process.env.PORT ?? 8080), host: "0.0.0.0" });
