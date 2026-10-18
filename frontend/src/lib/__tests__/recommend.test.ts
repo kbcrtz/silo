@@ -6,6 +6,7 @@ import {
   garmentOutlines,
   hemY,
   landmarks,
+  outfit,
 } from "../mannequin";
 import { recommend } from "../recommend";
 import { silhouetteMatch } from "../silhouette";
@@ -104,19 +105,40 @@ describe("mannequin", () => {
   });
 
   it("is symmetric", () => {
-    const torso = bodyOutlines(L).parts.at(-1)!;
-    const xs = torso.map((p) => p.x).sort((a, b) => a - b);
-    expect(xs[0]).toBeCloseTo(-xs[xs.length - 1]);
+    const { silhouette, head } = bodyOutlines(L);
+    for (const outline of [silhouette, head]) {
+      const xs = outline.map((p) => p.x).sort((a, b) => a - b);
+      expect(xs[0]).toBeCloseTo(-xs[xs.length - 1]);
+    }
+  });
+
+  it("opens the arms far enough to clear wide hips", () => {
+    const narrow = landmarks({ chest: 88, waist: 70, hips: 94 }, "womens");
+    const wide = landmarks({ chest: 82, waist: 72, hips: 118 }, "womens");
+    expect(wide.arm.spread).toBeGreaterThan(narrow.arm.spread);
+    for (const t of [0.5, 1]) {
+      const inner = wide.arm.point(t, -wide.arm.half(t));
+      expect(inner.x).toBeGreaterThan(wide.halfAt(inner.y));
+    }
   });
 
   it("builds a finite outline for every catalog item", () => {
     for (const item of CATALOG) {
       const g = garmentOutlines(L, item);
       expect(g.parts.length).toBeGreaterThan(0);
-      for (const part of g.parts)
-        for (const p of part)
+      for (const shape of [...g.parts, ...g.lines, ...g.folds])
+        for (const p of shape)
           expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
     }
+  });
+
+  it("completes the outfit around the item", () => {
+    const roles = (id: string) =>
+      outfit(L, findItem(id)!).map((layer) => layer.role);
+    expect(roles("w-03")).toEqual(["item"]); // dress
+    expect(roles("w-06")).toEqual(["baseTop", "item"]); // trousers
+    expect(roles("w-01")).toEqual(["baseBottom", "item"]); // shirt
+    expect(roles("w-09")).toEqual(["baseBottom", "baseTop", "item"]); // blazer
   });
 
   it("drops the hem lower for longer lengths", () => {
