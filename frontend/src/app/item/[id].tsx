@@ -29,6 +29,7 @@ import { silhouetteMatch } from "@/lib/silhouette";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
+import { BRAND } from "@/theme/brand";
 
 const VISUAL_HEIGHT = 320;
 const BAR_HEIGHT = 52;
@@ -163,7 +164,17 @@ export default function ItemSheet() {
             borderColor: PILL_EDGE,
           }}
         >
-          {onYou ? <BackdropFill id={backdrop} /> : null}
+          {onYou && aiSource ? (
+            <View
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: BRAND.white,
+              }}
+            />
+          ) : onYou ? (
+            <BackdropFill id={backdrop} />
+          ) : null}
           {onYou ? (
             <Animated.View
               key="mannequin"
