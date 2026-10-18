@@ -39,7 +39,7 @@ export function ItemCard({
           }}
         >
           <ProductImage item={item} />
-          {score !== undefined ? (
+          {score !== undefined || item.popular ? (
             <View
               style={{
                 position: "absolute",
@@ -53,8 +53,11 @@ export function ItemCard({
                 style={{ paddingHorizontal: t.space(2) }}
               >
                 <Text variant="caption" style={{ color: BRAND.ink }}>
-                  {item.source ? "≈" : ""}
-                  {score}% match
+                  {score !== undefined
+                    ? `${item.source ? "≈" : ""}${score}% match`
+                    : ""}
+                  {score !== undefined && item.popular ? " · " : ""}
+                  {item.popular ? "Popular" : ""}
                 </Text>
               </GlassPill>
             </View>

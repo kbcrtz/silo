@@ -7,6 +7,7 @@ import { createGate } from "./guard.ts";
 import { locateRegions, type CreateInteraction } from "./services/colorVision.ts";
 import { createEnricher } from "./services/listingInsights.ts";
 import { createCatalog } from "./services/shopifyCatalog.ts";
+import { createTrends, migrateTrends } from "./services/trends.ts";
 import { createUserData, migrate } from "./services/userData.ts";
 
 const secret = process.env.API_SECRET ?? "";
@@ -60,10 +61,14 @@ const enrich = process.env.CATALOG_AI === "off" ? undefined : createEnricher({ c
 // Tiger Cloud Postgres backs up the app's on-device data. Without it, /me answers 503 and everything else works.
 const databaseUrl = process.env.TIGER_DATABASE_URL;
 let userData;
+let trends;
 if (databaseUrl) {
-  const sql = postgres(databaseUrl, { ssl: "require", max: 5, idle_timeout: 30 });
+  // onnotice: the migrations' "already exists, skipping" notices are expected on every start.
+  const sql = postgres(databaseUrl, { ssl: "require", max: 5, idle_timeout: 30, onnotice: () => {} });
   await migrate(sql);
+  await migrateTrends(sql);
   userData = createUserData(sql);
+  trends = createTrends(sql);
 } else {
   console.warn("TIGER_DATABASE_URL is not set; /me routes are off.");
 }
@@ -79,6 +84,7 @@ const app = buildApp({
   gate,
   enrich,
   userData,
+  trends,
   locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }),
 });
 await app.listen({ port: Number(process.env.PORT ?? 8080), host: "0.0.0.0" });

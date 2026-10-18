@@ -1,4 +1,6 @@
+import type { CatalogItem } from "@/data/catalog";
 import {
+  eventFor,
   measurementRows,
   profileSnapshot,
   savedSnapshot,
@@ -55,5 +57,43 @@ describe("cloud backup snapshots", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
     expect(uuidV4()).not.toBe(id);
+  });
+});
+
+describe("event payloads", () => {
+  const item: CatalogItem = {
+    id: "shopify-AAA111",
+    name: "Linen Overshirt",
+    brand: "Tide",
+    cut: "unisex",
+    colors: ["#9CAF88"],
+    price: 58,
+    aspect: 1.25,
+    sizeChartId: "",
+    source: "shopify",
+    category: "outerwear",
+    silhouette: "relaxed",
+    sleeve: "long",
+    length: "hip",
+  };
+
+  it("reports what the item looks like and the shopper's season, nothing about the person", () => {
+    expect(eventFor("open", item, "soft-autumn")).toEqual({
+      kind: "open",
+      itemId: "shopify-AAA111",
+      season: "soft-autumn",
+      garment: "outerwear",
+      silhouette: "relaxed",
+      color: "#9CAF88",
+    });
+  });
+
+  it("leaves out what isn't known", () => {
+    expect(eventFor("shop", { ...item, colors: [] }, undefined)).toEqual({
+      kind: "shop",
+      itemId: "shopify-AAA111",
+      garment: "outerwear",
+      silhouette: "relaxed",
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Haptics from "expo-haptics";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Button } from "@/components/Button";
@@ -21,6 +21,7 @@ import { useLatestMeasurements } from "@/hooks/useRecommendations";
 import { bodyShape } from "@/lib/bodyShape";
 import { recommendSize } from "@/lib/fit";
 import { paletteMatch } from "@/lib/paletteMatch";
+import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
 import { silhouetteMatch } from "@/lib/silhouette";
 import { useProfile } from "@/store/profile";
@@ -93,6 +94,11 @@ export default function ItemSheet() {
   const [onYou, setOnYou] = useState(false);
   const backdrop = useSeasonBackdrop();
 
+  // Counted once per sheet open, for "popular with your season".
+  useEffect(() => {
+    if (item) track("open", item, t.season?.id);
+  }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!item) {
     return (
       <View style={{ padding: t.space(5) }}>
@@ -112,6 +118,7 @@ export default function ItemSheet() {
 
   const toggleSave = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!saved) track("save", item, t.season?.id);
     useSaved.getState().toggle(item.id);
   };
 
@@ -207,6 +214,9 @@ export default function ItemSheet() {
             <Pill label={`${fit.label} · ${shape.name}`} />
           ) : null}
           <Pill label={SILHOUETTE_LABELS[item.silhouette]} />
+          {item.popular && t.season ? (
+            <Pill label={`Popular with ${t.season.name}s this week`} />
+          ) : null}
         </View>
 
         {size ? (
@@ -294,7 +304,10 @@ export default function ItemSheet() {
         <IconButton
           icon="bag"
           label="Shop"
-          onPress={() => openProduct(shopUrl(item), t.colors.accentText)}
+          onPress={() => {
+            track("shop", item, t.season?.id);
+            openProduct(shopUrl(item), t.colors.accentText);
+          }}
         />
       </View>
     </View>

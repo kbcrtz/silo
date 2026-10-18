@@ -124,7 +124,9 @@ The app backs up what it stores on the phone to Postgres on Tiger Cloud (`TIGER_
 | `POST /me/measurements` | `{ entries: [{ type, value, measuredAt }] }` → `{ added }`; resending is a no-op | `measurements`, a TimescaleDB hypertable on `measured_at` |
 | `GET /me` | → `{ profile, saved, measurements }` | |
 
-Tables are created on startup (`src/services/userData.ts`). Logs carry counts only. Errors: 400 `invalid_device` or `invalid_request`, 413 `too_large`, 502 `data_failed`.
+`POST /events` `{ events: [{ kind: "open" | "save" | "shop", itemId, season?, garment?, silhouette?, color? }] }` (≤ 100) records app actions in `events`, a hypertable; `color` is stored as its Shopify color family. `event_scores` is a real-time continuous aggregate of hourly weighted scores (shop 5, save 3, open 1) per season and item. `GET /catalog/discover?season=<id>` looks up the last 7 days for that season alongside the Shopify search, marks matching products `popular: true` (same item, or the same garment, cut and color family as a top combination) and moves them to the front (`src/services/trends.ts`).
+
+Tables are created on startup (`src/services/userData.ts`, `src/services/trends.ts`). Logs carry counts only. Errors: 400 `invalid_device` or `invalid_request`, 413 `too_large`, 502 `data_failed`.
 
 ## Attribution and limits
 

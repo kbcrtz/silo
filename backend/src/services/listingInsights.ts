@@ -4,8 +4,8 @@ import { HttpError } from "../errors.ts";
 import { providerError, type CreateInteraction } from "./colorVision.ts";
 
 // The app's catalog vocabulary (frontend/src/data/catalog.ts), so its mannequin can draw the cut.
-const GARMENTS = ["top", "bottom", "dress", "outerwear"] as const;
-const SILHOUETTES = ["fitted", "relaxed", "boxy", "wrap", "tailored", "cropped", "slip", "a-line", "slim", "straight", "wide-leg"] as const;
+export const GARMENTS = ["top", "bottom", "dress", "outerwear"] as const;
+export const SILHOUETTES = ["fitted", "relaxed", "boxy", "wrap", "tailored", "cropped", "slip", "a-line", "slim", "straight", "wide-leg"] as const;
 const LENGTHS = ["waist", "hip", "thigh", "knee", "midi", "ankle"] as const;
 const SLEEVES = ["none", "short", "long"] as const;
 

@@ -61,6 +61,8 @@ export type CatalogProduct = {
    * color, its cut, and the words it went on. An estimate, not a measurement.
    */
   estimate?: Insight & { source: "ai" };
+  /** Popular with the shopper's season this week (services/trends.ts). */
+  popular?: true;
   // Detail only:
   images?: { url: string; alt: string }[];
   description?: string;

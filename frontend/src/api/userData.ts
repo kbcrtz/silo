@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { uuidV4 } from "@/lib/cloud";
+import type { CatalogItem } from "@/data/catalog";
+import { eventFor, uuidV4, type EventKind } from "@/lib/cloud";
 import { API_URL, USE_MOCKS, apiHeaders, expectOk } from "./config";
 
 const DEVICE_KEY = "silo.device";
@@ -49,3 +50,26 @@ export const backupMeasurements = (
   entries.length
     ? send("POST", "/me/measurements", { entries })
     : Promise.resolve();
+
+// Events go in batches: a burst of taps is one request.
+let queue: ReturnType<typeof eventFor>[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Reports an open, save or Shop tap for "popular with your season".
+ * Backend contract: POST /events { events: [{ kind, itemId, season?, garment?, silhouette?, color? }] } -> 204
+ */
+export function track(
+  kind: EventKind,
+  item: CatalogItem,
+  season: string | undefined,
+) {
+  queue.push(eventFor(kind, item, season));
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(() => {
+    const events = queue.splice(0, 100);
+    queue = queue.length ? queue : [];
+    // Lost on failure: popularity is a nice-to-have, not the user's data.
+    send("POST", "/events", { events }).catch(() => {});
+  }, 3000);
+}

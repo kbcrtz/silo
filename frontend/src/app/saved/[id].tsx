@@ -5,6 +5,7 @@ import { MasonryGrid } from "@/components/MasonryGrid";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
 import { findItem, shopUrl } from "@/data/catalog";
+import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
@@ -55,7 +56,10 @@ export default function SavedList() {
           footer={(item) => (
             <Pressable
               hitSlop={6}
-              onPress={() => openProduct(shopUrl(item), t.colors.accentText)}
+              onPress={() => {
+                track("shop", item, t.season?.id);
+                openProduct(shopUrl(item), t.colors.accentText);
+              }}
               style={{ marginTop: t.space(1) }}
             >
               <Text variant="caption" tone="accent">

@@ -1,3 +1,4 @@
+import type { CatalogItem } from "@/data/catalog";
 import type { MeasurementEntry } from "./measurements";
 
 type State = Record<string, unknown>;
@@ -38,4 +39,22 @@ export function uuidV4(): string {
   hex[16] = "89ab"[Math.floor(Math.random() * 4)];
   const s = hex.join("");
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`;
+}
+
+export type EventKind = "open" | "save" | "shop";
+
+/** One action for the backend's "popular with your season": the item's look and the season, no personal data. */
+export function eventFor(
+  kind: EventKind,
+  item: CatalogItem,
+  season: string | undefined,
+) {
+  return {
+    kind,
+    itemId: item.id,
+    ...(season && { season }),
+    garment: item.category,
+    silhouette: item.silhouette,
+    ...(item.colors[0] && { color: item.colors[0] }),
+  };
 }

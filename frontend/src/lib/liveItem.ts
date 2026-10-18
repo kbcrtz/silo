@@ -165,6 +165,7 @@ export function toCatalogItem(
     productUrl: product.url,
     source: "shopify",
     ...(product.estimate && { evidence: product.estimate.evidence }),
+    ...(product.popular && { popular: true }),
     // The backend's reading of the full listing beats a guess from the title alone.
     ...(product.estimate?.cut ?? inferCut(product.title, product.category)),
   };

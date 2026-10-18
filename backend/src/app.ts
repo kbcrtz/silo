@@ -9,6 +9,7 @@ import { colorAnalysisRoute } from "./routes/colorAnalysis.ts";
 import { meRoute } from "./routes/me.ts";
 import type { Enrich } from "./services/listingInsights.ts";
 import type { Catalog } from "./services/shopifyCatalog.ts";
+import type { Trends } from "./services/trends.ts";
 import type { UserData } from "./services/userData.ts";
 
 /** Finds facial regions in the model-sized JPEG (Gemini in production, a fake in tests). */
@@ -28,6 +29,8 @@ export function buildApp(deps: {
   enrich?: Enrich;
   /** On-device data backed up to Postgres; /me answers 503 without it. */
   userData?: UserData;
+  /** Season popularity from app events (Tiger Cloud); the feed works without it. */
+  trends?: Trends;
 }) {
   // Request logs keep the path only: discover's query string carries palette colors and search text.
   const req = (r: { method: string; url: string }) => ({ method: r.method, url: r.url.split("?")[0] });

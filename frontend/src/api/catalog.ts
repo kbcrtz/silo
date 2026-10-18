@@ -41,6 +41,8 @@ export type CatalogProduct = {
   selected: Choice[];
   available: boolean;
   rating?: { value: number; max: number; count: number };
+  /** Popular with the shopper's season this week. */
+  popular?: true;
   /** The backend's AI reading of the listing text (never images): estimated color and cut, with the words it used. */
   estimate?: {
     hex: string | null;
@@ -100,6 +102,7 @@ export async function discoverProducts(
   });
   if (params.q) query.set("q", params.q);
   if (params.season) {
+    query.set("season", params.season.id);
     query.set("palette", params.season.best.join(","));
     query.set("neutrals", params.season.neutrals.join(","));
   }

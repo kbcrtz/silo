@@ -6,6 +6,7 @@ import { CATEGORIES, STYLES } from "../catalog/query.ts";
 import { HttpError } from "../errors.ts";
 import type { Enrich } from "../services/listingInsights.ts";
 import type { Catalog } from "../services/shopifyCatalog.ts";
+import { markPopular, type Trends } from "../services/trends.ts";
 
 const hexList = z
   .string()
@@ -29,6 +30,11 @@ const DiscoverQuery = z.strictObject({
   priceMax: dollars,
   // Room for the HMAC suffix on the opaque cursor.
   cursor: z.string().max(4500).optional(),
+  /** The shopper's season id, for "popular with your season". */
+  season: z
+    .string()
+    .regex(/^[a-z-]{3,24}$/)
+    .optional(),
 });
 
 const Selected = z.array(z.object({ name: z.string().max(100), label: z.string().max(100) })).max(10);
@@ -65,7 +71,10 @@ const cents = (dollars?: number) => (dollars === undefined ? undefined : dollars
  * listings, normalized for the app. Nothing is cached or stored, per Shopify's
  * catalog rules.
  */
-export async function catalogRoute(app: FastifyInstance, { catalog, secret, enrich }: { catalog: Catalog; secret: string; enrich?: Enrich }) {
+export async function catalogRoute(
+  app: FastifyInstance,
+  { catalog, secret, enrich, trends }: { catalog: Catalog; secret: string; enrich?: Enrich; trends?: Trends },
+) {
   async function handle(route: string, req: { log: FastifyInstance["log"] }, reply: FastifyReply, run: (diag: Record<string, unknown>) => Promise<unknown>) {
     const started = performance.now();
     // Counts only: no queries, palette colors or search text, which describe the shopper.
@@ -89,9 +98,14 @@ export async function catalogRoute(app: FastifyInstance, { catalog, secret, enri
     handle("discover", req, reply, async (diag) => {
       const query = DiscoverQuery.safeParse(req.query);
       if (!query.success) throw new HttpError("invalid_request", 400);
-      const { cursor, priceMin, priceMax, ...params } = query.data;
+      const { cursor, priceMin, priceMax, season, ...params } = query.data;
       diag.category = params.category;
+      // Looked up alongside the Shopify search; a failure just means no popular marks.
+      const trending = season && trends ? trends.trending(season).catch(() => null) : null;
       const page = await discover(catalog, { ...params, priceMin: cents(priceMin), priceMax: cents(priceMax) }, cursor, secret, clientSignal(reply), enrich);
+      const top = await trending;
+      if (top) page.products = markPopular(page.products, top);
+      diag.popular = page.products.filter((p) => p.popular).length;
       const { upstreamCalls, dropped, estimated, estimateError } = page;
       Object.assign(diag, { upstreamCalls, returned: page.products.length, dropped, estimated, estimateError });
       return { products: page.products, cursor: page.cursor, source: "shopify" };

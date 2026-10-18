@@ -47,6 +47,8 @@ export type CatalogItem = {
   source?: "shopify";
   /** The listing's own words the backend's AI based color and cut on. */
   evidence?: string;
+  /** Popular with the shopper's season this week (from the backend). */
+  popular?: boolean;
 };
 
 /** Placeholder catalog spread across all twelve seasons. Brands are fictional. */
