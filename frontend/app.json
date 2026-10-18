@@ -10,11 +10,6 @@
     "icon": "./assets/icon.png",
     "scheme": "silo",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "bundleIdentifier": "com.siloapp.ios",
       "supportsTablet": false,
@@ -35,7 +30,16 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "enableFullScreenImage_legacy": true,
+          "resizeMode": "cover",
+          "backgroundColor": "#FFFCFB"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
