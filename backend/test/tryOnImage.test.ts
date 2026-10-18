@@ -19,6 +19,7 @@ test("the fixed template puts only the selected piece on a bare mannequin, for e
     assert.match(prompt, /wears ONLY the/);
     assert.match(prompt, /bare/);
     assert.match(prompt, /no shoes/);
+    assert.match(prompt, /pure white \(#FFFFFF\) background/); // blends into the app's white card
     assert.doesNotMatch(prompt, /chinos|t-shirt|sneakers/);
   }
   assert.match(tryOnPrompt({ category: "top", department: "mens", cut: "relaxed fit" }), /male dress-form[\s\S]*relaxed fit/);

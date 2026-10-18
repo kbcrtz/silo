@@ -6,7 +6,7 @@ export type Department = "womens" | "mens" | "both";
 type Garment = "top" | "bottom" | "dress" | "outerwear";
 
 /** Bumped when the template changes, so saved images from an older one aren't served. */
-export const TEMPLATE_VERSION = 2;
+export const TEMPLATE_VERSION = 3;
 
 const NOUN: Record<Garment, string> = { top: "top", bottom: "bottoms", outerwear: "jacket or coat", dress: "dress" };
 
@@ -21,7 +21,7 @@ export function tryOnPrompt({ category, department, cut }: { category: Garment; 
   const noun = NOUN[category];
   return [
     "A clean full-body studio product photo for a fashion app's try-on view.",
-    `A matte light-gray, faceless ${form} dress-form mannequin, front view, standing straight with arms relaxed at its sides, framed from the top of the head to the feet, plain soft off-white background, soft even studio lighting.`,
+    `A matte light-gray, faceless ${form} dress-form mannequin, front view, standing straight with arms relaxed at its sides, framed from the top of the head to the feet, on a seamless pure white (#FFFFFF) background with no floor line, no shadow and no vignette, soft even studio lighting.`,
     `The mannequin wears ONLY the ${noun} from the store photo. Reproduce it faithfully: the same colors, pattern, fabric, collar, pockets, buttons, sleeve length and overall length${cut ? `, worn as ${cut}` : ""}. Ignore the person, pose, background and any other clothing in the store photo.`,
     `Everywhere the ${noun} doesn't cover, the mannequin is bare: smooth matte light-gray mannequin surface, with no other clothing, no shoes and nothing else.`,
     "No text, no watermarks, no accessories, no people.",
