@@ -1,8 +1,8 @@
 # Silo backend
 
-Server for the Silo app. Phase 1 implements color analysis only; try-on (FASHN), TigerData persistence and Supabase auth come later (see the team's MVP design doc).
+Server for the Silo app: color analysis and a live product feed from Shopify's Global Catalog. Try-on (FASHN), TigerData persistence and Supabase auth come later (see the team's MVP design doc).
 
-Stack: Node 24+ running TypeScript directly (type stripping, no build step), Fastify, sharp, zod, `@google/genai`.
+Stack: Node 24+ running TypeScript directly (type stripping, no build step), Fastify, sharp, zod, `@google/genai`. The catalog uses plain `fetch`.
 
 ## Run it
 
@@ -21,7 +21,7 @@ Point the app at it with `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_USE_MOCKS=false`
 ## Checks
 
 ```sh
-npm test            # node --test, no network: Gemini is faked
+npm test            # node --test, no network: Gemini and Shopify are faked
 npm run typecheck
 ```
 
@@ -32,6 +32,8 @@ The app already calls these, behind mocks, in `frontend/src/api/`. Match these s
 - `POST /color-analysis`, multipart `selfie` → `{ warmth, depth, clarity, confidence }`. Axes are -1..1, confidence 0..1; the axes are defined in `frontend/src/data/seasons.ts`. **Implemented.**
 - `POST /try-on`, multipart `bodyPhoto` (file), `itemId`, `itemImageUrl?`, `measurements` (JSON, cm/kg) → `{ jobId }`. Not implemented yet.
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`. Not implemented yet.
+- `GET /catalog/discover` → `{ products: CatalogProduct[], cursor: string | null, source: "shopify" }`. **Implemented**; see [Catalog](#catalog).
+- `GET /catalog/product?id=<gid>&selected=<JSON>` → `{ product: CatalogProduct }` with images, description and variants. **Implemented.**
 
 Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non-2xx as "couldn't analyze", offering retake or quiz-only.
 
@@ -45,6 +47,11 @@ Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non
 | 422 | `no_usable_face` | No single face, or no usable skin sample |
 | 502 | `gemini_failed`, `gemini_invalid_output` | Gemini errored or returned output that fails the schema |
 | 504 | `gemini_timeout` | Gemini took longer than `GEMINI_TIMEOUT_MS` |
+| 400 | `invalid_request`, `invalid_cursor` | Catalog query parameters fail validation, or a cursor this server didn't issue |
+| 404 | `product_not_found` | The id doesn't resolve, or the listing has no merchant link |
+| 502 | `catalog_unavailable`, `catalog_invalid_response` | Shopify errored, or answered in a shape we can't read |
+| 503 | `catalog_rate_limited` | Shopify's shared anonymous rate limit, after one retry |
+| 504 | `catalog_timeout` | Shopify took longer than `CATALOG_TIMEOUT_MS` (default 8 s) |
 
 ## How color analysis works
 
@@ -60,6 +67,44 @@ Every number the rules use (cutoffs, spreads, weights, penalties, caps, sampling
 ### Logs
 
 One `color_analysis` line per request: request id, model, rule version, which boxes Gemini returned, which were rejected, which regions were sampled, which metrics were available, warnings, penalties and caps applied, whether the output passed validation, duration, and an error code. No images, colors, metric values or traits are logged.
+
+## Catalog
+
+Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/catalog/global-catalog) (`https://catalog.shopify.com/api/ucp/mcp`, JSON-RPC `search_catalog` and `get_product`). Access is anonymous: no Shopify account or key, only a UCP agent profile URL. The default is Shopify's documented example profile, which is fine for testing; host our own profile and set `SHOPIFY_AGENT_PROFILE` before relying on it.
+
+### `GET /catalog/discover`
+
+| Param | Values |
+| --- | --- |
+| `category` | `for-you` (default), `all`, `tops`, `bottoms`, `jeans`, `shorts`, `sweats`, `dresses`, `outerwear` |
+| `q` | Search text, up to 100 characters |
+| `shopFor` | `womens`, `mens`, `both` (default) |
+| `style` | `minimal`, `colorful`, `dark`, `none` (default) |
+| `palette`, `neutrals` | The season's best and neutral colors, comma-separated `#RRGGBB`, up to 16 each |
+| `priceMin`, `priceMax` | Whole dollars |
+| `cursor` | The previous page's `cursor`; null means no more pages |
+
+- **A category** (`src/catalog/query.ts`) is one 20-item search such as "men's jeans". Search text narrows it ("women's wool jackets and coats"). Every search has Shopify's clothing taxonomy filter (`aa-1`), ships to `CATALOG_COUNTRY` and asks for available items.
+- **For You** with no search text is a fixed plan of up to 8 searches pairing palette color words with garments, e.g. "women's sage knit sweater". The style picks which colors lead: neutrals for `minimal` (which also adds "minimalist"), the most saturated for `colorful`, the darkest for `dark`. Palette hexes become search words through the nearest entry in `src/catalog/colors.ts`. Each page runs two plan searches of 10 and interleaves them. After the first pass through the plan, each search resumes from its own Shopify cursor, all carried in the opaque `cursor`.
+- **Each page** is deduplicated by product id and capped at 2 products per merchant, so page sizes vary and can be under 20.
+- Changing `category`, `q`, `shopFor`, `style` or the palette starts a new feed: drop the old cursor.
+
+### `CatalogProduct`
+
+`id` (Shopify product GID), `variantId`, `title`, `url`, `merchant { name, url? }`, `image { url, alt } | null`, `price { minor, currency, formatted } | null`, `category?`, `color`, `options`, `sizes`, `selected`, `available`, `rating?`. Detail adds `images`, `description` (plain text) and `variants`.
+
+- **`url`** is the shown variant's merchant page exactly as Shopify gave it. Search results carry no `product.url`, so the variant's is used. Listings without one are dropped, never linked by guesswork.
+- **`price`** comes from minor units in the listing's own currency (`JPY` has none). Listings can come back in non-US currencies even with US shipping.
+- **`color`** is `{ name, hex, source }`: the merchant's color option for the shown variant (`variant`), or a color word in the title (`title`). Shopify gives names, never hex, so `hex` is an approximate swatch from the name table and is null for names like "Bering Sea". Use it for broad ranking only. Nothing reads product images.
+- **`sizes`** are the labels of options named like "size" (S, 32"). They are not garment measurements.
+- **`selected`** is the shown variant's options. Pass it to `/catalog/product` so the detail opens on the same variant.
+- Shopify returns no image dimensions, so the app learns each image's aspect ratio when it loads.
+
+### Shopify rules and limits
+
+- Nothing is cached or stored, and images are never downloaded: Shopify's catalog terms forbid caching results and allow images only alongside their listing. The app should show them with `cachePolicy="none"`.
+- Anonymous access has shared, low rate limits. The server keeps at most 2 Shopify calls open and retries a 429 or 5xx once, after `Retry-After` (up to 3 s) or 500 ms. Timeouts aren't retried. A request the app abandons cancels its Shopify call.
+- Only fashion attributes go to Shopify: category, search text, department, style words and palette color words. Never selfies or measurements. Logs carry counts and the category only.
 
 ## Attribution and limits
 

@@ -62,7 +62,8 @@ function setup(locate: Locate) {
     },
   });
   let calls = 0;
-  const app = buildApp({ rules, model: "gemini-test", logger: { level: "info", stream }, locate: (jpeg) => (calls++, locate(jpeg)) });
+  const catalog = { search: async () => assert.fail("no catalog here"), getProduct: async () => assert.fail("no catalog here") };
+  const app = buildApp({ rules, model: "gemini-test", logger: { level: "info", stream }, catalog, locate: (jpeg) => (calls++, locate(jpeg)) });
   return { app, logs, calls: () => calls };
 }
 

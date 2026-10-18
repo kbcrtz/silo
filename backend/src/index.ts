@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { loadRules } from "./analysis/evaluate.ts";
 import { buildApp } from "./app.ts";
 import { locateRegions, type CreateInteraction } from "./services/colorVision.ts";
+import { createCatalog } from "./services/shopifyCatalog.ts";
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -22,5 +23,19 @@ const client = new GoogleGenAI({ apiKey });
 const create: CreateInteraction = async (params, options) =>
   (await client.interactions.create(params as never, options)) as { output_text?: string };
 
-const app = buildApp({ rules, model, logger: true, locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }) });
+const catalogTimeoutMs = Number(process.env.CATALOG_TIMEOUT_MS ?? 8_000);
+if (!(catalogTimeoutMs > 0)) {
+  console.error("CATALOG_TIMEOUT_MS must be a positive number of milliseconds.");
+  process.exit(1);
+}
+const catalog = createCatalog({
+  fetch,
+  endpoint: process.env.SHOPIFY_CATALOG_URL ?? "https://catalog.shopify.com/api/ucp/mcp",
+  // Shopify's documented example profile is fine for testing; host our own before relying on it.
+  profile: process.env.SHOPIFY_AGENT_PROFILE ?? "https://shopify.dev/ucp/agent-profiles/examples/2026-08-25/valid-with-capabilities.json",
+  country: process.env.CATALOG_COUNTRY ?? "US",
+  timeoutMs: catalogTimeoutMs,
+});
+
+const app = buildApp({ rules, model, logger: true, catalog, locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }) });
 await app.listen({ port: Number(process.env.PORT ?? 8080), host: "0.0.0.0" });

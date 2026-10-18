@@ -48,6 +48,8 @@ Set `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_USE_MOCKS=false` in `.env`. The serve
 - `POST /color-analysis`, multipart `selfie` → `{ warmth, depth, clarity, confidence }` (axes -1..1, see `src/data/seasons.ts`)
 - `POST /try-on`, multipart `bodyPhoto`, `itemId`, `itemImageUrl?`, `measurements` (JSON, cm/kg) → `{ jobId }`
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`
+- `GET /catalog/discover?category&q&shopFor&style&palette&neutrals&priceMin&priceMax&cursor` → `{ products, cursor, source }`, live Shopify listings (`src/api/catalog.ts`; not wired into a screen yet). The mock serves the bundled fixtures as `source: "demo"`.
+- `GET /catalog/product?id&selected` → `{ product }`
 
 ## How the app is laid out
 
