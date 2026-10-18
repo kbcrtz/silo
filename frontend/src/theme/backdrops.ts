@@ -18,6 +18,7 @@ export type Blob = {
 };
 
 export const FRAME_WIDTH = 402;
+export const FRAME_HEIGHT = 874;
 
 export const BACKDROPS: Record<BackdropId, { base: string; blobs: Blob[] }> = {
   neutral: {

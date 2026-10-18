@@ -17,7 +17,7 @@ export function shopForGender(gender: Gender): ShopFor {
 
 export type ColorProfile = {
   seasonId: SeasonId;
-  /** Every season, best fit first; powers "not quite? try…". */
+  /** Every season, best fit first. */
   ranked: SeasonId[];
   traits: ColorTraits;
   analyzedAt: string;
@@ -40,14 +40,8 @@ type ProfileState = {
   unitSystem: UnitSystem;
   fitPreference: FitPreference;
 
-  set: (
-    patch: Partial<
-      Omit<ProfileState, "set" | "answer" | "chooseSeason" | "reset">
-    >,
-  ) => void;
+  set: (patch: Partial<Omit<ProfileState, "set" | "answer" | "reset">>) => void;
   answer: (questionId: string, optionId: string) => void;
-  /** Manual override from the ranked list; keeps the analysis itself. */
-  chooseSeason: (seasonId: SeasonId) => void;
   reset: () => void;
 };
 
@@ -69,12 +63,6 @@ export const useProfile = create<ProfileState>()(
         set((s) => ({
           quizAnswers: { ...s.quizAnswers, [questionId]: optionId },
         })),
-      chooseSeason: (seasonId) =>
-        set((s) =>
-          s.colorProfile
-            ? { colorProfile: { ...s.colorProfile, seasonId } }
-            : s,
-        ),
       reset: () =>
         set({
           ...initial,

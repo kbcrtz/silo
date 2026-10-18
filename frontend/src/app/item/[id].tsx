@@ -6,8 +6,14 @@ import { Alert, Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Button } from "@/components/Button";
 import { Chip } from "@/components/Chip";
+import { GlassPill, PILL_EDGE, PILL_FILL } from "@/components/GlassPill";
 import { ProductImage } from "@/components/ItemCard";
 import { Mannequin } from "@/components/Mannequin";
+import {
+  BackdropFill,
+  useSeasonBackdrop,
+} from "@/components/onboarding/Backdrop";
+import { Glass } from "@/components/onboarding/Glass";
 import { Text } from "@/components/Text";
 import { findItem, shopUrl, SILHOUETTE_LABELS } from "@/data/catalog";
 import { SIZE_CHARTS } from "@/data/sizeCharts";
@@ -22,22 +28,12 @@ import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 
 const VISUAL_HEIGHT = 320;
-
+const BAR_HEIGHT = 52;
 function Pill({ label }: { label: string }) {
-  const t = useTheme();
   return (
-    <View
-      style={{
-        paddingVertical: t.space(1),
-        paddingHorizontal: t.space(3),
-        borderRadius: t.radius.pill,
-        backgroundColor: t.colors.surface,
-        borderWidth: 1,
-        borderColor: t.colors.border,
-      }}
-    >
+    <GlassPill height={32} style={{ paddingHorizontal: 13 }}>
       <Text variant="caption">{label}</Text>
-    </View>
+    </GlassPill>
   );
 }
 
@@ -58,27 +54,24 @@ function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: t.space(2),
-        paddingHorizontal: t.space(4),
-        borderRadius: t.radius.pill,
-        borderWidth: 1,
-        borderColor: active ? t.colors.accent : t.colors.border,
-        backgroundColor: t.colors.surface,
-        opacity: pressed ? 0.85 : 1,
-      })}
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
     >
-      <SymbolView
-        name={icon}
-        size={18}
-        tintColor={t.colors.accentText}
-        style={{ width: 18, height: 18 }}
-      />
-      <Text variant="heading" style={{ fontSize: 15 }}>
-        {label}
-      </Text>
+      <GlassPill
+        height={BAR_HEIGHT}
+        fill={active ? "rgba(23,19,17,0.06)" : undefined}
+        interactive
+        style={{ gap: t.space(2), paddingHorizontal: t.space(4) }}
+      >
+        <SymbolView
+          name={icon}
+          size={18}
+          tintColor={t.colors.accentText}
+          style={{ width: 18, height: 18 }}
+        />
+        <Text variant="heading" style={{ fontSize: 15 }}>
+          {label}
+        </Text>
+      </GlassPill>
     </Pressable>
   );
 }
@@ -98,6 +91,7 @@ export default function ItemSheet() {
   const saved = useSaved((s) => (item ? s.itemIds.includes(item.id) : false));
   const lists = useSaved((s) => s.lists);
   const [onYou, setOnYou] = useState(false);
+  const backdrop = useSeasonBackdrop();
 
   if (!item) {
     return (
@@ -141,11 +135,12 @@ export default function ItemSheet() {
             height: VISUAL_HEIGHT,
             borderRadius: t.radius.lg,
             overflow: "hidden",
-            backgroundColor: onYou ? t.colors.surface : item.colors[0],
+            backgroundColor: item.colors[0],
             borderWidth: onYou ? 1 : 0,
-            borderColor: t.colors.border,
+            borderColor: PILL_EDGE,
           }}
         >
+          {onYou ? <BackdropFill id={backdrop} /> : null}
           {onYou ? (
             <Animated.View
               key="mannequin"
@@ -203,49 +198,63 @@ export default function ItemSheet() {
         </View>
 
         {size ? (
-          size.kind === "size" ? (
-            <Text>
-              Your size <Text variant="heading">{size.size}</Text>
-              <Text tone="muted">
-                {"  ·  "}
-                {size.confidence === "high"
-                  ? "Should fit well"
-                  : size.confidence === "medium"
-                    ? "Close fit"
-                    : "Between sizes"}
+          <Glass
+            radius={24}
+            fill={PILL_FILL}
+            edge={PILL_EDGE}
+            style={{ paddingVertical: 15, paddingHorizontal: 18 }}
+          >
+            {size.kind === "size" ? (
+              <Text>
+                Your size <Text variant="heading">{size.size}</Text>
+                <Text tone="muted">
+                  {"  ·  "}
+                  {size.confidence === "high"
+                    ? "Should fit well"
+                    : size.confidence === "medium"
+                      ? "Close fit"
+                      : "Between sizes"}
+                </Text>
               </Text>
-            </Text>
-          ) : (
-            <Pressable onPress={() => router.push("/measurements")}>
-              <Text tone="accent">Add measurements to get your size ›</Text>
-            </Pressable>
-          )
+            ) : (
+              <Pressable onPress={() => router.push("/measurements")}>
+                <Text tone="accent">Add measurements to get your size ›</Text>
+              </Pressable>
+            )}
+          </Glass>
         ) : null}
 
         {saved ? (
-          <Animated.View entering={FadeIn} style={{ gap: t.space(2) }}>
-            <Text variant="caption" tone="muted">
-              ADD TO A LIST
-            </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: t.space(2),
-              }}
+          <Animated.View entering={FadeIn}>
+            <Glass
+              radius={24}
+              fill={PILL_FILL}
+              edge={PILL_EDGE}
+              style={{ padding: 16, gap: t.space(3) }}
             >
-              {lists.map((list) => (
-                <Chip
-                  key={list.id}
-                  label={list.name}
-                  selected={list.itemIds.includes(item.id)}
-                  onPress={() =>
-                    useSaved.getState().toggleInList(list.id, item.id)
-                  }
-                />
-              ))}
-              <Chip label="+ New list" onPress={newList} />
-            </View>
+              <Text variant="caption" tone="muted">
+                ADD TO A LIST
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: t.space(2),
+                }}
+              >
+                {lists.map((list) => (
+                  <Chip
+                    key={list.id}
+                    label={list.name}
+                    selected={list.itemIds.includes(item.id)}
+                    onPress={() =>
+                      useSaved.getState().toggleInList(list.id, item.id)
+                    }
+                  />
+                ))}
+                <Chip label="+ New list" selected={false} onPress={newList} />
+              </View>
+            </Glass>
           </Animated.View>
         ) : null}
       </ScrollView>
@@ -262,7 +271,7 @@ export default function ItemSheet() {
         <Button
           label={onYou ? "See photo" : "Try it on"}
           onPress={() => setOnYou((v) => !v)}
-          style={{ flex: 1, paddingHorizontal: t.space(4) }}
+          style={{ flex: 1 }}
         />
         <IconButton
           icon={saved ? "heart.fill" : "heart"}

@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { CARD_PAD } from "./CardSurface";
+import { usePassportFonts } from "./fonts";
 import { rgb01 } from "./holoShader";
 import { PassportBack } from "./PassportBack";
 import { PassportFront } from "./PassportFront";
@@ -35,6 +36,7 @@ export function PassportCard({
   width: number;
 }) {
   const height = width * CARD_ASPECT;
+  const fontMgr = usePassportFonts();
   const { dragX, dragY, foilX, foilY, sweep, flip, gesture } = useCardTilt(
     width,
     height,
@@ -90,26 +92,31 @@ export function PassportCard({
         accessibilityRole="image"
         accessibilityLabel={`Silo passport, ${data.season.name}`}
       >
-        <View style={StyleSheet.absoluteFill}>
-          <Animated.View style={[styles.face, frontStyle]}>
-            <PassportFront
-              width={width}
-              height={height}
-              data={data}
-              uniforms={uniforms}
-              fillUniforms={fillUniforms}
-            />
-          </Animated.View>
-          <Animated.View style={[styles.face, backStyle]}>
-            <PassportBack
-              width={width}
-              height={height}
-              data={data}
-              uniforms={uniforms}
-              fillUniforms={fillUniforms}
-            />
-          </Animated.View>
-        </View>
+        {/* The faces wait for the brand fonts rather than flash in system type. */}
+        {fontMgr ? (
+          <View style={StyleSheet.absoluteFill}>
+            <Animated.View style={[styles.face, frontStyle]}>
+              <PassportFront
+                width={width}
+                height={height}
+                data={data}
+                fontMgr={fontMgr}
+                uniforms={uniforms}
+                fillUniforms={fillUniforms}
+              />
+            </Animated.View>
+            <Animated.View style={[styles.face, backStyle]}>
+              <PassportBack
+                width={width}
+                height={height}
+                data={data}
+                fontMgr={fontMgr}
+                uniforms={uniforms}
+                fillUniforms={fillUniforms}
+              />
+            </Animated.View>
+          </View>
+        ) : null}
       </View>
     </GestureDetector>
   );

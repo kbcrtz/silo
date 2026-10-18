@@ -6,7 +6,7 @@ import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useHydrated } from "@/store/storage";
 import { useTheme } from "@/theme";
-import { useBrandFonts } from "@/theme/brand";
+import { BRAND, useBrandFonts } from "@/theme/brand";
 
 /** Pushed screens show only the back button; they title themselves. */
 const pushed = { headerShown: true, title: "" };
@@ -47,7 +47,7 @@ export default function RootLayout() {
               sheetAllowedDetents: [0.78, 1],
               sheetGrabberVisible: true,
               sheetCornerRadius: 28,
-              contentStyle: { backgroundColor: t.colors.bg },
+              contentStyle: { backgroundColor: BRAND.white },
             }}
           />
           <Stack.Screen name="saved/index" options={pushed} />

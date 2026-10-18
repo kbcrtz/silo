@@ -13,6 +13,7 @@ import {
   Text,
   useImage,
   vec,
+  type SkTypefaceFontProvider,
 } from "@shopify/react-native-skia";
 import { useMemo } from "react";
 import { mix } from "@/lib/color";
@@ -24,6 +25,7 @@ import {
   rosettePath,
   type HoloUniforms,
 } from "./CardSurface";
+import { sansFont, serifFont } from "./fonts";
 import type { PassportData } from "./usePassportData";
 
 const GRAYSCALE = [
@@ -49,6 +51,7 @@ type Props = {
   width: number;
   height: number;
   data: PassportData;
+  fontMgr: SkTypefaceFontProvider;
   /** Thin lines: no glitter, which would read as gaps at this width. */
   uniforms: HoloUniforms;
   /** Filled areas: with glitter. */
@@ -59,6 +62,7 @@ export function PassportFront({
   width: w,
   height: h,
   data,
+  fontMgr: mgr,
   uniforms,
   fillUniforms,
 }: Props) {
@@ -73,40 +77,18 @@ export function PassportFront({
     // Size the MRZ so its 36 characters span the card's inner width exactly.
     const mrzSize = (10 * (88 * u)) / mrzProbe.getTextWidth("<".repeat(36));
     return {
-      wordmark: matchFont({
-        fontFamily: "Didot",
-        fontSize: 9 * u,
-        fontWeight: "bold",
-      }),
-      subtitle: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 2.3 * u,
-        fontWeight: "600",
-      }),
-      label: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 2.1 * u,
-        fontWeight: "600",
-      }),
-      value: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 3.7 * u,
-        fontWeight: "500",
-      }),
-      season: matchFont({
-        fontFamily: "Didot",
-        fontSize: 4.6 * u,
-        fontWeight: "bold",
-      }),
+      // Set like onboarding: Instrument Serif for the wordmark and season,
+      // DM Sans for the labels and values.
+      wordmark: serifFont(mgr, 11 * u, true),
+      subtitle: sansFont(mgr, 2.3 * u, true),
+      label: sansFont(mgr, 2.1 * u, true),
+      value: sansFont(mgr, 3.7 * u),
+      season: serifFont(mgr, 6.4 * u),
       mrz: matchFont({ fontFamily: "Menlo", fontSize: mrzSize }),
       signature: matchFont({ fontFamily: "Snell Roundhand", fontSize: 6 * u }),
-      micro: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 1.5 * u,
-        fontWeight: "600",
-      }),
+      micro: sansFont(mgr, 1.5 * u, true),
     };
-  }, [u]);
+  }, [u, mgr]);
 
   const seal = useMemo(
     () => rosettePath(w - 14 * u, 12 * u, 7.5 * u, 10, 6),
@@ -146,7 +128,7 @@ export function PassportFront({
         rosette={[0.72, 0.5]}
       >
         {/* Header */}
-        <Text x={7 * u} y={15 * u} text="SILO" font={fonts.wordmark}>
+        <Text x={7 * u} y={15 * u} text="Silo" font={fonts.wordmark}>
           <Holo uniforms={fillUniforms} />
         </Text>
         <Text
@@ -203,8 +185,8 @@ export function PassportFront({
         />
         <Text
           x={42 * u}
-          y={33.5 * u}
-          text={season.name.toUpperCase()}
+          y={34 * u}
+          text={season.name}
           font={fonts.season}
           color={ink}
         />

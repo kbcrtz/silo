@@ -2,10 +2,16 @@ import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { Pressable, Text, View } from "react-native";
 import { BRAND, TYPE } from "@/theme/brand";
+import { Glass } from "./Glass";
+
+/** The back button's glass circle. */
+const BACK = 40;
+const FILL = "rgba(255,255,255,0.42)";
+const EDGE = "rgba(255,255,255,0.75)";
 
 /**
- * The row at the top of each step: a back arrow (or the wordmark once there
- * is nothing to go back to) and a pill with the step or section.
+ * The row at the top of each step: a glass back button (or the wordmark once
+ * there is nothing to go back to) and a glass pill with the step or section.
  */
 export function Header({
   badge,
@@ -31,31 +37,41 @@ export function Header({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"
-          hitSlop={14}
+          hitSlop={8}
           onPress={onBack}
-          style={{ marginLeft: 4 }}
+          // Taller than the row; the negative margin keeps the row at 28.
+          style={{ marginVertical: -(BACK - 28) / 2 }}
         >
-          <SymbolView
-            name="arrow.left"
-            size={21}
-            weight="light"
-            tintColor={BRAND.inkSoft}
-            style={{ width: 22, height: 22 }}
-          />
+          <Glass
+            radius={BACK / 2}
+            fill={FILL}
+            edge={EDGE}
+            interactive
+            style={{
+              width: BACK,
+              height: BACK,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <SymbolView
+              name="arrow.left"
+              size={18}
+              weight="regular"
+              tintColor={BRAND.ink}
+              style={{ width: 20, height: 20 }}
+            />
+          </Glass>
         </Pressable>
       )}
-      <View
-        style={{
-          height: 28,
-          paddingHorizontal: 13,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: BRAND.inkFaint,
-          justifyContent: "center",
-        }}
+      <Glass
+        radius={14}
+        fill={FILL}
+        edge={EDGE}
+        style={{ height: 28, paddingHorizontal: 13, justifyContent: "center" }}
       >
         <Text style={TYPE.badge}>{badge}</Text>
-      </View>
+      </Glass>
     </View>
   );
 }

@@ -1,44 +1,68 @@
 import { FAMILIES, familyOf } from "@/data/families";
 import { SEASON_IDS } from "@/data/seasons";
-import { adjustForContext, isComplete, traitWords } from "../photoContext";
+import {
+  adjustForContext,
+  isComplete,
+  selfReportedTraits,
+  toggleSelfieFlag,
+  traitWords,
+} from "../photoContext";
 
 const photo = { warmth: 0.5, depth: 0.6, clarity: 0.4, confidence: 0.8 };
 
 describe("adjustForContext", () => {
-  it("leaves a clean daylight photo alone", () => {
-    expect(
-      adjustForContext(photo, {
-        makeup: "none",
-        hair: "natural",
-        lighting: "window",
-      }),
-    ).toEqual(photo);
+  it("leaves a clean selfie alone", () => {
+    expect(adjustForContext(photo, ["none"])).toEqual(photo);
   });
 
-  it("corrects indoor light for its warm cast and trusts it less", () => {
-    const r = adjustForContext(photo, { lighting: "indoor" });
-    expect(r.warmth).toBeCloseTo(0.3);
+  it("reads a dim photo lighter and trusts it less", () => {
+    const r = adjustForContext(photo, ["dim"]);
+    expect(r.depth).toBeCloseTo(0.4);
     expect(r.confidence).toBeLessThan(photo.confidence);
   });
 
-  it("discounts depth from dyed hair and undertone under foundation", () => {
-    const r = adjustForContext(photo, { hair: "dyed", makeup: "foundation" });
-    expect(r.depth).toBeCloseTo(0.3);
-    expect(r.warmth).toBeCloseTo(0.3);
+  it("discounts undertone under makeup and a filter", () => {
+    const r = adjustForContext(photo, ["makeup", "filter"]);
+    expect(r.warmth).toBeCloseTo(0.24);
+    expect(r.clarity).toBeCloseTo(0.28);
+  });
+});
+
+describe("selfie checklist", () => {
+  it("keeps none of these exclusive", () => {
+    expect(toggleSelfieFlag(["makeup"], "none")).toEqual(["none"]);
+    expect(toggleSelfieFlag(["none"], "dim")).toEqual(["dim"]);
+    expect(toggleSelfieFlag(["dim", "filter"], "dim")).toEqual(["filter"]);
+  });
+});
+
+describe("self-reported traits", () => {
+  const answers = {
+    veins: "green",
+    sun: "tan",
+    hair: "red",
+    eyes: "hazel",
+    lips: "coral",
+  };
+
+  it("reads warm answers as warm", () => {
+    expect(selfReportedTraits({ answers }).warmth).toBeGreaterThan(0.5);
   });
 
-  it("needs every question answered", () => {
-    expect(
-      isComplete({ makeup: "none", hair: "natural", lighting: "sun" }),
-    ).toBe(false);
-    expect(
-      isComplete({
-        makeup: "none",
-        hair: "natural",
-        lighting: "sun",
-        style: "none",
-      }),
-    ).toBe(true);
+  it("ignores not sure instead of pulling toward neutral", () => {
+    const sure = selfReportedTraits({ answers: { veins: "blue" } });
+    const unsure = selfReportedTraits({
+      answers: { veins: "blue", lips: "unsure" },
+    });
+    expect(unsure).toEqual(sure);
+  });
+
+  it("needs every question and the checklist", () => {
+    expect(isComplete({ answers })).toBe(false);
+    expect(isComplete({ answers, selfie: ["none"] })).toBe(true);
+    expect(isComplete({ answers: { veins: "blue" }, selfie: ["none"] })).toBe(
+      false,
+    );
   });
 });
 

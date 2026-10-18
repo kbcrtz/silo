@@ -158,14 +158,18 @@ const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 
 /**
  * Averages each axis over the answered questions that speak to it. A question
- * whose options never mention an axis does not dilute that axis toward zero.
+ * whose options never mention an axis does not dilute that axis toward zero,
+ * and an option with no weights at all ("not sure") counts as unanswered.
  */
-export function scoreQuiz(answers: QuizAnswers): ColorTraits {
+export function scoreQuiz(
+  answers: QuizAnswers,
+  questions: QuizQuestion[] = QUIZ,
+): ColorTraits {
   const sums: ColorTraits = { warmth: 0, depth: 0, clarity: 0 };
   const counts: ColorTraits = { warmth: 0, depth: 0, clarity: 0 };
-  for (const question of QUIZ) {
+  for (const question of questions) {
     const option = question.options.find((o) => o.id === answers[question.id]);
-    if (!option) continue;
+    if (!option || !Object.keys(option.weights).length) continue;
     for (const axis of AXES) {
       const touchesAxis = question.options.some(
         (o) => o.weights[axis] !== undefined,

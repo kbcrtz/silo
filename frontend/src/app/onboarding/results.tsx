@@ -2,13 +2,12 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
   LinearTransition,
-  ZoomIn,
 } from "react-native-reanimated";
 import { GlassButton, PrimaryButton } from "@/components/onboarding/Buttons";
 import { Glass } from "@/components/onboarding/Glass";
@@ -16,7 +15,7 @@ import { Header, stepBadge } from "@/components/onboarding/Header";
 import { renderEmphasis } from "@/components/onboarding/Headline";
 import { MetalOrb } from "@/components/onboarding/MetalOrb";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
-import { FAMILIES, familyOf, METALS, type Metal } from "@/data/families";
+import { FAMILIES, familyOf, METALS } from "@/data/families";
 import { photoUri } from "@/lib/photos";
 import { traitWords } from "@/lib/photoContext";
 import { useProfile } from "@/store/profile";
@@ -25,14 +24,12 @@ import { BRAND, TYPE } from "@/theme/brand";
 /** How long the analysis summary shows before the season takes over. */
 const REVEAL_MS = 1900;
 const SWATCH = 55;
-const layout = LinearTransition.springify().damping(18);
+const layout = LinearTransition.duration(300);
 
 function Swatch({ color, index }: { color: string; index: number }) {
   return (
     <Animated.View
-      entering={ZoomIn.delay(250 + index * 30)
-        .springify()
-        .damping(13)}
+      entering={FadeIn.delay(250 + index * 20).duration(350)}
       style={{
         width: SWATCH,
         height: SWATCH,
@@ -85,7 +82,6 @@ export default function Results() {
   const name = useProfile((s) => s.displayName);
   const selfie = useProfile((s) => s.selfiePhoto);
   const [revealed, setRevealed] = useState(false);
-  const [preview, setPreview] = useState<Metal | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -97,9 +93,7 @@ export default function Results() {
 
   if (!colorProfile) return null;
   const family = FAMILIES[familyOf(colorProfile.seasonId)];
-  const best = family.metal;
-  const shown = preview ?? best;
-  const other: Metal = best === "gold" ? "silver" : "gold";
+  const metal = family.metal;
   const lead = name?.trim() ? `${name.trim()}, you’re a` : "You’re a";
 
   return (
@@ -116,7 +110,7 @@ export default function Results() {
         </Text>
         <Animated.View
           entering={FadeIn.delay(150).duration(600)}
-          style={{ position: "absolute", right: 0, top: 139 }}
+          style={{ position: "absolute", right: 0, top: 104 }}
         >
           <Portrait selfie={selfie} />
         </Animated.View>
@@ -167,49 +161,35 @@ export default function Results() {
             entering={FadeInDown.delay(250).duration(500)}
             style={{ marginTop: 25 }}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityHint="Compare gold and silver"
-              onPress={() => {
-                Haptics.selectionAsync();
-                setPreview(shown === best ? other : null);
+            <Glass
+              radius={34}
+              fill={BRAND.glassFillStrong}
+              style={{
+                height: 115,
+                flexDirection: "row",
+                alignItems: "center",
+                paddingLeft: 17,
+                paddingRight: 24,
               }}
             >
-              <Glass
-                radius={34}
-                fill={BRAND.glassFillStrong}
-                style={{
-                  height: 115,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingLeft: 17,
-                  paddingRight: 24,
-                }}
-              >
-                <Animated.View
-                  key={shown}
-                  entering={ZoomIn.springify().damping(14)}
+              <MetalOrb metal={metal} />
+              <View style={{ flex: 1, marginLeft: 17 }}>
+                <Text style={[TYPE.metalLabel, { color: BRAND.inkMuted }]}>
+                  YOUR BEST METAL
+                </Text>
+                <Text style={[TYPE.metal, { marginTop: 6 }]}>
+                  {METALS[metal].name}
+                </Text>
+                <Text
+                  style={[
+                    TYPE.metalBody,
+                    { color: BRAND.inkSoft, marginTop: 4 },
+                  ]}
                 >
-                  <MetalOrb metal={shown} />
-                </Animated.View>
-                <View style={{ flex: 1, marginLeft: 17 }}>
-                  <Text style={[TYPE.metalLabel, { color: BRAND.inkMuted }]}>
-                    {shown === best ? "YOUR BEST METAL" : "JEWELRY PREVIEW"}
-                  </Text>
-                  <Text style={[TYPE.metal, { marginTop: 6 }]}>
-                    {METALS[shown].name}
-                  </Text>
-                  <Text
-                    style={[
-                      TYPE.metalBody,
-                      { color: BRAND.inkSoft, marginTop: 4 },
-                    ]}
-                  >
-                    {METALS[shown].description}
-                  </Text>
-                </View>
-              </Glass>
-            </Pressable>
+                  {METALS[metal].description}
+                </Text>
+              </View>
+            </Glass>
           </Animated.View>
 
           <Animated.View
@@ -217,7 +197,7 @@ export default function Results() {
             style={{ flexDirection: "row", gap: 13, marginTop: 16 }}
           >
             <GlassButton
-              label="Try another photo"
+              label="Retake photo"
               onPress={() => router.navigate("/onboarding/selfie")}
               style={{ flex: 1 }}
             />

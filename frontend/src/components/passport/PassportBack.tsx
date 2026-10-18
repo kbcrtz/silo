@@ -3,11 +3,11 @@ import {
   Circle,
   Group,
   Line,
-  matchFont,
   Skia,
   Text,
   TextPath,
   vec,
+  type SkTypefaceFontProvider,
 } from "@shopify/react-native-skia";
 import { useMemo } from "react";
 import {
@@ -17,12 +17,14 @@ import {
   useCardStock,
   type HoloUniforms,
 } from "./CardSurface";
+import { sansFont, serifFont } from "./fonts";
 import type { PassportData } from "./usePassportData";
 
 type Props = {
   width: number;
   height: number;
   data: PassportData;
+  fontMgr: SkTypefaceFontProvider;
   uniforms: HoloUniforms;
   fillUniforms: HoloUniforms;
 };
@@ -31,6 +33,7 @@ export function PassportBack({
   width: w,
   height: h,
   data,
+  fontMgr: mgr,
   uniforms,
   fillUniforms,
 }: Props) {
@@ -38,45 +41,18 @@ export function PassportBack({
   const { season } = data;
   const { ink, muted } = useCardStock(season);
 
+  // Set like onboarding: Instrument Serif titles, DM Sans everything else.
   const fonts = useMemo(
     () => ({
-      title: matchFont({
-        fontFamily: "Didot",
-        fontSize: 6.4 * u,
-        fontWeight: "bold",
-      }),
-      subtitle: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 2.3 * u,
-        fontWeight: "600",
-      }),
-      label: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 3.2 * u,
-        fontWeight: "500",
-      }),
-      value: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 3.4 * u,
-        fontWeight: "600",
-      }),
-      small: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 2.1 * u,
-        fontWeight: "600",
-      }),
-      stamp: matchFont({
-        fontFamily: "Avenir Next",
-        fontSize: 2.3 * u,
-        fontWeight: "700",
-      }),
-      stampCenter: matchFont({
-        fontFamily: "Didot",
-        fontSize: 4.4 * u,
-        fontWeight: "bold",
-      }),
+      title: serifFont(mgr, 8 * u, true),
+      subtitle: sansFont(mgr, 2.3 * u, true),
+      label: sansFont(mgr, 3.2 * u),
+      value: sansFont(mgr, 3.4 * u, true),
+      small: sansFont(mgr, 2.1 * u, true),
+      stamp: sansFont(mgr, 2.3 * u, true),
+      stampCenter: serifFont(mgr, 5.6 * u, true),
     }),
-    [u],
+    [u, mgr],
   );
 
   // Stamp: a ring of text around a circle, rotated like it was pressed by hand.
@@ -209,9 +185,9 @@ export function PassportBack({
             initialOffset={0}
           />
           <Text
-            x={stamp.cx - fonts.stampCenter.getTextWidth("SILO") / 2}
+            x={stamp.cx - fonts.stampCenter.getTextWidth("Silo") / 2}
             y={stamp.cy + 1.4 * u}
-            text="SILO"
+            text="Silo"
             font={fonts.stampCenter}
             color={season.signature}
           />

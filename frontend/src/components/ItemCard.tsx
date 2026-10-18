@@ -7,6 +7,8 @@ import type { CatalogItem } from "@/data/catalog";
 import { readableOn } from "@/lib/color";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
+import { BRAND } from "@/theme/brand";
+import { GlassPill } from "./GlassPill";
 import { Text } from "./Text";
 
 export function ItemCard({
@@ -43,15 +45,17 @@ export function ItemCard({
                 position: "absolute",
                 top: t.space(2),
                 left: t.space(2),
-                backgroundColor: "rgba(255,255,255,0.9)",
-                borderRadius: t.radius.pill,
-                paddingHorizontal: t.space(2),
-                paddingVertical: 2,
               }}
             >
-              <Text variant="caption" style={{ color: "#141414" }}>
-                {score}% match
-              </Text>
+              <GlassPill
+                height={24}
+                shadow={false}
+                style={{ paddingHorizontal: t.space(2) }}
+              >
+                <Text variant="caption" style={{ color: BRAND.ink }}>
+                  {score}% match
+                </Text>
+              </GlassPill>
             </View>
           ) : null}
           {saved ? (

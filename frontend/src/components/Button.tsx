@@ -1,15 +1,26 @@
 import * as Haptics from "expo-haptics";
-import { ActivityIndicator, Pressable, type ViewStyle } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { useTheme } from "@/theme";
+import { BRAND } from "@/theme/brand";
+import { GlassPill, GradientPill } from "./GlassPill";
 import { Text } from "./Text";
+
+const HEIGHT = 52;
 
 type Props = {
   label: string;
   onPress: () => void;
+  /** Primary is glass over the season gradient, secondary plain glass. */
   variant?: "primary" | "secondary" | "ghost";
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 };
 
 export function Button({
@@ -22,21 +33,18 @@ export function Button({
 }: Props) {
   const t = useTheme();
   const inactive = disabled || loading;
-  const bg =
-    variant === "primary"
-      ? t.colors.accent
-      : variant === "secondary"
-        ? t.colors.surface
-        : "transparent";
-  const tone =
-    variant === "primary"
-      ? "onAccent"
-      : variant === "ghost"
-        ? "accent"
-        : "default";
+  const content = loading ? (
+    <ActivityIndicator color={BRAND.ink} />
+  ) : (
+    <Text variant="heading" tone={variant === "ghost" ? "accent" : "default"}>
+      {label}
+    </Text>
+  );
+  const padding = { paddingHorizontal: t.space(6) };
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
       onPress={() => {
         Haptics.selectionAsync();
@@ -44,26 +52,30 @@ export function Button({
       }}
       style={({ pressed }) => [
         {
-          backgroundColor: bg,
-          borderRadius: t.radius.pill,
-          paddingVertical: t.space(4),
-          paddingHorizontal: t.space(6),
-          alignItems: "center",
-          borderWidth: variant === "secondary" ? 1 : 0,
-          borderColor: t.colors.border,
-          opacity: inactive ? 0.5 : pressed ? 0.85 : 1,
+          opacity: inactive ? 0.5 : pressed ? 0.88 : 1,
+          transform: [{ scale: pressed && variant !== "ghost" ? 0.985 : 1 }],
         },
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === "primary" ? t.colors.onAccent : t.colors.text}
-        />
+      {variant === "primary" ? (
+        <GradientPill height={HEIGHT} style={padding}>
+          {content}
+        </GradientPill>
+      ) : variant === "secondary" ? (
+        <GlassPill height={HEIGHT} interactive style={padding}>
+          {content}
+        </GlassPill>
       ) : (
-        <Text variant="heading" tone={tone}>
-          {label}
-        </Text>
+        <View
+          style={{
+            height: HEIGHT,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {content}
+        </View>
       )}
     </Pressable>
   );

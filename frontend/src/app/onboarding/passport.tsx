@@ -1,13 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { Text as RNText, useWindowDimensions, View } from "react-native";
-import Animated, {
-  FadeIn,
-  FadeOut,
-  SlideInDown,
-  ZoomIn,
-} from "react-native-reanimated";
-import { ProductImage } from "@/components/ItemCard";
+import { useWindowDimensions } from "react-native";
+import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
 import { Header } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
@@ -15,24 +9,19 @@ import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { CARD_ASPECT, PassportCard } from "@/components/passport/PassportCard";
 import { usePassportData } from "@/components/passport/usePassportData";
 import { Text } from "@/components/Text";
-import { useRecommendations } from "@/hooks/useRecommendations";
 import { useProfile } from "@/store/profile";
 import { familyOf } from "@/data/families";
 import { useTheme } from "@/theme";
-import { BRAND, TYPE } from "@/theme/brand";
 
 /** When the "ISSUED" stamp lands, after the card has slid up. */
 const STAMP_AT_MS = 900;
 /** How long the stamp stays: it sits flat over a card that can turn, so it leaves. */
 const STAMP_FOR_MS = 1600;
-/** A pick at or above this score counts toward "N pieces picked for you". */
-const GOOD_PICK = 70;
 
 /**
  * Onboarding's finale: the passport is "issued" with everything collected so
  * far. The card slides up and its foil sweeps (PassportCard does that on
  * mount) and a stamp lands with a haptic.
- * Below it, a first look at the feed shows what all those answers bought them.
  */
 export default function PassportStep() {
   const t = useTheme();
@@ -41,13 +30,8 @@ export default function PassportStep() {
   const seasonId = useProfile((s) => s.colorProfile?.seasonId);
   const set = useProfile((s) => s.set);
   const [stamp, setStamp] = useState(false);
-  const { ranked } = useRecommendations();
-  const goodPicks = ranked.filter((r) => r.score >= GOOD_PICK).length;
-  const preview = ranked.slice(0, 4);
 
-  // Narrower than the profile's card so the picks below start on screen.
   const cardWidth = Math.min(width - t.space(10), 290);
-  const thumb = (width - t.space(10) - t.space(2) * 3) / 4;
 
   useEffect(() => {
     const show = setTimeout(() => {
@@ -78,9 +62,12 @@ export default function PassportStep() {
       />
       {data ? (
         <Animated.View
-          entering={SlideInDown.springify().damping(16)}
+          entering={FadeInDown.duration(500)}
+          // Centered in the space between the title and the button, which
+          // its auto margins also push to the bottom of the screen.
           style={{
             alignSelf: "center",
+            marginVertical: "auto",
             width: cardWidth,
             height: cardWidth * CARD_ASPECT,
           }}
@@ -89,7 +76,7 @@ export default function PassportStep() {
           {stamp ? (
             <Animated.View
               pointerEvents="none"
-              entering={ZoomIn.springify().damping(9)}
+              entering={FadeIn.duration(300)}
               exiting={FadeOut.duration(400)}
               style={{
                 position: "absolute",
@@ -116,36 +103,6 @@ export default function PassportStep() {
         </Text>
       )}
 
-      {preview.length ? (
-        <Animated.View
-          entering={FadeIn.delay(STAMP_AT_MS + 700)}
-          style={{ gap: t.space(2) }}
-        >
-          <RNText style={TYPE.question}>
-            {goodPicks || preview.length} pieces already picked for you
-          </RNText>
-          <View style={{ flexDirection: "row", gap: t.space(2) }}>
-            {preview.map(({ item }) => (
-              <View
-                key={item.id}
-                style={{
-                  width: thumb,
-                  height: thumb * 1.3,
-                  borderRadius: t.radius.sm,
-                  overflow: "hidden",
-                  backgroundColor: item.colors[0],
-                }}
-              >
-                <ProductImage item={item} />
-              </View>
-            ))}
-          </View>
-          <RNText style={[TYPE.body, { color: BRAND.inkSoft }]}>
-            Ranked by your colors and your shape. Try any of them on your
-            mannequin.
-          </RNText>
-        </Animated.View>
-      ) : null}
       <PrimaryButton label="Enter Silo" onPress={finish} />
     </OnboardingScreen>
   );
