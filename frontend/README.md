@@ -35,11 +35,12 @@ Builds:
 | `eas build -p ios --profile development --local` | Dev client `.ipa` for registered phones; loads JS from Metro |
 | `eas build -p ios --profile simulator --local` | Dev client for the simulator; no Apple credentials needed |
 | `eas build -p ios --profile preview --local` | Release build with JS bundled in; use this for the demo (no Metro or Wi-Fi needed) |
+| `eas build -p ios --profile production --auto-submit` | App Store-signed cloud build, uploaded to TestFlight; build number auto-increments |
 
 The first device build asks you to sign in to Apple and creates the bundle id (`com.siloapp.ios`), distribution certificate and ad-hoc profile. Install the `.ipa` by dragging it into Xcode → Window → Devices and Simulators, or `xcrun devicectl device install app --device <id> <file>.ipa`.
 
 - Adding a phone later means registering it and rebuilding.
-- Teammates who aren't with you: drop `--local` for a cloud build with an install link, or `eas submit -p ios` a preview build to TestFlight internal testers.
+- Teammates who aren't with you: drop `--local` for a cloud build with an install link, or ship a `production` build to TestFlight (preview builds are ad-hoc signed and can't be submitted). Production builds read `EXPO_PUBLIC_*` from the EAS `production` environment, not `.env`.
 
 ## Connecting the backend
 
