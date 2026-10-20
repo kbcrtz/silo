@@ -180,8 +180,8 @@ async function mockDiscover(params: DiscoverParams): Promise<DiscoverPage> {
  * a bare mannequin. Null for demo items and in mock mode (the app draws the
  * mannequin instead).
  *
- * Backend contract: GET {API_URL}/catalog/tryon-image?id&shopFor,
- * Authorization: Bearer -> image/jpeg
+ * Backend contract: GET {API_URL}/catalog/tryon-image?id&shopFor&selected=<JSON color option>,
+ * Authorization: Bearer -> image/jpeg. Without the color, Shopify would use the store's default variant's photo.
  */
 export function tryOnImageSource(
   item: CatalogItem,
@@ -189,6 +189,8 @@ export function tryOnImageSource(
 ): { uri: string; headers: Record<string, string> } | null {
   if (USE_MOCKS || !item.shopifyId) return null;
   const query = new URLSearchParams({ id: item.shopifyId, shopFor });
+  if (item.shopifyColor)
+    query.set("selected", JSON.stringify([item.shopifyColor]));
   return {
     uri: `${API_URL}/catalog/tryon-image?${query}`,
     headers: apiHeaders(),

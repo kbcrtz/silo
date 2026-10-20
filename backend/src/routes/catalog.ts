@@ -39,21 +39,22 @@ const DiscoverQuery = z.strictObject({
 });
 
 const Selected = z.array(z.object({ name: z.string().max(100), label: z.string().max(100) })).max(10);
+/** `selected=<JSON>`: a variant's options, e.g. [{"name":"Color","label":"Light Blue"}]. */
+export const SelectedParam = z
+  .string()
+  .max(2000)
+  .transform((s, ctx) => {
+    try {
+      return JSON.parse(s) as unknown;
+    } catch {
+      ctx.addIssue({ code: "custom", message: "selected is not JSON" });
+      return z.NEVER;
+    }
+  })
+  .pipe(Selected);
 const ProductQuery = z.strictObject({
   id: z.string().regex(/^gid:\/\/shopify\/p\/[A-Za-z0-9]+$/),
-  selected: z
-    .string()
-    .max(2000)
-    .transform((s, ctx) => {
-      try {
-        return JSON.parse(s) as unknown;
-      } catch {
-        ctx.addIssue({ code: "custom", message: "selected is not JSON" });
-        return z.NEVER;
-      }
-    })
-    .pipe(Selected)
-    .optional(),
+  selected: SelectedParam.optional(),
 });
 
 /** Aborts the upstream Shopify call when the app goes away mid-request. */

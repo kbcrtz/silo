@@ -69,7 +69,7 @@ export type CatalogProduct = {
   variants?: { id: string; title: string; url: string; price: Price | null; available: boolean; options: { name: string; label: string }[] }[];
 };
 
-const isColor = (name: string) => /colou?r/i.test(name);
+export const isColor = (name: string) => /colou?r/i.test(name);
 
 /** Shopify amounts are in the currency's minor unit; JPY has none, USD has two. */
 function price(money: z.infer<typeof Money> | undefined): Price | null {

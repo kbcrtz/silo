@@ -165,6 +165,7 @@ export function toCatalogItem(
     productUrl: product.url,
     source: "shopify",
     shopifyId: product.id,
+    shopifyColor: product.selected.find((o) => /colou?r/i.test(o.name)),
     ...(product.estimate && { evidence: product.estimate.evidence }),
     ...(product.popular && { popular: true }),
     ...(product.estimate?.pattern &&

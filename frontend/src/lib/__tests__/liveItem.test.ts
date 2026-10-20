@@ -115,6 +115,20 @@ describe("toCatalogItem", () => {
     expect(item.evidence).toBeUndefined();
   });
 
+  it("keeps the shown variant's color option, so the AI try-on photo is that color", () => {
+    const item = toCatalogItem(
+      product({
+        selected: [
+          { name: "Size", label: "M" },
+          { name: "Colour", label: "Light Blue" },
+        ],
+      }),
+      "womens",
+    );
+    expect(item.shopifyColor).toEqual({ name: "Colour", label: "Light Blue" });
+    expect(toCatalogItem(product(), "womens").shopifyColor).toBeUndefined();
+  });
+
   it("invents no color when the name has no swatch", () => {
     const item = toCatalogItem(
       product({ color: { name: "Bering Sea", hex: null, source: "variant" } }),
