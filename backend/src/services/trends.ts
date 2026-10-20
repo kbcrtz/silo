@@ -4,7 +4,7 @@ import type { CatalogProduct } from "../catalog/normalize.ts";
 
 export const EVENT_KINDS = ["open", "save", "shop"] as const;
 
-/** What the app reports: an action on an item, with the item's look and the shopper's season. No identity beyond the device id. */
+/** What the app reports: an action on an item, with the item's look and the shopper's season. */
 export type AppEvent = {
   kind: (typeof EVENT_KINDS)[number];
   itemId: string;
@@ -18,7 +18,7 @@ export type AppEvent = {
 export type Trending = { items: string[]; traits: { garment: string; silhouette: string; family: string }[] };
 
 export type Trends = {
-  record(deviceId: string, events: AppEvent[]): Promise<void>;
+  record(userId: string, events: AppEvent[]): Promise<void>;
   trending(season: string): Promise<Trending>;
 };
 
@@ -26,7 +26,7 @@ const TOP_ITEMS = 20;
 const TOP_TRAITS = 5;
 /**
  * Points needed to count as popular (shop 5, save 3, open 1): one open never is.
- * shortcut: one device can still reach it alone, count distinct devices once there are real users.
+ * shortcut: one user can still reach it alone, count distinct users once there are many.
  */
 const MIN_SCORE = 6;
 
@@ -76,41 +76,12 @@ export function markPopular(products: CatalogProduct[], t: Trending): CatalogPro
   return [...popular, ...products.filter((p) => !p.popular)];
 }
 
-/**
- * events is a TimescaleDB hypertable; event_scores is a continuous aggregate
- * of hourly weighted scores per season and item (shop 5, save 3, open 1),
- * real-time so new events count straight away.
- */
-export async function migrateTrends(sql: postgres.Sql) {
-  await sql`CREATE TABLE IF NOT EXISTS events (
-    device_id uuid NOT NULL,
-    at timestamptz NOT NULL DEFAULT now(),
-    kind text NOT NULL,
-    item_id text NOT NULL,
-    season text,
-    garment text,
-    silhouette text,
-    color_family text
-  )`;
-  await sql`SELECT create_hypertable('events', by_range('at'), if_not_exists => TRUE)`;
-  await sql`CREATE MATERIALIZED VIEW IF NOT EXISTS event_scores
-    WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
-    SELECT time_bucket(INTERVAL '1 hour', at) AS bucket, season, item_id, garment, silhouette, color_family,
-      sum(CASE kind WHEN 'shop' THEN 5 WHEN 'save' THEN 3 ELSE 1 END) AS score
-    FROM events
-    GROUP BY bucket, season, item_id, garment, silhouette, color_family
-    WITH NO DATA`;
-  await sql`SELECT add_continuous_aggregate_policy('event_scores',
-    start_offset => INTERVAL '8 days', end_offset => INTERVAL '1 hour',
-    schedule_interval => INTERVAL '30 minutes', if_not_exists => TRUE)`;
-}
-
 export function createTrends(sql: postgres.Sql): Trends {
   return {
-    async record(deviceId, events) {
+    async record(userId, events) {
       if (!events.length) return;
       const rows = events.map((e) => ({
-        device_id: deviceId,
+        user_id: userId,
         kind: e.kind,
         item_id: e.itemId,
         season: e.season ?? null,
@@ -118,13 +89,15 @@ export function createTrends(sql: postgres.Sql): Trends {
         silhouette: e.silhouette ?? null,
         color_family: e.family ?? null,
       }));
-      await sql`INSERT INTO events ${sql(rows, "device_id", "kind", "item_id", "season", "garment", "silhouette", "color_family")}`;
+      await sql`INSERT INTO events ${sql(rows, "user_id", "kind", "item_id", "season", "garment", "silhouette", "color_family")}`;
     },
+    // Weighted scores (shop 5, save 3, open 1) over the last week, straight from events (indexed on season, at).
     async trending(season) {
       const rows = await sql<Row[]>`
-        SELECT item_id, garment, silhouette, color_family, sum(score)::int AS score
-        FROM event_scores
-        WHERE season = ${season} AND bucket > now() - INTERVAL '7 days'
+        SELECT item_id, garment, silhouette, color_family,
+          sum(CASE kind WHEN 'shop' THEN 5 WHEN 'save' THEN 3 ELSE 1 END)::int AS score
+        FROM events
+        WHERE season = ${season} AND at > now() - INTERVAL '7 days'
         GROUP BY item_id, garment, silhouette, color_family`;
       return pickTrending(rows);
     },

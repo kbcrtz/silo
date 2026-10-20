@@ -9,6 +9,7 @@ import type { Enrich, Insight } from "../src/services/listingInsights.ts";
 import type { Catalog } from "../src/services/shopifyCatalog.ts";
 import { photoUrlAllowed, tryOnPrompt, type TryOn } from "../src/services/tryOnImage.ts";
 import { productDetail } from "./fixtures/shopify.ts";
+import { TOKEN, verify } from "./fixtures/auth.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const SECRET = "test-secret-0123456789";
@@ -84,12 +85,13 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate 
     locate: async () => assert.fail("no Gemini"),
     catalog,
     secret: SECRET,
+    verify: async (token) => (token === "other-token" ? "0b0b0b0b-1c1c-4d2d-8e3e-4f4f4f4f4f4f" : verify(token)),
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     enrich,
     tryOn,
     tryOnGate: opts.gate ?? createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
   });
-  const get = (url: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${SECRET}` } });
+  const get = (url: string, token = TOKEN) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
   return { get, generated, saved, fetched, logs };
 }
 
@@ -119,13 +121,14 @@ test("each department gets its own image", async () => {
   assert.match(generated[1].prompt, /female dress-form/);
 });
 
-test("past the per-device budget, no image is generated", async () => {
+test("past the per-user budget, no image is generated; other users keep theirs", async () => {
   const { get, generated } = setup({ gate: createGate({ windowMs: 60_000, max: 1, concurrency: 4 }) });
   await get(url("mens"));
   const res = await get(url("womens"));
   assert.equal(res.statusCode, 429);
   assert.deepEqual(res.json(), { error: "rate_limited" });
   assert.equal(generated.length, 1);
+  assert.equal((await get(url("both"), "other-token")).statusCode, 200);
 });
 
 test("unknown products, shoes and missing photos are explained, not generated", async () => {

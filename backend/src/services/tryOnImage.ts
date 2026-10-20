@@ -98,15 +98,6 @@ export function memoryStore(): TryOnStore {
   };
 }
 
-export async function migrateTryOn(sql: postgres.Sql) {
-  await sql`CREATE TABLE IF NOT EXISTS tryon_images (
-    key text PRIMARY KEY,
-    model text NOT NULL,
-    image bytea NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
-  )`;
-}
-
 /** Generated images saved in Postgres, so each product and department is generated once. */
 export function postgresStore(sql: postgres.Sql): TryOnStore {
   return {

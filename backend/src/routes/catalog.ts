@@ -107,8 +107,8 @@ export async function catalogRoute(
     handle("discover", req, reply, async (diag) => {
       const query = DiscoverQuery.safeParse(req.query);
       if (!query.success) throw new HttpError("invalid_request", 400);
-      // Gemini estimates are billed per page; past the device's budget the page loads without them.
-      const aiAllowed = Boolean(enrich) && (!estimateGate || estimateGate.tryEnter(req.ip) === "ok");
+      // Gemini estimates are billed per page; past the user's budget the page loads without them.
+      const aiAllowed = Boolean(enrich) && (!estimateGate || estimateGate.tryEnter(req.userId ?? req.ip) === "ok");
       try {
         const { cursor, priceMin, priceMax, season, ...params } = query.data;
         diag.category = params.category;

@@ -8,6 +8,7 @@ import { buildApp, type Locate } from "../src/app.ts";
 import { evaluate, loadRules, type Warnings } from "../src/analysis/evaluate.ts";
 import type { Box } from "../src/analysis/regions.ts";
 import { createGate } from "../src/guard.ts";
+import { TOKEN, verify } from "./fixtures/auth.ts";
 
 const SECRET = "test-secret-0123456789";
 
@@ -72,6 +73,7 @@ function setup(locate: Locate) {
     logger: { level: "info", stream },
     catalog,
     secret: SECRET,
+    verify,
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     locate: (jpeg) => (calls++, locate(jpeg)),
   });
@@ -85,7 +87,7 @@ async function post(app: ReturnType<typeof buildApp>, body: { payload: Buffer; h
     method: "POST",
     url: "/color-analysis",
     payload: body.payload,
-    headers: { ...body.headers, authorization: `Bearer ${SECRET}` },
+    headers: { ...body.headers, authorization: `Bearer ${TOKEN}` },
   });
 }
 

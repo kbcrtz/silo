@@ -1,13 +1,20 @@
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
+let accessToken: string | null = null;
+
 /**
- * Shared gate for the LAN server. EXPO_PUBLIC_ values are compiled into the
- * app, so this stops other devices on the network, not someone who has the app.
+ * The signed-in user's Supabase access token. The sign-in code calls this on
+ * sign-in, token refresh and sign-out (null). Logged out, only selfie
+ * analysis works and the user's data stays on the phone.
  */
-export const API_SECRET = process.env.EXPO_PUBLIC_API_SECRET ?? "";
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+}
+
+export const isSignedIn = () => accessToken !== null;
 
 export function apiHeaders(): Record<string, string> {
-  return API_SECRET ? { authorization: `Bearer ${API_SECRET}` } : {};
+  return accessToken ? { authorization: `Bearer ${accessToken}` } : {};
 }
 
 /** Mocks stay on until the backend exists, or when no API URL is set. */

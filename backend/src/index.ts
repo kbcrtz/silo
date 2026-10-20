@@ -1,21 +1,38 @@
 import { readFileSync } from "node:fs";
 import postgres from "postgres";
 import { GoogleGenAI } from "@google/genai";
+import { createRemoteJWKSet } from "jose";
 import { loadRules } from "./analysis/evaluate.ts";
 import { buildApp } from "./app.ts";
+import { supabaseVerifier } from "./auth.ts";
 import { createGate } from "./guard.ts";
+import { supabaseAccounts } from "./services/account.ts";
 import { locateRegions, type CreateInteraction } from "./services/colorVision.ts";
 import { createEnricher } from "./services/listingInsights.ts";
 import { createCatalog } from "./services/shopifyCatalog.ts";
-import { createTrends, migrateTrends } from "./services/trends.ts";
-import { createTryOn, memoryStore, migrateTryOn, postgresStore, type TryOnStore } from "./services/tryOnImage.ts";
-import { createUserData, migrate } from "./services/userData.ts";
+import { createTrends } from "./services/trends.ts";
+import { createTryOn, memoryStore, postgresStore, type TryOnStore } from "./services/tryOnImage.ts";
+import { createUserData } from "./services/userData.ts";
 
-const secret = process.env.API_SECRET ?? "";
+const secret = process.env.CURSOR_SECRET ?? "";
 if (secret.length < 16) {
-  console.error("API_SECRET must be at least 16 characters. Copy .env.template to .env.");
+  console.error("CURSOR_SECRET must be at least 16 characters. Copy .env.template to .env.");
   process.exit(1);
 }
+
+// Supabase Auth: login tokens are checked against the project's public signing keys.
+const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+if (!supabaseUrl) {
+  console.error("SUPABASE_URL is not set. Copy .env.template to .env.");
+  process.exit(1);
+}
+const verify = supabaseVerifier({
+  issuer: `${supabaseUrl}/auth/v1`,
+  keys: createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`)),
+});
+// Account deletion needs the secret key; without it DELETE /me answers 503.
+const secretKey = process.env.SUPABASE_SECRET_KEY;
+const deleteAccount = secretKey ? supabaseAccounts({ url: supabaseUrl, secretKey, fetch }) : undefined;
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -58,25 +75,22 @@ if (!(enrichTimeoutMs > 0)) {
 // Flash-Lite: on a 20-listing page it took ~1.5 s against ~4 s for Flash, agreeing on category and cut (2026-10-18).
 const enrichModel = process.env.CATALOG_AI_MODEL ?? "gemini-3.5-flash-lite";
 const enrich = process.env.CATALOG_AI === "off" ? undefined : createEnricher({ create, model: enrichModel, timeoutMs: enrichTimeoutMs });
-// 30 AI-read pages per device per 10 minutes (up to 120 Gemini calls), 4 at once; past that, pages skip the estimates.
+// 30 AI-read pages per user per 10 minutes (up to 120 Gemini calls), 4 at once; past that, pages skip the estimates.
 const estimateGate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 4 });
 
-// Tiger Cloud Postgres backs up the app's on-device data. Without it, /me answers 503 and everything else works.
-const databaseUrl = process.env.TIGER_DATABASE_URL;
+// Supabase Postgres holds signed-in users' data; tables come from supabase/migrations.
+// Without DATABASE_URL, /me answers 503 and everything else works. SSL comes from the URL (?sslmode=require).
+const databaseUrl = process.env.DATABASE_URL;
 let userData;
 let trends;
 let tryOnStore: TryOnStore = memoryStore();
 if (databaseUrl) {
-  // onnotice: the migrations' "already exists, skipping" notices are expected on every start.
-  const sql = postgres(databaseUrl, { ssl: "require", max: 5, idle_timeout: 30, onnotice: () => {} });
-  await migrate(sql);
-  await migrateTrends(sql);
-  await migrateTryOn(sql);
+  const sql = postgres(databaseUrl, { max: 5, idle_timeout: 30 });
   userData = createUserData(sql);
   trends = createTrends(sql);
   tryOnStore = postgresStore(sql);
 } else {
-  console.warn("TIGER_DATABASE_URL is not set; /me routes are off.");
+  console.warn("DATABASE_URL is not set; /me routes are off.");
 }
 
 // AI try-on images: Gemini image generation from the store photo, saved once per product and department.
@@ -88,7 +102,7 @@ const tryOn = createTryOn({
   fetch,
   store: tryOnStore,
 });
-// 20 new images per device per 10 minutes, 3 at once; saved images don't count.
+// 20 new images per user per 10 minutes, 3 at once; saved images don't count.
 const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 3 });
 
 // One person retaking a selfie stays under this. A loop does not, and only two Gemini calls run at once.
@@ -99,6 +113,8 @@ const app = buildApp({
   logger: true,
   catalog,
   secret,
+  verify,
+  deleteAccount,
   gate,
   enrich,
   estimateGate,

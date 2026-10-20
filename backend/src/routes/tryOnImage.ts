@@ -38,9 +38,9 @@ export async function tryOnImageRoute(
       diag.saved = Boolean(saved);
       if (saved) return reply.header("content-type", "image/jpeg").header("cache-control", "private, max-age=86400").send(saved);
 
-      // Generation is billed: the same per-device budget idea as selfie analysis.
+      // Generation is billed: a budget per signed-in user.
       if (tryOnGate) {
-        const slot = tryOnGate.tryEnter(req.ip);
+        const slot = tryOnGate.tryEnter(req.userId ?? req.ip);
         if (slot !== "ok") throw new HttpError(slot === "rate" ? "rate_limited" : "busy", slot === "rate" ? 429 : 503);
         entered = true;
       }

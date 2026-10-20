@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { HttpError } from "../errors.ts";
+import type { DeleteAccount } from "../services/account.ts";
 import { GARMENTS, SILHOUETTES } from "../services/listingInsights.ts";
 import { EVENT_KINDS, familyOfHex, type Trends } from "../services/trends.ts";
 import { MEASUREMENT_TYPES, type UserData } from "../services/userData.ts";
@@ -15,13 +16,11 @@ const Measurements = z.object({
       z.object({
         type: z.enum(MEASUREMENT_TYPES),
         value: z.number().positive().max(1000),
-        // Bounded: every distinct week becomes a hypertable chunk.
         measuredAt: z.iso.datetime().refine((at) => at >= "2000-01-01" && Date.parse(at) < Date.now() + 86_400_000),
       }),
     )
     .max(500),
 });
-const DeviceId = z.uuid();
 const Events = z.object({
   events: z
     .array(
@@ -45,25 +44,28 @@ const Events = z.object({
 });
 
 /**
- * The app's on-device data, backed up to Postgres (Tiger Cloud) per anonymous
- * device id sent as x-device-id: GET /me, PUT /me/profile, PUT /me/saved,
- * POST /me/measurements, DELETE /me (reset), and POST /events. Selfie photos stay on the phone.
+ * The signed-in user's data in Postgres, moved there from the phone after
+ * sign-up: GET /me, PUT /me/profile, PUT /me/saved, POST /me/measurements,
+ * POST /events, and DELETE /me (deletes the account). Selfie photos stay on the phone.
+ * The app's onRequest hook has already checked the login, so req.userId is set.
  */
-export async function meRoute(app: FastifyInstance, { userData, trends }: { userData?: UserData; trends?: Trends }) {
+export async function meRoute(
+  app: FastifyInstance,
+  { userData, trends, deleteAccount }: { userData?: UserData; trends?: Trends; deleteAccount?: DeleteAccount },
+) {
   async function handle<S>(
     route: string,
     service: S | undefined,
     req: FastifyRequest,
     reply: FastifyReply,
-    run: (data: S, device: string, diag: Record<string, unknown>) => Promise<unknown>,
+    run: (data: S, user: string, diag: Record<string, unknown>) => Promise<unknown>,
+    unavailable = "data_unavailable",
   ) {
-    // Counts only: no device ids, measurements, events or profile contents.
+    // Counts only: no user ids, measurements, events or profile contents.
     const diag: Record<string, unknown> = { route };
     try {
-      if (!service) throw new HttpError("data_unavailable", 503);
-      const device = DeviceId.safeParse(req.headers["x-device-id"]);
-      if (!device.success) throw new HttpError("invalid_device", 400);
-      const result = await run(service, device.data, diag);
+      if (!service) throw new HttpError(unavailable, 503);
+      const result = await run(service, req.userId!, diag);
       return result === undefined ? reply.code(204).send() : result;
     } catch (e) {
       const known = e instanceof HttpError ? e : null;
@@ -84,49 +86,47 @@ export async function meRoute(app: FastifyInstance, { userData, trends }: { user
   };
 
   app.get("/me", (req, reply) =>
-    handle("get", userData, req, reply, async (data, device, diag) => {
-      const me = await data.get(device);
+    handle("get", userData, req, reply, async (data, user, diag) => {
+      const me = await data.get(user);
       diag.measurements = me.measurements.length;
       return me;
     }),
   );
 
   app.delete("/me", (req, reply) =>
-    handle("delete", userData, req, reply, async (data, device) => {
-      await data.deleteAll(device);
-    }),
+    handle("delete", deleteAccount, req, reply, (del, user) => del(user), "account_delete_unavailable"),
   );
 
-    app.put("/me/profile", (req, reply) =>
-    handle("profile", userData, req, reply, async (data, device) => {
-      await data.putProfile(device, snapshot(req.body, PROFILE_LIMIT));
+  app.put("/me/profile", (req, reply) =>
+    handle("profile", userData, req, reply, async (data, user) => {
+      await data.putProfile(user, snapshot(req.body, PROFILE_LIMIT));
     }),
   );
 
   app.put("/me/saved", (req, reply) =>
-    handle("saved", userData, req, reply, async (data, device) => {
-      await data.putSaved(device, snapshot(req.body, SAVED_LIMIT));
+    handle("saved", userData, req, reply, async (data, user) => {
+      await data.putSaved(user, snapshot(req.body, SAVED_LIMIT));
     }),
   );
 
   app.post("/events", (req, reply) =>
-    handle("events", trends, req, reply, async (t, device, diag) => {
+    handle("events", trends, req, reply, async (t, user, diag) => {
       const parsed = Events.safeParse(req.body);
       if (!parsed.success) throw new HttpError("invalid_request", 400);
       const events = parsed.data.events.map(({ color, ...e }) => {
         const family = color ? familyOfHex(color) : null;
         return family ? { ...e, family } : e;
       });
-      await t.record(device, events);
+      await t.record(user, events);
       diag.recorded = events.length;
     }),
   );
 
   app.post("/me/measurements", (req, reply) =>
-    handle("measurements", userData, req, reply, async (data, device, diag) => {
+    handle("measurements", userData, req, reply, async (data, user, diag) => {
       const parsed = Measurements.safeParse(req.body);
       if (!parsed.success) throw new HttpError("invalid_request", 400);
-      const added = await data.addMeasurements(device, parsed.data.entries);
+      const added = await data.addMeasurements(user, parsed.data.entries);
       diag.added = added;
       return { added };
     }),

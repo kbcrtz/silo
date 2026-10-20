@@ -1,30 +1,41 @@
 # Silo backend
 
-Server for the Silo app: color analysis and a live product feed from Shopify's Global Catalog. Try-on (FASHN), TigerData persistence and Supabase auth come later (see the team's MVP design doc).
+Server for the Silo app: color analysis, a live product feed from Shopify's Global Catalog, AI try-on images, and signed-in users' data in Supabase Postgres. Sign-in is Supabase Auth (Apple and Google); the backend checks the login token and is the only thing that reads or writes the tables.
 
-Stack: Node 24+ running TypeScript directly (type stripping, no build step), Fastify, sharp, zod, `@google/genai`. The catalog uses plain `fetch`.
+Stack: Node 24+ running TypeScript directly (type stripping, no build step), Fastify, sharp, zod, `@google/genai`, `postgres`, `jose`. The catalog uses plain `fetch`.
 
 ## Run it
 
 ```sh
 npm install
-cp .env.template .env   # set GEMINI_API_KEY and API_SECRET
+cp .env.template .env   # set GEMINI_API_KEY, CURSOR_SECRET and the Supabase values
 npm start               # http://0.0.0.0:8080
 ```
 
+The database schema lives in `supabase/migrations/` at the repo root. Locally, with Docker running:
+
+```sh
+cd .. && supabase start   # local Postgres + Auth; `supabase status` prints the URLs and keys for .env
+supabase db reset         # applies the migrations to the local database
+```
+
+To use a hosted project instead, `supabase link` it and `supabase db push`, then point `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `DATABASE_URL` at it (`DATABASE_URL` from the dashboard's Connect panel, with `?sslmode=require`; use the direct or session-pooler string, not the transaction pooler).
+
 In Google AI Studio, turn off project-level logging for the key used here, so selfies are not kept as logs.
 
-Every route requires `Authorization: Bearer <API_SECRET>`. The server listens on all interfaces so a phone on the LAN can reach it; the secret is what stops everyone else. Set the same value as `EXPO_PUBLIC_API_SECRET` in the app. That value is compiled into the app, so it only keeps other devices on the network out. Use HTTPS before putting this anywhere public: the secret and the selfie both travel with the request.
+Every route except `POST /color-analysis` requires `Authorization: Bearer <Supabase access token>` from a signed-in Supabase user. For now the app signs in silently as an anonymous Supabase user (so TestFlight builds work before Apple and Google sign-in exist), and those tokens are accepted; refuse them in `src/auth.ts` once real sign-in ships. Tokens are verified locally against the project's public signing keys (`SUPABASE_URL/auth/v1/.well-known/jwks.json`, issuer `SUPABASE_URL/auth/v1`, audience `authenticated`), so the project must use asymmetric JWT signing keys. Color analysis stays open because onboarding runs before sign-up; it keeps its per-client limits. Use HTTPS before putting this anywhere public: the token and the selfie both travel with the request.
 
-Color analysis allows 8 calls per 10 minutes from one client, and at most 2 Gemini calls run at once. A 502 log line carries `providerStatus` (429 quota or spend cap, 402 billing, 503 overload). Catalog cursors are HMAC-signed with `API_SECRET`; a cursor this process did not sign is `invalid_cursor`.
+Color analysis allows 8 calls per 10 minutes from one client, and at most 2 Gemini calls run at once. A 502 log line carries `providerStatus` (429 quota or spend cap, 402 billing, 503 overload). Catalog cursors are HMAC-signed with `CURSOR_SECRET`; a cursor this process did not sign is `invalid_cursor`.
 
 Point the app at it with `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_USE_MOCKS=false` in `frontend/.env`. A phone needs your machine's LAN IP or a deployed HTTPS URL, not `localhost`.
 
 ## Checks
 
 ```sh
-npm test            # node --test, no network: Gemini and Shopify are faked
+npm test            # node --test, no network: Gemini, Shopify and Supabase Auth are faked
 npm run typecheck
+# Also run the database tests against the local stack (migrations applied):
+TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm test
 ```
 
 ## API contract
@@ -37,7 +48,7 @@ The app already calls these, behind mocks, in `frontend/src/api/`. Match these s
 - `GET /catalog/discover` → `{ products: CatalogProduct[], cursor: string | null, source: "shopify" }`. **Implemented**; see [Catalog](#catalog).
 - `GET /catalog/product?id=<gid>&selected=<JSON>` → `{ product: CatalogProduct }` with images, description and variants. **Implemented.**
 - `GET /catalog/tryon-image?id=<gid>&shopFor=` → `image/jpeg`: a full-body mannequin wearing the product. **Implemented**; see [AI try-on images](#ai-try-on-images).
-- `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`: back up the app's on-device data to Postgres on Tiger Cloud, keyed by an anonymous `x-device-id` UUID. **Implemented**; see [User data](#user-data).
+- `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`, `POST /events`, `DELETE /me`: the signed-in user's data, keyed by their Supabase user id. **Implemented**; see [User data](#user-data).
 
 Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non-2xx as "couldn't analyze", offering retake or quiz-only.
 
@@ -51,7 +62,7 @@ Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non
 | 422 | `no_usable_face` | No single face, or no usable skin sample |
 | 502 | `gemini_failed`, `gemini_invalid_output` | Gemini errored or returned output that fails the schema |
 | 504 | `gemini_timeout` | Gemini took longer than `GEMINI_TIMEOUT_MS` |
-| 401 | `unauthorized` | Missing or wrong bearer token |
+| 401 | `unauthorized` | Missing, invalid or expired login token (every route but color analysis) |
 | 429 | `rate_limited` | More than 8 color analyses from this client in 10 minutes |
 | 503 | `busy` | Two color analyses are already running |
 | 400 | `invalid_request`, `invalid_cursor` | Catalog query parameters fail validation, or a cursor this process did not sign |
@@ -104,7 +115,7 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 - **`price`** comes from minor units in the listing's own currency (`JPY` has none). Listings can come back in non-US currencies even with US shipping.
 - **`color`** is `{ name, hex, source }`: the merchant's color option for the shown variant (`variant`), or a color word in the title (`title`). Shopify gives names, never hex, so `hex` is an approximate swatch from the name table and is null for names like "Bering Sea". Use it for broad ranking only. Nothing reads product images.
 - **`sizes`** are the labels of options named like "size" (S, 32"). They are not garment measurements.
-- **`estimate`** (optional) is Gemini's reading of the listing text: `{ hex, confidence, cut: { category, silhouette, length, sleeve? }, evidence, source: "ai" }`. Each page's title, color, fit options, description and Shopify feature notes go to Gemini in parallel batches of 5 (`src/services/listingInsights.ts`): text only, no images and nothing about the shopper. Labeled specs ("Fit: Relaxed", "Length: Mini") are sent too, minus care and sizing lines. It uses `CATALOG_AI_MODEL` (default `gemini-3.5-flash-lite`, about 1.5 s for a 20-item page; Flash took about 4 s). The color is the model's idea of the color name, such as a stock "olive", not the store's actual shade. If Gemini fails or passes `CATALOG_AI_TIMEOUT_MS` (default 3 s), the page returns without estimates. Each device gets 30 AI-read pages per 10 minutes (4 at once); past that, pages load without estimates (`estimateError: "estimate_budget"` in the log). `CATALOG_AI=off` turns it off.
+- **`estimate`** (optional) is Gemini's reading of the listing text: `{ hex, confidence, cut: { category, silhouette, length, sleeve? }, evidence, source: "ai" }`. Each page's title, color, fit options, description and Shopify feature notes go to Gemini in parallel batches of 5 (`src/services/listingInsights.ts`): text only, no images and nothing about the shopper. Labeled specs ("Fit: Relaxed", "Length: Mini") are sent too, minus care and sizing lines. It uses `CATALOG_AI_MODEL` (default `gemini-3.5-flash-lite`, about 1.5 s for a 20-item page; Flash took about 4 s). The color is the model's idea of the color name, such as a stock "olive", not the store's actual shade. If Gemini fails or passes `CATALOG_AI_TIMEOUT_MS` (default 3 s), the page returns without estimates. Each user gets 30 AI-read pages per 10 minutes (4 at once); past that, pages load without estimates (`estimateError: "estimate_budget"` in the log). `CATALOG_AI=off` turns it off.
 - **`selected`** is the shown variant's options. Pass it to `/catalog/product` so the detail opens on the same variant.
 - Shopify returns no image dimensions, so the app learns each image's aspect ratio when it loads.
 
@@ -121,24 +132,26 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 - Model: `TRYON_IMAGE_MODEL`, default `gemini-3.1-flash-lite-image` (about 6 s for a new image in testing).
 - Each image is saved in `tryon_images` (Postgres bytea, keyed by product, department and template version) and served from there next time (about 0.4 s). Without a database it's kept in memory. Bump `TEMPLATE_VERSION` when the template changes.
 - Photos are fetched only from `https://cdn.shopify.com`, at most 8 MB, and never written to disk.
-- New images are capped at 20 per device per 10 minutes, 3 at once (429 `rate_limited`, 503 `busy`); saved ones don't count.
+- New images are capped at 20 per user per 10 minutes, 3 at once (429 `rate_limited`, 503 `busy`); saved ones don't count.
 - Errors: 400 `invalid_request`, 404 `product_not_found`, 422 `no_photo` or `not_clothing` (shoes, bags), 502/504 for Gemini failures.
 
 ## User data
 
-The app backs up what it stores on the phone to Postgres on Tiger Cloud (`TIGER_DATABASE_URL`; without it the `/me` routes answer 503 `data_unavailable` and everything else works). Each install makes a random UUID and sends it as `x-device-id`; there are no accounts, so a reinstall starts fresh. Selfie photos never leave the phone.
+Onboarding (quiz, selfie analysis, passport) runs logged out and keeps everything on the phone. After sign-up the app sends that data here, and keeps it current from then on. Rows are keyed by the Supabase user id from the login token (`src/services/userData.ts`). Without `DATABASE_URL` the routes answer 503 `data_unavailable` and everything else works. Selfie photos never leave the phone.
 
 | Route | Body | Table |
 | --- | --- | --- |
-| `PUT /me/profile` | `{ data }`, the profile store without the selfie file name (≤ 32 KB) | `profiles` (jsonb) |
-| `PUT /me/saved` | `{ data }`, saved ids, lists and bookmarks (≤ 256 KB) | `saved` (jsonb) |
-| `POST /me/measurements` | `{ entries: [{ type, value, measuredAt }] }` → `{ added }`; types height, weight, chest, bust, waist, hips, inseam, armLength; dates from 2000 to tomorrow; resending is a no-op | `measurements`, a TimescaleDB hypertable on `measured_at` |
-| `GET /me` | → `{ profile, saved, measurements }` (newest 1000 measurements); the app restores an empty install from it | |
-| `DELETE /me` | Deletes the device's profile, saved items, measurements and events (the app's Reset) | |
+| `PUT /me/profile` | `{ data }`, the profile store without the selfie file name (≤ 32 KB); replaces | `profiles` (jsonb) |
+| `PUT /me/saved` | `{ data }`, saved ids, lists and bookmarks (≤ 256 KB); replaces | `saved` (jsonb) |
+| `POST /me/measurements` | `{ entries: [{ type, value, measuredAt }] }` → `{ added }`; types height, weight, chest, bust, waist, hips, inseam, armLength; dates from 2000 to tomorrow; appends, and resending is a no-op | `measurements` |
+| `GET /me` | → `{ profile, saved, measurements }` (newest 1000 measurements); the app restores from it after signing in on an empty install | |
+| `DELETE /me` | Deletes the account through Supabase's admin API (`SUPABASE_SECRET_KEY`); the user's rows go with it, their events stay as anonymous counts. 503 `account_delete_unavailable` without the key, 502 `account_delete_failed` if Supabase refuses | |
 
-`POST /events` `{ events: [{ kind: "open" | "save" | "shop", itemId, season?, garment?, silhouette?, color? }] }` (≤ 100) records app actions in `events`, a hypertable; `color` is stored as its Shopify color family. `event_scores` is a real-time continuous aggregate of hourly weighted scores (shop 5, save 3, open 1) per season and item. `GET /catalog/discover?season=<id>` looks up the last 7 days for that season alongside the Shopify search, marks matching products `popular: true` (same item, or the same garment, cut and color family as a top combination, each needing at least 6 points, so one open is never enough) and moves them to the front; the lookup gets 1.5 s, after which the page goes out without marks (`src/services/trends.ts`).
+Moving data after sign-up: `PUT /me/profile` (the new onboarding replaces any older profile), `POST /me/measurements` (added to the history), `PUT /me/saved`. A returning user who signs in on an empty install calls `GET /me` first and restores from it.
 
-Tables are created on startup (`src/services/userData.ts`, `src/services/trends.ts`). Logs carry counts only. Errors: 400 `invalid_device` or `invalid_request`, 413 `too_large`, 502 `data_failed`.
+`POST /events` `{ events: [{ kind: "open" | "save" | "shop", itemId, season?, garment?, silhouette?, color? }] }` (≤ 100) records app actions in `events`; `color` is stored as its Shopify color family. `GET /catalog/discover?season=<id>` adds up the last 7 days for that season (shop 5, save 3, open 1), marks matching products `popular: true` (same item, or the same garment, cut and color family as a top combination, each needing at least 6 points, so one open is never enough) and moves them to the front; the lookup gets 1.5 s, after which the page goes out without marks (`src/services/trends.ts`).
+
+Tables come from `supabase/migrations/` (row level security on with no policies, so the app's publishable key can't read them; only the backend's database connection can). Logs carry counts only. Errors: 400 `invalid_request`, 401 `unauthorized`, 413 `too_large`, 502 `data_failed`.
 
 ## Attribution and limits
 

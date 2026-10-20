@@ -7,6 +7,7 @@ import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp, type Locate } from "../src/app.ts";
 import { createGate } from "../src/guard.ts";
 import type { Catalog } from "../src/services/shopifyCatalog.ts";
+import { TOKEN, verify } from "./fixtures/auth.ts";
 
 const SECRET = "test-secret-0123456789";
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
@@ -37,7 +38,8 @@ function catalog(): Catalog {
 }
 
 function app(gate = createGate({ windowMs: 60_000, max: 100, concurrency: 4 })) {
-  return buildApp({ rules, model: "m", logger: false, catalog: catalog(), locate: found, secret: SECRET, gate });
+  return buildApp({ rules, model: "m", logger: false, catalog: catalog(), locate: found, secret: SECRET,
+    verify, gate });
 }
 
 async function jpeg() {
@@ -54,17 +56,17 @@ async function selfie(headers: Record<string, string> = {}) {
     method: "POST" as const,
     url: "/color-analysis",
     payload: Buffer.from(await req.arrayBuffer()),
-    headers: { "content-type": req.headers.get("content-type")!, authorization: `Bearer ${SECRET}`, ...headers },
+    headers: { "content-type": req.headers.get("content-type")!, authorization: `Bearer ${TOKEN}`, ...headers },
   };
 }
 
-test("a request without the bearer token is rejected before any work", async () => {
+test("a request without a login token is rejected before any work", async () => {
   const res = await app().inject({ method: "GET", url: "/catalog/discover?category=tops" });
   assert.equal(res.statusCode, 401);
   assert.deepEqual(res.json(), { error: "unauthorized" });
 });
 
-test("a wrong bearer token is rejected", async () => {
+test("a token the verifier refuses is rejected", async () => {
   const res = await app().inject({
     method: "GET",
     url: "/catalog/discover?category=tops",
@@ -73,13 +75,20 @@ test("a wrong bearer token is rejected", async () => {
   assert.equal(res.statusCode, 401);
 });
 
+test("selfie analysis works before sign-in: onboarding runs logged out", async () => {
+  const request = await selfie();
+  const { authorization: _, ...noLogin } = request.headers;
+  const res = await app().inject({ ...request, headers: noLogin });
+  assert.equal(res.statusCode, 200);
+});
+
 test("a cursor that was not signed by this server is rejected", async () => {
   const body = Buffer.from(JSON.stringify({ p: 0, c: { 0: "next:jeans" } })).toString("base64url");
   const forged = `${body}.${createHmac("sha256", "other-secret-0123456789").update(body).digest("base64url")}`;
   const res = await app().inject({
     method: "GET",
     url: `/catalog/discover?category=jeans&cursor=${encodeURIComponent(forged)}`,
-    headers: { authorization: `Bearer ${SECRET}` },
+    headers: { authorization: `Bearer ${TOKEN}` },
   });
   assert.equal(res.statusCode, 400);
   assert.deepEqual(res.json(), { error: "invalid_cursor" });
@@ -94,6 +103,7 @@ test("color analysis past the per-client cap is 429 and does not call Gemini aga
     catalog: catalog(),
     locate: async (jpeg) => (calls++, found(jpeg)),
     secret: SECRET,
+    verify,
     gate: createGate({ windowMs: 60_000, max: 1, concurrency: 4 }),
   });
   assert.equal((await limited.inject(await selfie())).statusCode, 200);
@@ -118,6 +128,7 @@ test("a second color analysis while one is running is 503", async () => {
       return found(jpeg);
     },
     secret: SECRET,
+    verify,
     gate: createGate({ windowMs: 60_000, max: 10, concurrency: 1 }),
   });
   const first = limited.inject(await selfie());

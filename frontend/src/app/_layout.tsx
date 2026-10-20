@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { sleep } from "@/api/config";
+import { startSession } from "@/api/supabase";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
@@ -14,13 +17,20 @@ const pushed = { headerShown: true, title: "" };
 
 export default function RootLayout() {
   const hydrated = useHydrated([useProfile, useMeasurements, useSaved]);
-  useCloudSync(hydrated);
+  const [sessionReady, setSessionReady] = useState(false);
+  useEffect(() => {
+    // Offline or slow: start logged out after 8 s rather than hold the splash; the next launch retries.
+    Promise.race([startSession().catch(() => {}), sleep(8000)]).then(() =>
+      setSessionReady(true),
+    );
+  }, []);
+  useCloudSync(hydrated && sessionReady);
   const onboarded = useProfile((s) => s.onboarded);
   const fontsLoaded = useBrandFonts();
   const t = useTheme();
 
   // Rendering before hydration would flash onboarding for returning users.
-  if (!hydrated || !fontsLoaded) return null;
+  if (!hydrated || !fontsLoaded || !sessionReady) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: t.colors.bg }}>

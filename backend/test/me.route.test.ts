@@ -5,11 +5,12 @@ import { test } from "node:test";
 import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp } from "../src/app.ts";
 import { createGate } from "../src/guard.ts";
+import type { DeleteAccount } from "../src/services/account.ts";
 import type { Measurement, UserData } from "../src/services/userData.ts";
+import { TOKEN, USER, verify } from "./fixtures/auth.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const SECRET = "test-secret-0123456789";
-const USER = "6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b";
 
 /** An in-memory UserData, so routes are tested without a database. */
 function fakeData() {
@@ -26,11 +27,6 @@ function fakeData() {
     async putSaved(user, value) {
       saved.set(user, value);
     },
-    async deleteAll(user) {
-      profiles.delete(user);
-      saved.delete(user);
-      measurements.delete(user);
-    },
     async addMeasurements(user, entries) {
       const list = measurements.get(user) ?? [];
       const fresh = entries.filter((e) => !list.some((m) => m.type === e.type && m.measuredAt === e.measuredAt));
@@ -41,7 +37,7 @@ function fakeData() {
   return data;
 }
 
-function setup(userData: UserData | null = fakeData()) {
+function setup(userData: UserData | null = fakeData(), deleteAccount?: DeleteAccount) {
   const logs: any[] = [];
   const stream = new Writable({
     write(chunk, _enc, done) {
@@ -57,22 +53,24 @@ function setup(userData: UserData | null = fakeData()) {
     locate: async () => assert.fail("no Gemini"),
     catalog,
     secret: SECRET,
+    verify,
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     userData: userData ?? undefined,
+    deleteAccount,
   });
-  const call = (method: "GET" | "PUT" | "POST" | "DELETE", url: string, payload?: unknown, user: string | null = USER) =>
+  const call = (method: "GET" | "PUT" | "POST" | "DELETE", url: string, payload?: unknown, token: string | null = TOKEN) =>
     app.inject({
       method,
       url,
       payload: payload as never,
-      headers: { authorization: `Bearer ${SECRET}`, ...(user && { "x-device-id": user }) },
+      headers: token ? { authorization: `Bearer ${token}` } : {},
     });
   return { call, logs };
 }
 
 const profile = { onboarded: true, shopFor: "womens", colorProfile: { seasonId: "soft-autumn" }, unitSystem: "imperial" };
 
-test("a device's profile, saved items and measurements round-trip", async () => {
+test("a signed-in user's profile, saved items and measurements round-trip", async () => {
   const { call } = setup();
   assert.equal((await call("PUT", "/me/profile", { data: profile })).statusCode, 204);
   assert.equal((await call("PUT", "/me/saved", { data: { itemIds: ["w-01"], lists: [], items: {} } })).statusCode, 204);
@@ -96,15 +94,19 @@ test("resending measurements adds nothing twice", async () => {
   assert.deepEqual((await call("POST", "/me/measurements", { entries })).json(), { added: 0 });
 });
 
-test("a new device starts empty", async () => {
+test("a new account starts empty", async () => {
   const me = (await setup().call("GET", "/me")).json();
   assert.deepEqual(me, { profile: null, saved: null, measurements: [] });
 });
 
-test("the anonymous device id must be a UUID", async () => {
+test("the data routes need a signed-in user", async () => {
   const { call } = setup();
-  assert.deepEqual((await call("GET", "/me", undefined, null)).json(), { error: "invalid_device" });
-  assert.equal((await call("GET", "/me", undefined, "not-a-uuid")).statusCode, 400);
+  for (const [method, url] of [["GET", "/me"], ["PUT", "/me/profile"], ["POST", "/me/measurements"], ["DELETE", "/me"], ["POST", "/events"]] as const) {
+    const res = await call(method, url, {}, null);
+    assert.equal(res.statusCode, 401, url);
+    assert.deepEqual(res.json(), { error: "unauthorized" });
+  }
+  assert.equal((await call("GET", "/me", undefined, "someone-elses-token")).statusCode, 401);
 });
 
 test("bad bodies are rejected before the database", async () => {
@@ -150,12 +152,17 @@ test("measurement dates outside 2000..tomorrow are rejected", async () => {
   }
 });
 
-test("reset deletes everything stored for the device", async () => {
-  const { call } = setup();
-  await call("PUT", "/me/profile", { data: profile });
-  await call("POST", "/me/measurements", { entries: [{ type: "waist", value: 72, measuredAt: "2026-10-18T10:00:00.000Z" }] });
+test("DELETE /me deletes the signed-in user's account", async () => {
+  const deleted: string[] = [];
+  const { call } = setup(fakeData(), async (user) => void deleted.push(user));
   assert.equal((await call("DELETE", "/me")).statusCode, 204);
-  assert.deepEqual((await call("GET", "/me")).json(), { profile: null, saved: null, measurements: [] });
+  assert.deepEqual(deleted, [USER]);
+});
+
+test("without account deletion configured, DELETE /me says so", async () => {
+  const res = await setup().call("DELETE", "/me");
+  assert.equal(res.statusCode, 503);
+  assert.deepEqual(res.json(), { error: "account_delete_unavailable" });
 });
 
 test("framework errors use the same { error } shape", async () => {

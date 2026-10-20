@@ -6,7 +6,6 @@ import {
   measurementRows,
   profileSnapshot,
   savedSnapshot,
-  uuidV4,
 } from "../cloud";
 
 describe("cloud backup snapshots", () => {
@@ -51,14 +50,6 @@ describe("cloud backup snapshots", () => {
     ).toEqual([
       { type: "waist", value: 72, measuredAt: "2026-10-18T10:00:00.000Z" },
     ]);
-  });
-
-  it("makes anonymous ids the backend accepts", () => {
-    const id = uuidV4();
-    expect(id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    );
-    expect(uuidV4()).not.toBe(id);
   });
 });
 

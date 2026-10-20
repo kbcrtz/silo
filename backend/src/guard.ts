@@ -1,13 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
-
-/** SHA-256 both sides so the compare stays constant-time for any token length. */
-export function bearerOk(header: string | undefined, secret: string): boolean {
-  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
-  const a = createHash("sha256").update(token).digest();
-  const b = createHash("sha256").update(secret).digest();
-  return timingSafeEqual(a, b);
-}
-
 export type GateDecision = "ok" | "rate" | "busy";
 
 /**

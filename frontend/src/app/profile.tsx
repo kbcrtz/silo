@@ -1,5 +1,4 @@
 import { Link } from "expo-router";
-import { forgetDevice } from "@/api/userData";
 import { useMemo } from "react";
 import {
   Alert,
@@ -57,8 +56,6 @@ export default function Profile() {
           text: "Reset",
           style: "destructive",
           onPress: () => {
-            // Offline: the phone still resets; the old backup stays until the server is reachable.
-            forgetDevice().catch(() => {});
             useMeasurements.getState().replaceAll([]);
             useSaved.getState().clear();
             profile.reset();

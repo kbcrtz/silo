@@ -11,6 +11,7 @@ import type { Catalog, SearchInput } from "../src/services/shopifyCatalog.ts";
 
 const SECRET = "test-secret-0123456789";
 import { noUrl, productDetail, sweater, trouser } from "./fixtures/shopify.ts";
+import { TOKEN, verify } from "./fixtures/auth.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const softAutumn = "palette=%23B07D62,%239CAF88,%23C9A66B,%237E8C6A&neutrals=%23EDE4D8,%235C5046";
@@ -45,11 +46,12 @@ function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown
     locate: async () => assert.fail("no Gemini here"),
     catalog,
     secret: SECRET,
+    verify,
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     enrich: opts.enrich,
     estimateGate: opts.estimateGate,
   });
-  const get = (url: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${SECRET}` } });
+  const get = (url: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${TOKEN}` } });
   return { get, searches, lookups, logs };
 }
 

@@ -7,18 +7,18 @@ import { buildApp } from "../src/app.ts";
 import { createGate } from "../src/guard.ts";
 import type { Catalog } from "../src/services/shopifyCatalog.ts";
 import type { AppEvent, Trending, Trends } from "../src/services/trends.ts";
+import { TOKEN, USER, verify } from "./fixtures/auth.ts";
 import { sweater, trouser } from "./fixtures/shopify.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const SECRET = "test-secret-0123456789";
-const USER = "6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b";
 
 function setup(opts: { trends?: Trends | null; trending?: Trending } = {}) {
-  const recorded: { device: string; events: AppEvent[] }[] = [];
+  const recorded: { user: string; events: AppEvent[] }[] = [];
   const asked: string[] = [];
   const trends: Trends = {
-    async record(device, events) {
-      recorded.push({ device, events });
+    async record(user, events) {
+      recorded.push({ user, events });
     },
     async trending(season) {
       asked.push(season);
@@ -43,21 +43,22 @@ function setup(opts: { trends?: Trends | null; trending?: Trending } = {}) {
     locate: async () => assert.fail("no Gemini"),
     catalog,
     secret: SECRET,
+    verify,
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     trends: opts.trends === null ? undefined : (opts.trends ?? trends),
   });
-  const call = (method: "GET" | "POST", url: string, payload?: unknown, user: string | null = USER) =>
-    app.inject({ method, url, payload: payload as never, headers: { authorization: `Bearer ${SECRET}`, ...(user && { "x-device-id": user }) } });
+  const call = (method: "GET" | "POST", url: string, payload?: unknown) =>
+    app.inject({ method, url, payload: payload as never, headers: { authorization: `Bearer ${TOKEN}` } });
   return { call, recorded, asked, logs };
 }
 
 const open = { kind: "open", itemId: "shopify-A", season: "soft-autumn", garment: "top", silhouette: "relaxed", color: "#9CAF88" };
 
-test("events are recorded in a batch under the device, with the color as a family", async () => {
+test("events are recorded in a batch under the signed-in user, with the color as a family", async () => {
   const { call, recorded } = setup();
   const res = await call("POST", "/events", { events: [open, { kind: "shop", itemId: "w-01" }] });
   assert.equal(res.statusCode, 204);
-  assert.equal(recorded[0].device, USER);
+  assert.equal(recorded[0].user, USER);
   assert.deepEqual(recorded[0].events[0], { kind: "open", itemId: "shopify-A", season: "soft-autumn", garment: "top", silhouette: "relaxed", family: "Green" });
   assert.deepEqual(recorded[0].events[1], { kind: "shop", itemId: "w-01" });
 });
@@ -67,7 +68,6 @@ test("bad events never reach the database", async () => {
   for (const events of [[{ ...open, kind: "like" }], [{ ...open, itemId: "" }], [{ ...open, garment: "hat" }], Array(101).fill(open)]) {
     assert.equal((await call("POST", "/events", { events })).statusCode, 400);
   }
-  assert.equal((await call("POST", "/events", { events: [open] }, null)).statusCode, 400);
   assert.equal(recorded.length, 0);
 });
 

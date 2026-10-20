@@ -34,3 +34,6 @@ frontend/coverage/
 *.tar.gz
 *.tsbuildinfo
 .DS_Store
+
+# Database migrations and Supabase CLI state
+supabase/
