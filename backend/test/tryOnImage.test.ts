@@ -89,7 +89,7 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate 
     locate: async () => assert.fail("no Gemini"),
     catalog,
     secret: SECRET,
-    verify: async (token) => (token === "other-token" ? "0b0b0b0b-1c1c-4d2d-8e3e-4f4f4f4f4f4f" : verify(token)),
+    verify: async (token) => (token === "other-token" ? { id: "0b0b0b0b-1c1c-4d2d-8e3e-4f4f4f4f4f4f", anonymous: false } : verify(token)),
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     enrich,
     tryOn,

@@ -1,0 +1,42 @@
+import { importPKCS8, SignJWT } from "jose";
+import { HttpError } from "../errors.ts";
+
+/** Revokes a Sign in with Apple user's tokens, from a fresh authorization code the app gets just before deleting. */
+export type RevokeApple = (authorizationCode: string) => Promise<void>;
+
+const APPLE = "https://appleid.apple.com";
+
+/**
+ * Apple requires apps with Sign in with Apple to revoke the user's tokens
+ * when they delete their account. Supabase doesn't keep Apple's refresh
+ * token, so the app sends a new authorization code; this exchanges it and
+ * revokes the result. No Apple token is ever stored. Needs a Sign in with
+ * Apple key (.p8) from the Apple Developer account.
+ */
+export function appleRevoker(opts: { teamId: string; keyId: string; privateKey: string; clientId: string; fetch: typeof globalThis.fetch }): RevokeApple {
+  const key = importPKCS8(opts.privateKey, "ES256");
+  const post = (path: string, form: Record<string, string>) =>
+    opts.fetch(`${APPLE}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(form).toString(),
+      signal: AbortSignal.timeout(10_000),
+    });
+  return async (code) => {
+    const clientSecret = await new SignJWT({})
+      .setProtectedHeader({ alg: "ES256", kid: opts.keyId })
+      .setIssuer(opts.teamId)
+      .setSubject(opts.clientId)
+      .setAudience(APPLE)
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(await key);
+    const auth = { client_id: opts.clientId, client_secret: clientSecret };
+    const exchanged = await post("/auth/token", { ...auth, code, grant_type: "authorization_code" }).catch(() => null);
+    const tokens = exchanged?.ok ? ((await exchanged.json()) as { refresh_token?: string; access_token?: string }) : null;
+    const token = tokens?.refresh_token ?? tokens?.access_token;
+    if (!token) throw new HttpError("apple_revoke_failed", 502);
+    const revoked = await post("/auth/revoke", { ...auth, token, token_type_hint: tokens?.refresh_token ? "refresh_token" : "access_token" }).catch(() => null);
+    if (!revoked?.ok) throw new HttpError("apple_revoke_failed", 502);
+  };
+}

@@ -10,6 +10,7 @@ import { colorAnalysisRoute } from "./routes/colorAnalysis.ts";
 import { meRoute } from "./routes/me.ts";
 import { tryOnImageRoute } from "./routes/tryOnImage.ts";
 import type { DeleteAccount } from "./services/account.ts";
+import type { RevokeApple } from "./services/appleRevoke.ts";
 import type { Enrich } from "./services/listingInsights.ts";
 import type { Catalog } from "./services/shopifyCatalog.ts";
 import type { Trends } from "./services/trends.ts";
@@ -20,6 +21,8 @@ declare module "fastify" {
   interface FastifyRequest {
     /** The signed-in Supabase user, or null on the routes that work logged out. */
     userId: string | null;
+    /** That user is the silent anonymous sign-in, not Apple/Google. */
+    anonymous: boolean;
   }
 }
 
@@ -41,6 +44,10 @@ export function buildApp(deps: {
   verify: Verify;
   /** Deletes the signed-in user's account (DELETE /me); answers 503 without it. */
   deleteAccount?: DeleteAccount;
+  /** Anonymous Supabase logins count as signed in (ALLOW_ANONYMOUS). Off unless set. */
+  allowAnonymous?: boolean;
+  /** Revokes a deleted account's Sign in with Apple token; skipped without it. */
+  revokeApple?: RevokeApple;
   /** Caps color-analysis: per-IP window and how many Gemini calls run at once. */
   gate: Gate;
   /** Estimates feed products' color and cut from listing text; the feed works without it. */
@@ -75,10 +82,12 @@ export function buildApp(deps: {
   });
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not_found" }));
   app.decorateRequest("userId", null);
+  app.decorateRequest("anonymous", false);
   app.addHook("onRequest", async (req, reply) => {
     const header = req.headers.authorization;
     const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
-    req.userId = token ? await deps.verify(token) : null;
+    const user = token ? await deps.verify(token) : null;
+    if (user && (!user.anonymous || deps.allowAnonymous)) [req.userId, req.anonymous] = [user.id, user.anonymous];
     if (!req.userId && !LOGGED_OUT_ROUTES.has(`${req.method} ${req.routeOptions.url}`)) return reply.code(401).send({ error: "unauthorized" });
   });
   app.addHook("onSend", async (req, reply) => {

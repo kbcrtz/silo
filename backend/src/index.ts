@@ -7,6 +7,7 @@ import { buildApp } from "./app.ts";
 import { supabaseVerifier } from "./auth.ts";
 import { createGate } from "./guard.ts";
 import { supabaseAccounts } from "./services/account.ts";
+import { appleRevoker } from "./services/appleRevoke.ts";
 import { locateRegions, type CreateInteraction } from "./services/colorVision.ts";
 import { createEnricher } from "./services/listingInsights.ts";
 import { createCatalog } from "./services/shopifyCatalog.ts";
@@ -33,6 +34,21 @@ const verify = supabaseVerifier({
 // Account deletion needs the secret key; without it DELETE /me answers 503.
 const secretKey = process.env.SUPABASE_SECRET_KEY;
 const deleteAccount = secretKey ? supabaseAccounts({ url: supabaseUrl, secretKey, fetch }) : undefined;
+// The app's silent anonymous sign-in counts as signed in until Apple/Google ships; set ALLOW_ANONYMOUS=false then.
+const allowAnonymous = process.env.ALLOW_ANONYMOUS !== "false";
+// Sign in with Apple token revocation on account deletion; needs a Sign in with Apple key from the Apple Developer account.
+const { APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY } = process.env;
+const revokeApple =
+  APPLE_TEAM_ID && APPLE_KEY_ID && APPLE_PRIVATE_KEY
+    ? appleRevoker({
+        teamId: APPLE_TEAM_ID,
+        keyId: APPLE_KEY_ID,
+        // Hosting dashboards often store a .p8 on one line with literal \n.
+        privateKey: APPLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        clientId: process.env.APPLE_CLIENT_ID ?? "com.siloapp.ios",
+        fetch,
+      })
+    : undefined;
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -115,6 +131,8 @@ const app = buildApp({
   secret,
   verify,
   deleteAccount,
+  allowAnonymous,
+  revokeApple,
   gate,
   enrich,
   estimateGate,

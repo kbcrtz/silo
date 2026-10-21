@@ -81,3 +81,28 @@ test("try-on images are saved and served by key", { skip: !sql }, async () => {
   assert.equal((await store.get(key))?.toString(), "jpeg");
   await sql!`DELETE FROM tryon_images WHERE key = ${key}`;
 });
+
+test("merging an anonymous user into an Apple/Google account moves its data by the merge rules", { skip: !sql }, async () => {
+  const data = createUserData(sql!);
+  const [anon, account] = [await newUser(), await newUser()];
+  const season = `test-${randomUUID().slice(0, 8)}`;
+  await data.putProfile(account, { from: "account" });
+  await data.putSaved(account, { itemIds: ["account-item"] });
+  await data.addMeasurements(account, [{ type: "waist", value: 70, measuredAt: "2026-10-01T10:00:00.000Z" }]);
+  await data.putProfile(anon, { from: "anonymous" }); // newer: just onboarded
+  await data.putSaved(anon, { itemIds: ["anon-item"] });
+  await data.addMeasurements(anon, [
+    { type: "waist", value: 70, measuredAt: "2026-10-01T10:00:00.000Z" }, // same entry: kept once
+    { type: "hips", value: 98, measuredAt: "2026-10-19T10:00:00.000Z" },
+  ]);
+  await createTrends(sql!).record(anon, [{ kind: "save", itemId: "shopify-M", season }]);
+
+  await data.merge(anon, account);
+  const got = await data.get(account);
+  assert.deepEqual(got.profile, { from: "anonymous" }, "the newer profile wins");
+  assert.deepEqual(got.saved, { itemIds: ["account-item"] }, "the account's saved items win");
+  assert.deepEqual(got.measurements.map((m) => m.type).sort(), ["hips", "waist"]);
+  assert.deepEqual(await data.get(anon), { profile: null, saved: null, measurements: [] });
+  const [moved] = await sql!<{ owner: string }[]>`SELECT user_id::text AS owner FROM events WHERE season = ${season}`;
+  assert.equal(moved.owner, account);
+});

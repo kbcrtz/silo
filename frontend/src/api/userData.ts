@@ -5,13 +5,40 @@ import { API_URL, USE_MOCKS, apiHeaders, expectOk, isSignedIn } from "./config";
 /**
  * Deletes the signed-in user's account and all their data on the server
  * (App Store rule for apps with accounts). Sign out locally afterwards.
+ * For an Apple account, pass a fresh `authorizationCode` from
+ * AppleAuthentication.signInAsync so the server can revoke the Apple token,
+ * which Apple requires.
  */
-export async function deleteAccount() {
+export async function deleteAccount(appleAuthorizationCode?: string) {
   if (USE_MOCKS) return;
   await fetch(`${API_URL}/me`, {
     method: "DELETE",
-    headers: apiHeaders(),
+    headers: appleAuthorizationCode
+      ? { ...apiHeaders(), "content-type": "application/json" }
+      : apiHeaders(),
+    body: appleAuthorizationCode
+      ? JSON.stringify({ appleAuthorizationCode })
+      : undefined,
   }).then(expectOk);
+}
+
+/**
+ * After signing in to an Apple/Google identity that already had an account
+ * (linking the anonymous user failed with "identity already exists"): moves
+ * the anonymous user's data into the account and returns the merged backup to
+ * restore. `anonymousToken` is the anonymous session's access token, kept from
+ * before the sign-in; the request itself carries the account's token.
+ */
+export async function mergeAnonymous(
+  anonymousToken: string,
+): Promise<Backup | null> {
+  if (USE_MOCKS) return null;
+  const res = await fetch(`${API_URL}/me/merge`, {
+    method: "POST",
+    headers: { ...apiHeaders(), "content-type": "application/json" },
+    body: JSON.stringify({ anonymousToken }),
+  }).then(expectOk);
+  return res.json();
 }
 
 export type Backup = {
@@ -49,7 +76,8 @@ async function send(method: "PUT" | "POST", path: string, body: unknown) {
  * - PUT /me/saved { data } -> 204 (replaces)
  * - POST /me/measurements { entries: [{ type, value, measuredAt }] } -> { added } (appends)
  * - GET /me -> { profile, saved, measurements }
- * - DELETE /me -> 204 (deletes the account)
+ * - DELETE /me [{ appleAuthorizationCode }] -> 204 (revokes Apple, deletes the account)
+ * - POST /me/merge { anonymousToken } -> { profile, saved, measurements }
  * No token -> 401 { error: "unauthorized" }.
  */
 export const backupProfile = (data: Record<string, unknown>) =>

@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { HttpError } from "../errors.ts";
+import type { Verify } from "../auth.ts";
 import type { DeleteAccount } from "../services/account.ts";
+import type { RevokeApple } from "../services/appleRevoke.ts";
 import { GARMENTS, SILHOUETTES } from "../services/listingInsights.ts";
 import { EVENT_KINDS, familyOfHex, type Trends } from "../services/trends.ts";
 import { MEASUREMENT_TYPES, type UserData } from "../services/userData.ts";
@@ -21,6 +23,8 @@ const Measurements = z.object({
     )
     .max(500),
 });
+const Merge = z.object({ anonymousToken: z.string().min(1).max(4000) });
+const Delete = z.object({ appleAuthorizationCode: z.string().min(1).max(2000).optional() }).optional();
 const Events = z.object({
   events: z
     .array(
@@ -46,12 +50,20 @@ const Events = z.object({
 /**
  * The signed-in user's data in Postgres, moved there from the phone after
  * sign-up: GET /me, PUT /me/profile, PUT /me/saved, POST /me/measurements,
- * POST /events, and DELETE /me (deletes the account). Selfie photos stay on the phone.
+ * POST /events, POST /me/merge (an anonymous user signing in to an existing
+ * Apple/Google account), and DELETE /me (deletes the account, revoking Sign in
+ * with Apple first). Selfie photos stay on the phone.
  * The app's onRequest hook has already checked the login, so req.userId is set.
  */
 export async function meRoute(
   app: FastifyInstance,
-  { userData, trends, deleteAccount }: { userData?: UserData; trends?: Trends; deleteAccount?: DeleteAccount },
+  {
+    userData,
+    trends,
+    deleteAccount,
+    verify,
+    revokeApple,
+  }: { userData?: UserData; trends?: Trends; deleteAccount?: DeleteAccount; verify: Verify; revokeApple?: RevokeApple },
 ) {
   async function handle<S>(
     route: string,
@@ -94,7 +106,36 @@ export async function meRoute(
   );
 
   app.delete("/me", (req, reply) =>
-    handle("delete", deleteAccount, req, reply, (del, user) => del(user), "account_delete_unavailable"),
+    handle(
+      "delete",
+      deleteAccount,
+      req,
+      reply,
+      async (del, user, diag) => {
+        const body = Delete.safeParse(req.body ?? undefined);
+        if (!body.success) throw new HttpError("invalid_request", 400);
+        const code = body.data?.appleAuthorizationCode;
+        // Apple asks for revocation, but a failure there must not keep the account (and its data) alive.
+        if (code) diag.appleRevoked = revokeApple ? await revokeApple(code).then(() => true, () => false) : "not_configured";
+        await del(user);
+      },
+      "account_delete_unavailable",
+    ),
+  );
+
+  // The Apple/Google identity already had an account (another phone), so linking failed and the app signed in to it:
+  // the anonymous session's token proves which data to bring along.
+  app.post("/me/merge", (req, reply) =>
+    handle("merge", userData, req, reply, async (data, user, diag) => {
+      const body = Merge.safeParse(req.body);
+      const from = body.success && !req.anonymous ? await verify(body.data.anonymousToken) : null;
+      if (!from?.anonymous || from.id === user) throw new HttpError("invalid_merge", 400);
+      await data.merge(from.id, user);
+      // The anonymous user is empty now; if deleting it fails it's a harmless leftover.
+      await deleteAccount?.(from.id).catch(() => {});
+      diag.merged = true;
+      return data.get(user);
+    }),
   );
 
   app.put("/me/profile", (req, reply) =>

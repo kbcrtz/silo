@@ -6,8 +6,9 @@ import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp } from "../src/app.ts";
 import { createGate } from "../src/guard.ts";
 import type { DeleteAccount } from "../src/services/account.ts";
+import type { RevokeApple } from "../src/services/appleRevoke.ts";
 import type { Measurement, UserData } from "../src/services/userData.ts";
-import { TOKEN, USER, verify } from "./fixtures/auth.ts";
+import { ANON_TOKEN, ANON_USER, TOKEN, USER, verify } from "./fixtures/auth.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const SECRET = "test-secret-0123456789";
@@ -33,11 +34,23 @@ function fakeData() {
       measurements.set(user, [...list, ...fresh]);
       return fresh.length;
     },
+    async merge(from, to) {
+      merges.push([from, to]);
+      await data.addMeasurements(to, measurements.get(from) ?? []);
+      if (profiles.has(from)) profiles.set(to, profiles.get(from)); // the newer one; the anonymous profile is from just now
+      if (!saved.has(to) && saved.has(from)) saved.set(to, saved.get(from));
+      for (const m of [profiles, saved, measurements]) m.delete(from);
+    },
   };
-  return data;
+  const merges: [string, string][] = [];
+  return Object.assign(data, { merges });
 }
 
-function setup(userData: UserData | null = fakeData(), deleteAccount?: DeleteAccount) {
+function setup(
+  userData: UserData | null = fakeData(),
+  deleteAccount?: DeleteAccount,
+  opts: { allowAnonymous?: boolean; revokeApple?: RevokeApple } = {},
+) {
   const logs: any[] = [];
   const stream = new Writable({
     write(chunk, _enc, done) {
@@ -57,6 +70,8 @@ function setup(userData: UserData | null = fakeData(), deleteAccount?: DeleteAcc
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     userData: userData ?? undefined,
     deleteAccount,
+    allowAnonymous: opts.allowAnonymous ?? true,
+    revokeApple: opts.revokeApple,
   });
   const call = (method: "GET" | "PUT" | "POST" | "DELETE", url: string, payload?: unknown, token: string | null = TOKEN) =>
     app.inject({
@@ -168,4 +183,55 @@ test("without account deletion configured, DELETE /me says so", async () => {
 test("framework errors use the same { error } shape", async () => {
   const { call } = setup();
   assert.deepEqual((await call("GET", "/nope")).json(), { error: "not_found" });
+});
+
+test("signing in with Apple/Google to an existing account takes over the anonymous user's data", async () => {
+  const data = fakeData();
+  const deleted: string[] = [];
+  const { call } = setup(data, async (user) => void deleted.push(user));
+  await call("PUT", "/me/profile", { data: profile }, ANON_TOKEN);
+  await call("POST", "/me/measurements", { entries: [{ type: "waist", value: 72, measuredAt: "2026-10-18T10:00:00.000Z" }] }, ANON_TOKEN);
+  await call("PUT", "/me/saved", { data: { itemIds: ["mine-already"] } });
+  const res = await call("POST", "/me/merge", { anonymousToken: ANON_TOKEN });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(data.merges, [[ANON_USER, USER]]);
+  assert.deepEqual(deleted, [ANON_USER], "the emptied anonymous user is deleted");
+  const me = res.json();
+  assert.deepEqual(me.profile, profile);
+  assert.deepEqual(me.saved, { itemIds: ["mine-already"] }, "the account's own saved items win");
+  assert.equal(me.measurements.length, 1);
+});
+
+test("a merge only takes a genuine anonymous login, into a real Apple/Google account", async () => {
+  const data = fakeData();
+  const { call } = setup(data, async () => {});
+  for (const [token, body] of [
+    [TOKEN, { anonymousToken: TOKEN }], // not anonymous: someone else's real account
+    [TOKEN, { anonymousToken: "forged" }],
+    [TOKEN, {}],
+    [ANON_TOKEN, { anonymousToken: ANON_TOKEN }], // the caller must be the Apple/Google account
+  ] as const) {
+    const res = await call("POST", "/me/merge", body, token);
+    assert.equal(res.statusCode, 400, JSON.stringify(body));
+    assert.deepEqual(res.json(), { error: "invalid_merge" });
+  }
+  assert.equal(data.merges.length, 0);
+});
+
+test("deleting an Apple account revokes its Apple token first, then deletes", async () => {
+  const steps: string[] = [];
+  const { call } = setup(fakeData(), async () => void steps.push("delete"), { revokeApple: async (code) => void steps.push(`revoke:${code}`) });
+  assert.equal((await call("DELETE", "/me", { appleAuthorizationCode: "c0de" })).statusCode, 204);
+  assert.deepEqual(steps, ["revoke:c0de", "delete"]);
+});
+
+test("a failed Apple revocation still deletes the account; without a code nothing is revoked", async () => {
+  const steps: string[] = [];
+  const { call, logs } = setup(fakeData(), async () => void steps.push("delete"), {
+    revokeApple: async () => Promise.reject(new Error("apple down")),
+  });
+  assert.equal((await call("DELETE", "/me", { appleAuthorizationCode: "c0de" })).statusCode, 204);
+  assert.equal((await call("DELETE", "/me")).statusCode, 204);
+  assert.deepEqual(steps, ["delete", "delete"]);
+  assert.ok(logs.some((l) => l.userData?.appleRevoked === false));
 });

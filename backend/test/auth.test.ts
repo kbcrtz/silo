@@ -23,7 +23,7 @@ function token(claims: Record<string, unknown> = {}, opts: { key?: CryptoKey; is
 }
 
 test("a Supabase access token signed by the project's key gives its user id", async () => {
-  assert.equal(await verify(await token()), USER);
+  assert.deepEqual(await verify(await token()), { id: USER, anonymous: false });
 });
 
 test("tokens from another key, issuer or audience, or expired, are refused", async () => {
@@ -34,8 +34,8 @@ test("tokens from another key, issuer or audience, or expired, are refused", asy
   assert.equal(await verify("not-a-jwt"), null);
 });
 
-test("anonymous Supabase users count as signed in (the app's silent sign-in until Apple/Google ships)", async () => {
-  assert.equal(await verify(await token({ is_anonymous: true })), USER);
+test("anonymous Supabase users are recognized as such; the app decides whether they count", async () => {
+  assert.deepEqual(await verify(await token({ is_anonymous: true })), { id: USER, anonymous: true });
 });
 
 test("a token whose subject isn't a user id is refused", async () => {

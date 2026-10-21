@@ -7,7 +7,7 @@ import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp, type Locate } from "../src/app.ts";
 import { createGate } from "../src/guard.ts";
 import type { Catalog } from "../src/services/shopifyCatalog.ts";
-import { TOKEN, verify } from "./fixtures/auth.ts";
+import { ANON_TOKEN, TOKEN, verify } from "./fixtures/auth.ts";
 
 const SECRET = "test-secret-0123456789";
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
@@ -37,9 +37,9 @@ function catalog(): Catalog {
   };
 }
 
-function app(gate = createGate({ windowMs: 60_000, max: 100, concurrency: 4 })) {
+function app(gate = createGate({ windowMs: 60_000, max: 100, concurrency: 4 }), allowAnonymous?: boolean) {
   return buildApp({ rules, model: "m", logger: false, catalog: catalog(), locate: found, secret: SECRET,
-    verify, gate });
+    verify, gate, allowAnonymous });
 }
 
 async function jpeg() {
@@ -139,4 +139,13 @@ test("a second color analysis while one is running is 503", async () => {
   release();
   assert.equal((await first).statusCode, 200);
   assert.equal(calls, 1);
+});
+
+test("anonymous logins count only while ALLOW_ANONYMOUS is on; Apple/Google logins always do", async () => {
+  const feed = (allow: boolean | undefined, token: string) =>
+    app(undefined, allow).inject({ method: "GET", url: "/catalog/discover?category=tops", headers: { authorization: `Bearer ${token}` } });
+  assert.equal((await feed(true, ANON_TOKEN)).statusCode, 200);
+  assert.equal((await feed(false, ANON_TOKEN)).statusCode, 401);
+  assert.equal((await feed(undefined, ANON_TOKEN)).statusCode, 401, "refused unless turned on");
+  assert.equal((await feed(false, TOKEN)).statusCode, 200);
 });
