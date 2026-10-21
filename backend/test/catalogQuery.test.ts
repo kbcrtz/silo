@@ -86,3 +86,27 @@ test("For You searches filter on the family of their color word; other feeds don
   assert.equal(buildQueryPlan({ ...base, q: "linen" })[0].color, undefined);
   assert.equal(buildQueryPlan({ ...base, style: "dark" })[0].color, undefined); // no palette
 });
+
+test("a seed varies For You: same seed, same plan; new seeds lead with other searches", () => {
+  const seeded = (seed: number) => buildQueryPlan({ ...base, ...softAutumn, seed });
+  assert.deepEqual(seeded(1), seeded(1));
+  const leads = new Set(Array.from({ length: 10 }, (_, s) => seeded(s + 1).slice(0, 2).map((x) => x.query).join(" + ")));
+  assert.ok(leads.size >= 6, `only ${leads.size} different first pages in 10 seeds`);
+  for (const step of seeded(3)) {
+    assert.ok(step.color, "every step still filters on a palette color family");
+    assert.match(step.query, /^women's /);
+  }
+});
+
+test("a seed turns a category tab into several varied searches of that category", () => {
+  const tops = buildQueryPlan({ ...base, category: "tops", seed: 7 });
+  assert.ok(tops.length >= 3);
+  assert.equal(new Set(tops.map((s) => s.query)).size, tops.length);
+  assert.ok(tops.every((s) => /^women's (\S+ )?tops$/.test(s.query) && s.category === "tops" && !s.color), JSON.stringify(tops));
+  const orders = new Set([1, 2, 3, 4, 5].map((seed) => buildQueryPlan({ ...base, category: "tops", seed })[0].query));
+  assert.ok(orders.size >= 3);
+});
+
+test("typed search text is never changed by the seed", () => {
+  assert.deepEqual(buildQueryPlan({ ...base, category: "tops", q: "linen", seed: 9 }), buildQueryPlan({ ...base, category: "tops", q: "linen" }));
+});

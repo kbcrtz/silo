@@ -29,6 +29,8 @@ const DiscoverQuery = z.strictObject({
   neutrals: hexList.default([]),
   priceMin: dollars,
   priceMax: dollars,
+  /** A new random number per feed open or refresh; varies the searches. Later pages use the cursor's. */
+  seed: z.coerce.number().int().min(0).max(2 ** 31 - 1).optional(),
   // Room for the HMAC suffix on the opaque cursor.
   cursor: z.string().max(4500).optional(),
   /** The shopper's season id, for "popular with your season". */

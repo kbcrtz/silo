@@ -27,7 +27,9 @@ const START: Feed = {
  * The Discover feed for one category from GET /catalog/discover, ranked page
  * by page with the existing palette and body-shape scoring. One request at a
  * time; a new category, department or season starts over and cancels the old
- * request. Kept in memory only (Shopify's catalog terms forbid storing it).
+ * request. Every start and refresh sends a new random seed, so the backend
+ * picks different searches and the feed isn't the same each time. Kept in
+ * memory only (Shopify's catalog terms forbid storing it).
  */
 export function useDiscover(category: FeedCategory) {
   const t = useTheme();
@@ -45,8 +47,16 @@ export function useDiscover(category: FeedCategory) {
       setFeed((f) => ({ ...f, status: "loading", mode }));
       try {
         const page = await discoverProducts(
-          // No style preference in the profile yet.
-          { category, shopFor, style: "none", season: t.season, cursor },
+          {
+            category,
+            shopFor,
+            // No style preference in the profile yet.
+            style: "none",
+            season: t.season,
+            cursor,
+            // Later pages follow the seed inside the cursor.
+            seed: cursor ? undefined : Math.floor(Math.random() * 2 ** 31),
+          },
           controller.signal,
         );
         if (controller.signal.aborted) return;

@@ -4,7 +4,7 @@ import { HttpError } from "../errors.ts";
 import type { Enrich } from "../services/listingInsights.ts";
 import type { Catalog } from "../services/shopifyCatalog.ts";
 import { listingFacts, normalizeProduct, type CatalogProduct } from "./normalize.ts";
-import { buildQueryPlan, type DiscoverParams } from "./query.ts";
+import { buildQueryPlan, seededRandom, shuffle, type DiscoverParams } from "./query.ts";
 
 export const PAGE_SIZE = 20;
 /** Big merchants list one style in many colors; past this they crowd out everyone else. */
@@ -15,9 +15,13 @@ const PER_PAGE = 2;
 /**
  * Where a feed is up to, handed to the app as an opaque cursor. `p` is the
  * position in the query plan (wrapping), `c` each query's own Shopify cursor:
- * null once that query has no more pages.
+ * null once that query has no more pages, `s` the seed the plan was built with.
  */
-const Cursor = z.object({ p: z.int().min(0).max(10_000), c: z.record(z.string(), z.string().max(2000).nullable()) });
+const Cursor = z.object({
+  p: z.int().min(0).max(10_000),
+  c: z.record(z.string(), z.string().max(2000).nullable()),
+  s: z.int().min(0).max(2 ** 31 - 1).optional(),
+});
 type Cursor = z.infer<typeof Cursor>;
 
 function mac(body: string, secret: string) {
@@ -68,8 +72,9 @@ export async function discover(
   signal?: AbortSignal,
   enrich?: Enrich,
 ): Promise<DiscoverPage> {
-  const plan = buildQueryPlan(params);
-  const state = rawCursor ? decode(rawCursor, secret) : { p: 0, c: {} };
+  const state: Cursor = rawCursor ? decode(rawCursor, secret) : { p: 0, c: {}, s: params.seed };
+  // Later pages follow the plan the first page was built with, whatever seed comes with them.
+  const plan = buildQueryPlan({ ...params, seed: state.s });
   const perQuery = plan.length > 1 ? PAGE_SIZE / PER_PAGE : PAGE_SIZE;
   const want = plan.length > 1 ? PER_PAGE : 1;
 
@@ -97,7 +102,7 @@ export async function discover(
     ),
   );
 
-  const next: Cursor = { p: pos, c: { ...state.c } };
+  const next: Cursor = { p: pos, c: { ...state.c }, ...(state.s !== undefined && { s: state.s }) };
   picks.forEach((i, k) => (next.c[i] = results[k].cursor));
   const more = pos < plan.length || plan.some((_, i) => typeof next.c[i] === "string");
 
@@ -119,6 +124,12 @@ export async function discover(
       products.push(product);
       raws.push(r.products[row]);
     });
+  }
+  if (state.s !== undefined && products.length > 1) {
+    // Mix the interleaved rows too, keeping each product next to its raw listing for the AI read.
+    const order = shuffle([...products.keys()], seededRandom(state.s + state.p));
+    products.splice(0, products.length, ...order.map((k) => products[k]));
+    raws.splice(0, raws.length, ...order.map((k) => raws[k]));
   }
   const page: DiscoverPage = { products, cursor: picks.length && more ? encode(next, secret) : null, upstreamCalls: picks.length, dropped };
   if (!enrich || !products.length) return page;

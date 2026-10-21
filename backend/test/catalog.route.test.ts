@@ -267,3 +267,31 @@ test("listings the AI says aren't clothing (sneakers, bags) are dropped from the
   const body = (await get("/catalog/discover?category=all")).json();
   assert.deepEqual(body.products.map((p: any) => p.id), [sweater.id]);
 });
+
+test("a seed reshuffles the first page; the cursor keeps that seed's plan for later pages", async () => {
+  const firstQueries = async (seed: number) => {
+    const { get, searches } = setup();
+    await get(`/catalog/discover?shopFor=womens&${softAutumn}&seed=${seed}`);
+    return searches.map((s) => s.query).join(" + ");
+  };
+  assert.ok(new Set(await Promise.all([1, 2, 3, 4, 5].map(firstQueries))).size >= 3, "different seeds, different first pages");
+
+  const secondPage = async (seedOnPage2: number) => {
+    const { get, searches } = setup();
+    const { cursor } = (await get(`/catalog/discover?shopFor=womens&${softAutumn}&seed=1`)).json();
+    await get(`/catalog/discover?shopFor=womens&${softAutumn}&seed=${seedOnPage2}&cursor=${encodeURIComponent(cursor)}`);
+    return searches.slice(2).map((s) => s.query);
+  };
+  assert.deepEqual(await secondPage(99), await secondPage(1), "page 2 follows the seed the cursor was made with");
+
+  for (const bad of ["-1", "x", "1.5", "99999999999"]) {
+    assert.equal((await setup().get(`/catalog/discover?seed=${bad}`)).statusCode, 400, bad);
+  }
+});
+
+test("a seed also mixes the order within a page", async () => {
+  const order = async (seed: number) =>
+    (await setup({ products: [trouser, sweater] }).get(`/catalog/discover?category=tops&seed=${seed}`)).json().products.map((p: any) => p.id).join(",");
+  assert.equal(await order(4), await order(4));
+  assert.ok(new Set(await Promise.all(Array.from({ length: 12 }, (_, i) => order(i + 1)))).size > 1);
+});

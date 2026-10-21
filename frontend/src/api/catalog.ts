@@ -83,6 +83,8 @@ export type DiscoverParams = {
   priceMin?: number;
   priceMax?: number;
   cursor?: string;
+  /** A new random number per feed open or refresh, so the feed differs each time; later pages follow the cursor's. */
+  seed?: number;
 };
 
 /**
@@ -90,7 +92,7 @@ export type DiscoverParams = {
  * category, search text, department, style and the season's palette colors.
  *
  * Backend contract: GET {API_URL}/catalog/discover, Authorization: Bearer, ?category&q&shopFor&style
- * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&cursor
+ * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&seed&cursor
  * -> { products, cursor, source }
  */
 export async function discoverProducts(
@@ -113,6 +115,7 @@ export async function discoverProducts(
     query.set("priceMin", String(params.priceMin));
   if (params.priceMax !== undefined)
     query.set("priceMax", String(params.priceMax));
+  if (params.seed !== undefined) query.set("seed", String(params.seed));
   if (params.cursor) query.set("cursor", params.cursor);
   const res = await fetch(`${API_URL}/catalog/discover?${query}`, {
     headers: apiHeaders(),
