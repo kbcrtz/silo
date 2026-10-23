@@ -8,10 +8,14 @@
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "silo",
+    "scheme": [
+      "silo",
+      "com.googleusercontent.apps.517103856921-ki5vhqblgb7p2jamcl2l0saqi8vpn2cf"
+    ],
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.siloapp.ios",
+      "usesAppleSignIn": true,
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

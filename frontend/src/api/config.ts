@@ -1,4 +1,5 @@
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+// Without a trailing slash, so `${API_URL}/path` never doubles it.
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 
 let accessToken: string | null = null;
 
