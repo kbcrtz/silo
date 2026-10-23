@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { AppState } from "react-native";
+import { accountFrom } from "@/lib/account";
+import { useAccount } from "@/store/account";
 import { USE_MOCKS, setAccessToken } from "./config";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
@@ -21,15 +23,15 @@ export const supabase =
 
 /**
  * Signs in before the app talks to the server: the saved session, else a new
- * anonymous Supabase user. Keeps the API's token current on refresh.
- * shortcut: a silent anonymous user stands in for Apple/Google sign-in so
- * TestFlight builds work; link Apple/Google to it (linkIdentity) when sign-in ships.
+ * anonymous Supabase user, which Apple/Google sign-in later links to
+ * (src/api/auth.ts). Keeps the API's token and useAccount current.
  */
 export async function startSession(): Promise<void> {
   if (!supabase || USE_MOCKS) return;
-  supabase.auth.onAuthStateChange((_event, session) =>
-    setAccessToken(session?.access_token ?? null),
-  );
+  supabase.auth.onAuthStateChange((_event, session) => {
+    setAccessToken(session?.access_token ?? null);
+    useAccount.setState({ account: accountFrom(session) });
+  });
   // Timers pause in the background; refresh the token when the app comes back.
   AppState.addEventListener("change", (state) =>
     state === "active"
@@ -38,7 +40,13 @@ export async function startSession(): Promise<void> {
   );
   const { data } = await supabase.auth.getSession();
   if (data.session) return setAccessToken(data.session.access_token);
-  const { data: anon, error } = await supabase.auth.signInAnonymously();
+  await signInAnonymously();
+}
+
+/** A fresh anonymous user: at first launch, and after signing out. */
+export async function signInAnonymously(): Promise<void> {
+  if (!supabase) return;
+  const { data, error } = await supabase.auth.signInAnonymously();
   if (error) throw error;
-  setAccessToken(anon.session?.access_token ?? null);
+  setAccessToken(data.session?.access_token ?? null);
 }

@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
@@ -9,6 +10,7 @@ import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { CARD_ASPECT, PassportCard } from "@/components/passport/PassportCard";
 import { usePassportData } from "@/components/passport/usePassportData";
 import { Text } from "@/components/Text";
+import { useAccount } from "@/store/account";
 import { useProfile } from "@/store/profile";
 import { familyOf } from "@/data/families";
 import { useTheme } from "@/theme";
@@ -29,6 +31,7 @@ export default function PassportStep() {
   const data = usePassportData();
   const seasonId = useProfile((s) => s.colorProfile?.seasonId);
   const set = useProfile((s) => s.set);
+  const member = useAccount((s) => s.account.kind === "member");
   const [stamp, setStamp] = useState(false);
 
   const cardWidth = Math.min(width - t.space(10), 290);
@@ -46,8 +49,9 @@ export default function PassportStep() {
   }, []);
 
   // Setting onboarded swaps the root stack's protected groups; the router
-  // moves to the tabs on its own.
-  const finish = () => set({ onboarded: true });
+  // moves to the tabs on its own. Not signed in yet: sign-up comes first.
+  const finish = () =>
+    member ? set({ onboarded: true }) : router.push("/onboarding/account");
 
   return (
     <OnboardingScreen

@@ -1,14 +1,15 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import { Text, View, type TextInput } from "react-native";
+import { Pressable, Text, View, type TextInput } from "react-native";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
 import { Field, OptionButton } from "@/components/onboarding/Controls";
 import { Header, stepBadge } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
+import { useAccount } from "@/store/account";
 import { shopForGender, useProfile, type Gender } from "@/store/profile";
-import { TYPE } from "@/theme/brand";
+import { BRAND, TYPE } from "@/theme/brand";
 
 const GENDERS: { id: Gender; label: string }[] = [
   { id: "woman", label: "Woman" },
@@ -24,6 +25,7 @@ function Label({ children }: { children: string }) {
 /** Step one: name, age and gender. Gender picks the cuts the feed starts from. */
 export default function Essentials() {
   const profile = useProfile();
+  const member = useAccount((s) => s.account.kind === "member");
   const [name, setName] = useState(profile.displayName ?? "");
   const [age, setAge] = useState(profile.age ? String(profile.age) : "");
   const [gender, setGender] = useState<Gender | undefined>(profile.gender);
@@ -103,6 +105,18 @@ export default function Essentials() {
         onPress={next}
         style={{ marginTop: 29 }}
       />
+      {member ? null : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/onboarding/account?returning=1")}
+          hitSlop={8}
+          style={{ alignSelf: "center", marginTop: 16, padding: 8 }}
+        >
+          <Text style={[TYPE.control, { color: BRAND.inkSoft }]}>
+            I already have an account
+          </Text>
+        </Pressable>
+      )}
     </OnboardingScreen>
   );
 }

@@ -7,12 +7,14 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { removeAccount, signOut } from "@/api/auth";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { usePassportData } from "@/components/passport/usePassportData";
 import { Screen } from "@/components/Screen";
+import { SignInButtons } from "@/components/SignInButtons";
 import { Text } from "@/components/Text";
 import { loadDemoProfile } from "@/data/demo";
 import { bodyShape } from "@/lib/bodyShape";
@@ -23,12 +25,79 @@ import {
   MEASUREMENT_TYPES,
 } from "@/lib/measurements";
 import { formatMeasurement } from "@/lib/units";
+import { useAccount } from "@/store/account";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 
 const FIT_PREFERENCES: FitPreference[] = ["slim", "regular", "relaxed"];
+
+const PROVIDER_NAMES = { apple: "Apple", google: "Google" };
+
+/** Signed in: who as, sign out and delete. Otherwise the sign-in buttons. */
+function AccountCard() {
+  const account = useAccount((s) => s.account);
+
+  const confirmSignOut = () =>
+    Alert.alert(
+      "Sign out?",
+      "Your Silo stays on your account. This iPhone starts over.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign out", onPress: () => signOut() },
+      ],
+    );
+
+  const confirmDelete = () =>
+    Alert.alert(
+      "Delete your account?",
+      "Your profile, measurements and saved pieces are deleted from Silo for good.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () =>
+            removeAccount().catch((e) =>
+              Alert.alert(
+                "Couldn't delete your account",
+                e instanceof Error ? e.message : "Please try again.",
+              ),
+            ),
+        },
+      ],
+    );
+
+  if (account.kind !== "member")
+    return (
+      <Card>
+        <Text variant="caption" tone="muted">
+          ACCOUNT
+        </Text>
+        <Text tone="muted">
+          Sign in to back up your Silo and get it back on any iPhone.
+        </Text>
+        <SignInButtons onSignedIn={() => {}} />
+      </Card>
+    );
+
+  return (
+    <Card>
+      <Text variant="caption" tone="muted">
+        ACCOUNT
+      </Text>
+      <Text>
+        {account.provider
+          ? `Signed in with ${PROVIDER_NAMES[account.provider]}`
+          : "Signed in"}
+      </Text>
+      {account.email ? <Text tone="muted">{account.email}</Text> : null}
+      <Button variant="ghost" label="Sign out" onPress={confirmSignOut} />
+      <Button variant="ghost" label="Delete account" onPress={confirmDelete} />
+    </Card>
+  );
+}
 
 export default function Profile() {
   const t = useTheme();
@@ -39,6 +108,7 @@ export default function Profile() {
   const season = t.season;
   const passport = usePassportData();
   const { width } = useWindowDimensions();
+  const member = useAccount((s) => s.account.kind === "member");
 
   const redoOnboarding = () =>
     Alert.alert("Redo onboarding?", "Your measurement history is kept.", [
@@ -165,6 +235,8 @@ export default function Profile() {
         </View>
       </Card>
 
+      <AccountCard />
+
       <View style={{ gap: t.space(2), marginTop: t.space(2) }}>
         <Button
           variant="ghost"
@@ -176,7 +248,10 @@ export default function Profile() {
           label="Load demo profile"
           onPress={loadDemoProfile}
         />
-        <Button variant="ghost" label="Reset app" onPress={resetApp} />
+        {/* Signed in, a reset would back the empty phone up over the account. */}
+        {member ? null : (
+          <Button variant="ghost" label="Reset app" onPress={resetApp} />
+        )}
       </View>
     </Screen>
   );
