@@ -1,5 +1,7 @@
 import { CATALOG, shopUrl, type CatalogItem } from "@/data/catalog";
 import type { Season } from "@/data/seasons";
+import { bodyOutlines, landmarks, type Outline } from "@/lib/mannequin";
+import type { Measurements } from "@/lib/measurements";
 import type { ShopFor } from "@/store/profile";
 import { API_URL, USE_MOCKS, apiHeaders, expectOk, sleep } from "./config";
 
@@ -179,21 +181,49 @@ async function mockDiscover(params: DiscoverParams): Promise<DiscoverPage> {
 }
 
 /**
+ * The drawn mannequin's body as the backend's body guide: the head, then
+ * everything below it, as [x, y] points in cm. Measurements are
+ * rounded to 2 cm (2 kg) first, so nearby bodies share one saved image.
+ */
+export function tryOnGuide(
+  measurements: Measurements,
+  shopFor: ShopFor,
+): { body: [number, number][][] } {
+  const rounded = Object.fromEntries(
+    Object.entries(measurements).map(([k, v]) => [k, Math.round(v / 2) * 2]),
+  );
+  const body = bodyOutlines(landmarks(rounded, shopFor));
+  const points = (o: Outline) =>
+    o.map((p): [number, number] => [
+      Math.round(p.x * 10) / 10,
+      Math.round(p.y * 10) / 10,
+    ]);
+  return { body: [body.head, body.silhouette].map(points) };
+}
+
+/**
  * The AI try-on image for a live product, for expo-image: the item alone on
- * a bare mannequin. Null for demo items and in mock mode (the app draws the
- * mannequin instead).
+ * a bare mannequin with the user's proportions. Null for demo items and in
+ * mock mode (the app draws the mannequin instead).
  *
- * Backend contract: GET {API_URL}/catalog/tryon-image?id&shopFor&selected=<JSON color option>,
+ * Backend contract: GET {API_URL}/catalog/tryon-image?id&shopFor&category&selected=<JSON color option>&guide=<JSON>,
  * Authorization: Bearer -> image/jpeg. Without the color, Shopify would use the store's default variant's photo.
  */
 export function tryOnImageSource(
   item: CatalogItem,
   shopFor: ShopFor,
+  measurements: Measurements,
 ): { uri: string; headers: Record<string, string> } | null {
   if (USE_MOCKS || !item.shopifyId) return null;
-  const query = new URLSearchParams({ id: item.shopifyId, shopFor });
+  // The category saves the backend a second listing read (about 1 s).
+  const query = new URLSearchParams({
+    id: item.shopifyId,
+    shopFor,
+    category: item.category,
+  });
   if (item.shopifyColor)
     query.set("selected", JSON.stringify([item.shopifyColor]));
+  query.set("guide", JSON.stringify(tryOnGuide(measurements, shopFor)));
   return {
     uri: `${API_URL}/catalog/tryon-image?${query}`,
     headers: apiHeaders(),

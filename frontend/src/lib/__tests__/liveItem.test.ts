@@ -230,8 +230,8 @@ describe("recommend with live items", () => {
 describe("AI try-on image source", () => {
   it("is off in mock mode and for demo items, so the drawn mannequin shows", () => {
     expect(
-      tryOnImageSource(toCatalogItem(product(), "mens"), "mens"),
+      tryOnImageSource(toCatalogItem(product(), "mens"), "mens", {}),
     ).toBeNull(); // tests run on mocks
-    expect(tryOnImageSource(findItem("w-01")!, "womens")).toBeNull();
+    expect(tryOnImageSource(findItem("w-01")!, "womens", {})).toBeNull();
   });
 });

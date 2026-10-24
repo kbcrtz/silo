@@ -7,7 +7,8 @@ import { buildApp } from "../src/app.ts";
 import { createGate, type Gate } from "../src/guard.ts";
 import type { Enrich, Insight } from "../src/services/listingInsights.ts";
 import type { Catalog } from "../src/services/shopifyCatalog.ts";
-import { photoUrlAllowed, tryOnPrompt, type TryOn } from "../src/services/tryOnImage.ts";
+import sharp from "sharp";
+import { bodyWords, createTryOn, guideImage, memoryStore, photoUrlAllowed, tryOnPrompt, whiteBackground, type Guide, type TryOn } from "../src/services/tryOnImage.ts";
 import { productDetail } from "./fixtures/shopify.ts";
 import { TOKEN, verify } from "./fixtures/auth.ts";
 
@@ -26,6 +27,65 @@ test("the fixed template puts only the selected piece on a bare mannequin, for e
   assert.match(tryOnPrompt({ category: "top", department: "mens", cut: "relaxed fit" }), /male dress-form[\s\S]*relaxed fit/);
   assert.match(tryOnPrompt({ category: "dress", department: "womens" }), /female dress-form/);
   assert.match(tryOnPrompt({ category: "bottom", department: "mens" }), /ONLY the bottoms/);
+});
+
+test("with a body guide, the body comes from the diagram and the words, the garment's look from the photo", () => {
+  const prompt = tryOnPrompt({ category: "dress", department: "womens", cut: "fitted fit", title: 'Kallan "Knit" Dress', build: "a plus-size body" });
+  assert.match(prompt, /^Image 1 is a body diagram/);
+  assert.match(prompt, /one specific person's body, a plus-size body/);
+  assert.match(prompt, /Image 2 is a store photo of a product \("Kallan Knit Dress"\)/); // quotes stripped from the listing title
+  assert.match(prompt, /neckline[\s\S]*of its photo/);
+  assert.match(prompt, /Never copy the diagram's flat style or its blue color/);
+  assert.match(prompt, /pure white \(#FFFFFF\) background/);
+  assert.doesNotMatch(prompt, /fitted fit/, "the photo sets the cut, not the listing reader's guess");
+});
+
+test("an answer without an image is retried once, with the body diagram first", async () => {
+  const jpeg = await sharp({ create: { width: 30, height: 40, channels: 3, background: "#eee" } }).jpeg().toBuffer();
+  const answers = [{ candidates: [{ content: { parts: [] } }] }, { candidates: [{ content: { parts: [{ inlineData: { data: jpeg.toString("base64") } }] } }] }];
+  const requests: any[] = [];
+  const tryOn = createTryOn({ generateContent: async (r) => (requests.push(r), answers.shift() ?? answers[0]), model: "m", timeoutMs: 1000, fetch, store: memoryStore() });
+  const photo = { data: Buffer.from("photo"), mimeType: "image/jpeg" };
+  const image = await tryOn.generate(photo, "prompt", Buffer.from("guide"));
+  assert.equal((await sharp(image).metadata()).format, "jpeg");
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[0].contents[0].parts.map((p: any) => p.inlineData?.mimeType ?? "text"), ["image/png", "image/jpeg", "text"]);
+  const never = createTryOn({ generateContent: async () => ({ candidates: [] }), model: "m", timeoutMs: 1000, fetch, store: memoryStore() });
+  await assert.rejects(never.generate(photo, "prompt"), /gemini_invalid_output/);
+});
+
+/** A body (head, then everything below it) in cm: `w` wide, `h` tall. */
+const box = (x: number, y: number, w: number, h: number): [number, number][] => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+const body = (w: number, h = 165): Guide => ({ body: [box(-10, 0, 20, 25), box(-w / 2, 25, w, h - 25)] });
+const GUIDE = body(31);
+
+test("the guide renders as a flat pale-blue body on white", async () => {
+  const { data, info } = await sharp(await guideImage(GUIDE)).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const at = (fx: number, fy: number) => {
+    const i = (Math.round(fy * (info.height - 1)) * info.width + Math.round(fx * (info.width - 1))) * 3;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+  assert.deepEqual(at(0.02, 0.5), [255, 255, 255], "white background");
+  assert.deepEqual(at(0.5, 0.6), [196, 218, 244], "a filled body, so its width reads at a glance");
+});
+
+test("the body's build in words, from its area relative to its height", () => {
+  assert.equal(bodyWords(body(22, 170)), "a slender body: narrow shoulders, a slim waist, slim hips and legs");
+  assert.equal(bodyWords(body(31)), "an average body");
+  assert.match(bodyWords(body(35)), /^a fuller, curvy body/);
+  assert.match(bodyWords(body(40)), /^a plus-size, full-figured body/);
+  assert.equal(bodyWords(body(30, 155)), "a petite, average body");
+  assert.match(bodyWords(body(38, 185)), /^a tall, fuller/);
+});
+
+test("a gray studio backdrop turns pure white; the mannequin on it is kept", async () => {
+  const W = 120, H = 160;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="100%" height="100%" fill="rgb(236,236,236)"/><rect x="40" y="20" width="40" height="120" fill="rgb(205,205,205)"/></svg>`;
+  const out = await whiteBackground(await sharp(Buffer.from(svg)).jpeg().toBuffer());
+  const { data } = await sharp(out).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const px = (x: number, y: number) => data[(y * W + x) * 3];
+  assert.ok(px(5, 5) === 255 && px(110, 150) === 255, "backdrop is white");
+  assert.ok(px(60, 80) < 215, "mannequin keeps its gray");
 });
 
 test("only Shopify's image CDN is fetched", () => {
@@ -48,7 +108,7 @@ const insight = (patch: Partial<Insight> = {}): Insight => ({
 });
 
 function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate } = {}) {
-  const generated: { prompt: string; photo: Buffer }[] = [];
+  const generated: { prompt: string; photo: Buffer; guide?: Buffer }[] = [];
   const saved = new Map<string, Buffer>();
   const fetched: string[] = [];
   const tryOn: TryOn = {
@@ -56,8 +116,8 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate 
       fetched.push(url);
       return { data: Buffer.from("photo"), mimeType: "image/jpeg" };
     },
-    async generate(photo, prompt) {
-      generated.push({ prompt, photo: photo.data });
+    async generate(photo, prompt, guide) {
+      generated.push({ prompt, photo: photo.data, guide });
       return Buffer.from("generated-jpeg");
     },
     store: {
@@ -74,7 +134,8 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate 
     search: async () => ({ products: [], cursor: null }),
     getProduct: async (_id, selected) => (asked.push(selected), opts.product === undefined ? productDetail : opts.product),
   };
-  const enrich: Enrich = async (facts) => facts.map(() => (opts.insight === undefined ? insight() : opts.insight));
+  const enriched: unknown[] = [];
+  const enrich: Enrich = async (facts) => (enriched.push(facts), facts.map(() => (opts.insight === undefined ? insight() : opts.insight)));
   const logs: any[] = [];
   const stream = new Writable({
     write(chunk, _enc, done) {
@@ -96,7 +157,7 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate 
     tryOnGate: opts.gate ?? createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
   });
   const get = (url: string, token = TOKEN) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
-  return { get, generated, saved, fetched, logs, asked };
+  return { get, generated, saved, fetched, logs, asked, enriched };
 }
 
 const url = (dept = "mens") => `/catalog/tryon-image?id=${encodeURIComponent(productDetail.id)}&shopFor=${dept}`;
@@ -155,4 +216,31 @@ test("the photo is the color the shopper saw: the variant's color goes to Shopif
   await get(url());
   assert.equal(asked.at(-1), undefined, "without a color, Shopify picks the default as before");
   assert.equal((await get(`${url()}&selected=nope`)).statusCode, 400);
+});
+
+test("a body guide goes to Gemini as a second image and keys the saved image per body", async () => {
+  const { get, generated } = setup();
+  const withGuide = (g: unknown) => `${url()}&guide=${encodeURIComponent(JSON.stringify(g))}`;
+  assert.equal((await get(withGuide(GUIDE))).statusCode, 200);
+  assert.match(generated[0].prompt, /body diagram[\s\S]*an average body[\s\S]*Image 2 is a store photo of a product \("/);
+  assert.equal((await sharp(generated[0].guide!).metadata()).format, "png");
+  await get(withGuide(GUIDE));
+  assert.equal(generated.length, 1, "the same body reuses the image");
+  await get(withGuide(body(40)));
+  assert.equal(generated.length, 2, "another body gets its own image");
+  await get(url());
+  assert.equal(generated[2].guide, undefined, "older apps without a guide still get the generic image");
+  assert.doesNotMatch(generated[2].prompt, /diagram/);
+  for (const bad of ["nope", JSON.stringify({ body: [] }), JSON.stringify({ body: [GUIDE.body[0], [[0, 0]]] }), JSON.stringify({ body: [GUIDE.body[0], box(-25, 25, 5000, 140)] }), JSON.stringify({ ...GUIDE, extra: 1 }), JSON.stringify(body(30, 40)), JSON.stringify({ body: [GUIDE.body[0], box(-15, -5, 30, 5)] })])
+    assert.equal((await get(`${url()}&guide=${encodeURIComponent(bad)}`)).statusCode, 400, bad);
+});
+
+test("with the app's category, the listing reader is skipped (it already read the listing for the feed)", async () => {
+  const { get, generated, enriched } = setup();
+  assert.equal((await get(`${url("womens")}&category=dress`)).statusCode, 200);
+  assert.equal(enriched.length, 0, "no extra Gemini call before the image");
+  assert.match(generated[0].prompt, /ONLY the dress/);
+  await get(url("mens"));
+  assert.equal(enriched.length, 1, "older apps without a category still get the reader");
+  assert.equal((await get(`${url()}&category=shoes`)).statusCode, 400);
 });
