@@ -149,3 +149,13 @@ test("anonymous logins count only while ALLOW_ANONYMOUS is on; Apple/Google logi
   assert.equal((await feed(undefined, ANON_TOKEN)).statusCode, 401, "refused unless turned on");
   assert.equal((await feed(false, TOKEN)).statusCode, 200);
 });
+
+test("the gate forgets clients whose window has passed, so rotating IPs don't grow memory", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 0 });
+  const gate = createGate({ windowMs: 1000, max: 5, concurrency: 1000 });
+  for (let i = 0; i < 100; i++) gate.tryEnter(`ip-${i}`);
+  assert.equal(gate.tracked(), 100);
+  t.mock.timers.setTime(1500);
+  gate.tryEnter("new-ip");
+  assert.equal(gate.tracked(), 1);
+});

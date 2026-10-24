@@ -121,7 +121,7 @@ function MeasureCard({
       <Glass
         radius={21}
         fill="rgba(255,255,255,0.4)"
-        style={{ height: 96, paddingHorizontal: 13, paddingTop: 15 }}
+        style={{ minHeight: 96, paddingHorizontal: 13, paddingTop: 15 }}
       >
         <Text style={TYPE.fieldLabel}>{label}</Text>
         <Text style={[TYPE.fieldHint, { color: BRAND.inkMuted, marginTop: 5 }]}>

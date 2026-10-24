@@ -47,7 +47,7 @@ The app already calls these, behind mocks, in `frontend/src/api/`. Match these s
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`. Not implemented yet.
 - `GET /catalog/discover` → `{ products: CatalogProduct[], cursor: string | null, source: "shopify" }`. **Implemented**; see [Catalog](#catalog).
 - `GET /catalog/product?id=<gid>&selected=<JSON>` → `{ product: CatalogProduct }` with images, description and variants. **Implemented.**
-- `GET /catalog/tryon-image?id=<gid>&shopFor=&selected=<JSON>` → `image/jpeg`: a full-body mannequin wearing the product, in the variant's color. **Implemented**; see [AI try-on images](#ai-try-on-images).
+- `GET /catalog/tryon-image?id=<gid>&shopFor=&category=&selected=<JSON>&guide=<JSON>` → `image/jpeg`: a full-body mannequin with the shopper's proportions wearing the product, in the variant's color. **Implemented**; see [AI try-on images](#ai-try-on-images).
 - `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`, `POST /events`, `POST /me/merge`, `DELETE /me`: the signed-in user's data, keyed by their Supabase user id. **Implemented**; see [User data](#user-data).
 
 Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non-2xx as "couldn't analyze", offering retake or quiz-only.
@@ -129,14 +129,22 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 
 ## AI try-on images
 
-`GET /catalog/tryon-image?id=<gid>&shopFor=womens|mens|both&selected=<JSON>` returns a JPEG (3:4) of a faceless light-gray dress-form mannequin, head to feet, wearing only the product (`src/services/tryOnImage.ts`); everywhere else the mannequin is bare, so a shirt leaves the legs bare and trousers the chest. It is made from the product's store photo with one fixed prompt template, so every product comes out in the same studio style. The listing reader decides what kind of item it is (top, bottoms, jacket or coat, dress) and its fit, length and sleeves.
+`GET /catalog/tryon-image?id=<gid>&shopFor=womens|mens|both&category=top|bottom|dress|outerwear&selected=<JSON>&guide=<JSON>` returns a JPEG (3:4) of a faceless light-gray dress-form mannequin, head to feet, wearing only the product (`src/services/tryOnImage.ts`); everywhere else the mannequin is bare, so a shirt leaves the legs bare and trousers the chest. It is made from the product's store photo with one fixed prompt template, so every product comes out in the same studio style. `category` (what the feed's listing reader already found) says what kind of item it is. Without it (older app builds), the listing reader runs here first, about 1 s, alongside the photo download.
+
+- `guide` is the app's drawn mannequin body: `{ body: [head, silhouette] }`, each an outline of `[x, y]` points in cm (origin at the top of the head), between 1 and 2.5 m tall.
+  - It's drawn as a flat pale-blue silhouette (blue, so it can't be copied as the gray mannequin) and sent as the first image, before the store photo. The prompt adds the build in words (slender, average, curvy or plus-size, and petite or tall), worked out from the silhouette's area and height.
+  - Gemini copies the shopper's widths and leg length from it. The garment's colors, cut and details come from the photo, which the prompt names by its listing title.
+  - In testing on Lite, each change mattered. Outlines alone, or clothes drawn over the body, left plus-size bodies about 25% too slim. Clothes drawn in the diagram also got copied as flat shapes. With the filled body first and the build in words, the error was 2–10%.
+  - Without a guide (older app builds), the listing reader's fit, length and sleeves go in the prompt and the body is generic.
+- If Gemini answers without an image, the request is retried once.
+- Gemini sometimes paints a light-gray backdrop; a flood fill from the border turns it pure white before saving.
 
 - Model: `TRYON_IMAGE_MODEL`, default `gemini-3.1-flash-lite-image` (about 6 s for a new image in testing).
 - `selected` is the shown variant's options, e.g. `[{"name":"Color","label":"Light Blue"}]`. Only the color option is used: it goes to Shopify's `get_product`, so the photo is that color's, and into the saved image's key. Without it, Shopify answers with the store's default variant, whose photo is often another color.
-- Each image is saved in `tryon_images` (Postgres bytea, keyed by product, department, color and template version) and served from there next time (about 0.4 s). Without a database it's kept in memory. Bump `TEMPLATE_VERSION` when the template changes.
+- Each image is saved in `tryon_images` (Postgres bytea, keyed by product, department, color, a hash of the guide and template version) and served from there next time (about 0.4 s). Without a database it's kept in memory. Bump `TEMPLATE_VERSION` when the template changes.
 - Photos are fetched only from `https://cdn.shopify.com`, at most 8 MB, and never written to disk.
 - New images are capped at 20 per user per 10 minutes, 3 at once (429 `rate_limited`, 503 `busy`); saved ones don't count.
-- Errors: 400 `invalid_request`, 404 `product_not_found`, 422 `no_photo` or `not_clothing` (shoes, bags), 502/504 for Gemini failures.
+- Errors: 400 `invalid_request` (also a malformed guide), 404 `product_not_found`, 422 `no_photo` or `not_clothing` (shoes, bags), 502/504 for Gemini failures.
 
 ## User data
 

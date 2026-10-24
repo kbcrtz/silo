@@ -105,7 +105,9 @@ export function MeasurementForm({
               }}
             />
             {text[type] && values[type] === undefined ? (
-              <Text variant="caption">{rangeHint(type, unitSystem)}</Text>
+              <Text variant="caption" tone="danger">
+                {rangeHint(type, unitSystem)}
+              </Text>
             ) : (
               <Text variant="caption" tone="muted">
                 {info.howTo}

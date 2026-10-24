@@ -120,7 +120,7 @@ export default function ItemSheet() {
   const measured = latest.chest && latest.waist && latest.hips;
 
   // Live products show the AI try-on image; demo items and mock mode the drawn mannequin.
-  const aiSource = tryOnImageSource(item, shopFor);
+  const aiSource = tryOnImageSource(item, shopFor, latest);
   const drawn = (
     <Mannequin
       measurements={latest}
@@ -186,7 +186,7 @@ export default function ItemSheet() {
               }}
             >
               {aiSource ? (
-                <AiTryOn source={aiSource} fallback={drawn} />
+                <AiTryOn key={aiSource.uri} source={aiSource} fallback={drawn} />
               ) : (
                 drawn
               )}
