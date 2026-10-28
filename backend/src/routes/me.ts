@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { HttpError } from "../errors.ts";
 import type { Verify } from "../auth.ts";
+import type { Gate } from "../guard.ts";
 import type { DeleteAccount } from "../services/account.ts";
 import type { RevokeApple } from "../services/appleRevoke.ts";
 import { GARMENTS, SILHOUETTES } from "../services/listingInsights.ts";
@@ -63,7 +64,8 @@ export async function meRoute(
     deleteAccount,
     verify,
     revokeApple,
-  }: { userData?: UserData; trends?: Trends; deleteAccount?: DeleteAccount; verify: Verify; revokeApple?: RevokeApple },
+    eventsGate,
+  }: { userData?: UserData; trends?: Trends; deleteAccount?: DeleteAccount; verify: Verify; revokeApple?: RevokeApple; eventsGate?: Gate },
 ) {
   async function handle<S>(
     route: string,
@@ -152,6 +154,10 @@ export async function meRoute(
 
   app.post("/events", (req, reply) =>
     handle("events", trends, req, reply, async (t, user, diag) => {
+      if (eventsGate) {
+        if (eventsGate.tryEnter(user) === "rate") throw new HttpError("rate_limited", 429);
+        eventsGate.leave(); // a window only: the insert is cheap, nothing to hold a slot for
+      }
       const parsed = Events.safeParse(req.body);
       if (!parsed.success) throw new HttpError("invalid_request", 400);
       const events = parsed.data.events.map(({ color, ...e }) => {

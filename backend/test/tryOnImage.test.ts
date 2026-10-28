@@ -10,7 +10,7 @@ import type { Catalog } from "../src/services/shopifyCatalog.ts";
 import sharp from "sharp";
 import { bodyWords, createTryOn, guideImage, memoryStore, photoUrlAllowed, tryOnPrompt, whiteBackground, type Guide, type TryOn } from "../src/services/tryOnImage.ts";
 import { productDetail } from "./fixtures/shopify.ts";
-import { TOKEN, verify } from "./fixtures/auth.ts";
+import { ANON_TOKEN, TOKEN, verify } from "./fixtures/auth.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const SECRET = "test-secret-0123456789";
@@ -107,7 +107,7 @@ const insight = (patch: Partial<Insight> = {}): Insight => ({
   ...patch,
 });
 
-function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate } = {}) {
+function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate; anonymousGate?: Gate } = {}) {
   const generated: { prompt: string; photo: Buffer; guide?: Buffer }[] = [];
   const saved = new Map<string, Buffer>();
   const fetched: string[] = [];
@@ -150,13 +150,23 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate 
     locate: async () => assert.fail("no Gemini"),
     catalog,
     secret: SECRET,
-    verify: async (token) => (token === "other-token" ? { id: "0b0b0b0b-1c1c-4d2d-8e3e-4f4f4f4f4f4f", anonymous: false } : verify(token)),
+    verify: async (token) =>
+      token === "other-token"
+        ? { id: "0b0b0b0b-1c1c-4d2d-8e3e-4f4f4f4f4f4f", anonymous: false }
+        : token === "anon-2"
+          ? { id: "0c0c0c0c-1d1d-4e2e-8f3f-404040404040", anonymous: true }
+          : verify(token),
+    allowAnonymous: true,
+    trustProxy: "100.64.0.0/10",
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     enrich,
     tryOn,
     tryOnGate: opts.gate ?? createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
+    anonymousTryOnGate: opts.anonymousGate,
   });
-  const get = (url: string, token = TOKEN) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
+  // `forwardedFor` arrives the way Railway's proxy (a 100.64.0.0/10 address) sends it: the client's address appended last.
+  const get = (url: string, token = TOKEN, forwardedFor = "203.0.113.1") =>
+    app.inject({ method: "GET", url, remoteAddress: "100.64.0.7", headers: { authorization: `Bearer ${token}`, "x-forwarded-for": forwardedFor } });
   return { get, generated, saved, fetched, logs, asked, enriched };
 }
 
@@ -194,6 +204,19 @@ test("past the per-user budget, no image is generated; other users keep theirs",
   assert.deepEqual(res.json(), { error: "rate_limited" });
   assert.equal(generated.length, 1);
   assert.equal((await get(url("both"), "other-token")).statusCode, 200);
+});
+
+test("anonymous logins share one budget per network address, so new ones don't reset it", async () => {
+  const { get, generated, logs } = setup({ anonymousGate: createGate({ windowMs: 60_000, max: 1, concurrency: 4 }) });
+  assert.equal((await get(url("mens"), ANON_TOKEN, "198.51.100.5")).statusCode, 200);
+  assert.equal((await get(url("womens"), "anon-2", "198.51.100.5")).statusCode, 429);
+  // A client-written address in front of the one the proxy appended changes nothing.
+  assert.equal((await get(url("womens"), "anon-2", "192.0.2.99, 198.51.100.5")).statusCode, 429);
+  assert.equal((await get(url("womens"), "anon-2", "198.51.100.6")).statusCode, 200);
+  assert.equal((await get(url("both"), TOKEN, "198.51.100.5")).statusCode, 200, "Apple/Google accounts keep their own budget");
+  assert.equal(generated.length, 3);
+  const checks = logs.filter((l) => l.msg === "proxy_check");
+  assert.deepEqual([checks.length, checks[0].proxyTrusted, checks[0].proxyNetwork], [1, true, "100.64"]);
 });
 
 test("unknown products, shoes and missing photos are explained, not generated", async () => {

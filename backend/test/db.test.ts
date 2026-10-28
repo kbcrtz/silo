@@ -45,17 +45,19 @@ test("profile, saved items and measurements round-trip per user", { skip: !sql }
   assert.deepEqual(await data.get(other), { profile: null, saved: null, measurements: [] });
 });
 
-test("popular this week: weighted scores per season, straight from events", { skip: !sql }, async () => {
+test("popular this week: each user's strongest action per item, per season, straight from events", { skip: !sql }, async () => {
   const trends = createTrends(sql!);
   const season = `test-${randomUUID().slice(0, 8)}`;
-  const me = await newUser();
+  const [me, other] = [await newUser(), await newUser()];
   await trends.record(me, [
     { kind: "shop", itemId: "shopify-HOT", season, garment: "top", silhouette: "relaxed", family: "Green" },
-    { kind: "save", itemId: "shopify-HOT", season },
+    { kind: "shop", itemId: "shopify-SOLO", season },
+    { kind: "shop", itemId: "shopify-SOLO", season },
     { kind: "open", itemId: "shopify-MEH", season },
   ]);
+  await trends.record(other, [{ kind: "save", itemId: "shopify-HOT", season }, { kind: "open", itemId: "shopify-MEH", season }]);
   const t = await trends.trending(season);
-  assert.deepEqual(t.items, ["shopify-HOT"]); // 5 + 3 passes the bar; one open doesn't
+  assert.deepEqual(t.items, ["shopify-HOT"]); // two users, 5 + 3; SOLO has one user, MEH 2 points
   assert.deepEqual(await trends.trending("some-other-season"), { items: [], traits: [] });
 });
 

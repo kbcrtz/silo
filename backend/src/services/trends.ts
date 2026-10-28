@@ -24,33 +24,40 @@ export type Trends = {
 
 const TOP_ITEMS = 20;
 const TOP_TRAITS = 5;
-/**
- * Points needed to count as popular (shop 5, save 3, open 1): one open never is.
- * shortcut: one user can still reach it alone, count distinct users once there are many.
- */
+/** Points needed to count as popular (shop 5, save 3, open 1), each user counted once at their strongest action. */
 const MIN_SCORE = 6;
+/** So one person tapping can't make anything popular for everyone. */
+const MIN_USERS = 2;
 
 export function familyOfHex(hex: string): Family | null {
   return /^#[0-9a-f]{6}$/i.test(hex) ? familyFor(nameForHex(hex)) : null;
 }
 
-type Row = { item_id: string; garment: string | null; silhouette: string | null; color_family: string | null; score: number };
+/** One user's strongest action on one item; `voter` is the user id, or the event id once the account is deleted. */
+type Row = { voter: string; item_id: string; garment: string | null; silhouette: string | null; color_family: string | null; score: number };
 
 export function pickTrending(rows: Row[]): Trending {
-  const byItem = new Map<string, number>();
-  const byTrait = new Map<string, { trait: Trending["traits"][number]; score: number }>();
-  for (const r of rows) {
-    byItem.set(r.item_id, (byItem.get(r.item_id) ?? 0) + r.score);
-    if (!r.garment || !r.silhouette || !r.color_family) continue;
-    const key = `${r.garment}|${r.silhouette}|${r.color_family}`;
-    const seen = byTrait.get(key) ?? { trait: { garment: r.garment, silhouette: r.silhouette, family: r.color_family }, score: 0 };
-    seen.score += r.score;
-    byTrait.set(key, seen);
-  }
-  return {
-    items: [...byItem].filter(([, score]) => score >= MIN_SCORE).sort((a, b) => b[1] - a[1]).slice(0, TOP_ITEMS).map(([id]) => id),
-    traits: [...byTrait.values()].filter((t) => t.score >= MIN_SCORE).sort((a, b) => b.score - a.score).slice(0, TOP_TRAITS).map((t) => t.trait),
+  type Tally<T> = { value: T; votes: Map<string, number> };
+  const byItem = new Map<string, Tally<string>>();
+  const byTrait = new Map<string, Tally<Trending["traits"][number]>>();
+  const vote = <T>(tallies: Map<string, Tally<T>>, key: string, value: T, r: Row) => {
+    const t = tallies.get(key) ?? { value, votes: new Map() };
+    t.votes.set(r.voter, Math.max(t.votes.get(r.voter) ?? 0, r.score));
+    tallies.set(key, t);
   };
+  for (const r of rows) {
+    vote(byItem, r.item_id, r.item_id, r);
+    if (r.garment && r.silhouette && r.color_family)
+      vote(byTrait, `${r.garment}|${r.silhouette}|${r.color_family}`, { garment: r.garment, silhouette: r.silhouette, family: r.color_family }, r);
+  }
+  const top = <T>(tallies: Map<string, Tally<T>>, n: number) =>
+    [...tallies.values()]
+      .map((t) => ({ value: t.value, users: t.votes.size, score: [...t.votes.values()].reduce((a, b) => a + b, 0) }))
+      .filter((t) => t.score >= MIN_SCORE && t.users >= MIN_USERS)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, n)
+      .map((t) => t.value);
+  return { items: top(byItem, TOP_ITEMS), traits: top(byTrait, TOP_TRAITS) };
 }
 
 export function isPopular(p: { itemId: string; garment?: string; silhouette?: string; family?: string | null }, t: Trending): boolean {
@@ -91,14 +98,15 @@ export function createTrends(sql: postgres.Sql): Trends {
       }));
       await sql`INSERT INTO events ${sql(rows, "user_id", "kind", "item_id", "season", "garment", "silhouette", "color_family")}`;
     },
-    // Weighted scores (shop 5, save 3, open 1) over the last week, straight from events (indexed on season, at).
+    // Each user's strongest action per item (shop 5, save 3, open 1) over the last week, straight from events (indexed on season, at).
+    // shortcut: one row per user and item reaches Node, move the totals into SQL when a season's week has ~100k of them.
     async trending(season) {
       const rows = await sql<Row[]>`
-        SELECT item_id, garment, silhouette, color_family,
-          sum(CASE kind WHEN 'shop' THEN 5 WHEN 'save' THEN 3 ELSE 1 END)::int AS score
+        SELECT coalesce(user_id::text, id::text) AS voter, item_id, garment, silhouette, color_family,
+          max(CASE kind WHEN 'shop' THEN 5 WHEN 'save' THEN 3 ELSE 1 END)::int AS score
         FROM events
         WHERE season = ${season} AND at > now() - INTERVAL '7 days'
-        GROUP BY item_id, garment, silhouette, color_family`;
+        GROUP BY 1, item_id, garment, silhouette, color_family`;
       return pickTrending(rows);
     },
   };
