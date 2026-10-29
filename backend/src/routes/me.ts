@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { HttpError } from "../errors.ts";
+import { compactPhoto, MAX_BYTES } from "../services/image.ts";
 import type { Verify } from "../auth.ts";
+import type { Gate } from "../guard.ts";
 import type { DeleteAccount } from "../services/account.ts";
 import type { RevokeApple } from "../services/appleRevoke.ts";
 import { GARMENTS, SILHOUETTES } from "../services/listingInsights.ts";
@@ -50,9 +52,9 @@ const Events = z.object({
 /**
  * The signed-in user's data in Postgres, moved there from the phone after
  * sign-up: GET /me, PUT /me/profile, PUT /me/saved, POST /me/measurements,
- * POST /events, POST /me/merge (an anonymous user signing in to an existing
- * Apple/Google account), and DELETE /me (deletes the account, revoking Sign in
- * with Apple first). Selfie photos stay on the phone.
+ * PUT and GET /me/photo, POST /events, POST /me/merge (an anonymous user
+ * signing in to an existing Apple/Google account), and DELETE /me (deletes the
+ * account, revoking Sign in with Apple first).
  * The app's onRequest hook has already checked the login, so req.userId is set.
  */
 export async function meRoute(
@@ -63,7 +65,8 @@ export async function meRoute(
     deleteAccount,
     verify,
     revokeApple,
-  }: { userData?: UserData; trends?: Trends; deleteAccount?: DeleteAccount; verify: Verify; revokeApple?: RevokeApple },
+    eventsGate,
+  }: { userData?: UserData; trends?: Trends; deleteAccount?: DeleteAccount; verify: Verify; revokeApple?: RevokeApple; eventsGate?: Gate },
 ) {
   async function handle<S>(
     route: string,
@@ -152,6 +155,10 @@ export async function meRoute(
 
   app.post("/events", (req, reply) =>
     handle("events", trends, req, reply, async (t, user, diag) => {
+      if (eventsGate) {
+        if (eventsGate.tryEnter(user) === "rate") throw new HttpError("rate_limited", 429);
+        eventsGate.leave(); // a window only: the insert is cheap, nothing to hold a slot for
+      }
       const parsed = Events.safeParse(req.body);
       if (!parsed.success) throw new HttpError("invalid_request", 400);
       const events = parsed.data.events.map(({ color, ...e }) => {
@@ -160,6 +167,32 @@ export async function meRoute(
       });
       await t.record(user, events);
       diag.recorded = events.length;
+    }),
+  );
+
+  // The passport photo, compacted here so the database and downloads stay small.
+  app.put("/me/photo", (req, reply) =>
+    handle("photo", userData, req, reply, async (data, user, diag) => {
+      const file = await req.file({ limits: { fileSize: MAX_BYTES, files: 1 } }).catch(() => null);
+      if (!file || file.fieldname !== "photo") throw new HttpError("missing_photo", 400);
+      const upload = await file.toBuffer().catch((e: { code?: string }) => {
+        throw e.code === "FST_REQ_FILE_TOO_LARGE" ? new HttpError("file_too_large", 413) : new HttpError("invalid_request", 400);
+      });
+      const photo = await compactPhoto(upload);
+      await data.putPhoto(user, photo);
+      diag.bytes = photo.length;
+    }),
+  );
+
+  app.get("/me/photo", (req, reply) =>
+    handle("photo_get", userData, req, reply, async (data, user) => {
+      const photo = await data.getPhoto(user);
+      if (!photo) throw new HttpError("no_photo", 404);
+      // The app keeps its own copy; the ETag only spares a download when nothing changed.
+      const etag = `"${photo.updatedAt.getTime()}"`;
+      reply.header("etag", etag).header("cache-control", "private, no-cache");
+      if (req.headers["if-none-match"] === etag) return reply.code(304).send();
+      return reply.header("content-type", "image/jpeg").send(photo.image);
     }),
   );
 

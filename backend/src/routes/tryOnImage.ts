@@ -26,13 +26,19 @@ const Query = z.strictObject({
  */
 export async function tryOnImageRoute(
   app: FastifyInstance,
-  { catalog, enrich, tryOn, tryOnGate }: { catalog: Catalog; enrich?: Enrich; tryOn?: TryOn; tryOnGate?: Gate },
+  {
+    catalog,
+    enrich,
+    tryOn,
+    tryOnGate,
+    anonymousTryOnGate,
+  }: { catalog: Catalog; enrich?: Enrich; tryOn?: TryOn; tryOnGate?: Gate; anonymousTryOnGate?: Gate },
 ) {
   app.get("/catalog/tryon-image", async (req, reply) => {
     const started = performance.now();
     // Counts only: no product photos or prompts.
     const diag: Record<string, unknown> = {};
-    let entered = false;
+    const entered: Gate[] = [];
     try {
       if (!tryOn) throw new HttpError("tryon_unavailable", 503);
       const query = Query.safeParse(req.query);
@@ -48,11 +54,13 @@ export async function tryOnImageRoute(
       diag.saved = Boolean(saved);
       if (saved) return reply.header("content-type", "image/jpeg").header("cache-control", "private, max-age=86400").send(saved);
 
-      // Generation is billed: a budget per signed-in user.
-      if (tryOnGate) {
-        const slot = tryOnGate.tryEnter(req.userId ?? req.ip);
+      // Generation is billed: a budget per signed-in user, and per IP across anonymous logins.
+      const gates: [Gate | undefined, string][] = [[tryOnGate, req.userId ?? req.ip], [req.anonymous ? anonymousTryOnGate : undefined, req.ip]];
+      for (const [gate, key] of gates) {
+        if (!gate) continue;
+        const slot = gate.tryEnter(key);
         if (slot !== "ok") throw new HttpError(slot === "rate" ? "rate_limited" : "busy", slot === "rate" ? 429 : 503);
-        entered = true;
+        entered.push(gate);
       }
 
       const raw = await catalog.getProduct(id, color.length ? color : undefined);
@@ -90,7 +98,7 @@ export async function tryOnImageRoute(
       if (err.providerStatus) diag.providerStatus = err.providerStatus;
       return reply.code(err.status).send({ error: err.code });
     } finally {
-      if (entered) tryOnGate?.leave();
+      for (const gate of entered) gate.leave();
       diag.durationMs = Math.round(performance.now() - started);
       req.log.info({ tryOnImage: diag }, "tryon_image");
     }

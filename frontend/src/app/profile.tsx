@@ -24,6 +24,8 @@ import {
   MEASUREMENT_INFO,
   MEASUREMENT_TYPES,
 } from "@/lib/measurements";
+import { deletePhoto, persistPhoto } from "@/lib/photos";
+import { pickSelfie } from "@/lib/pickPhoto";
 import { formatMeasurement } from "@/lib/units";
 import { useAccount } from "@/store/account";
 import { useMeasurements } from "@/store/measurements";
@@ -116,6 +118,15 @@ export default function Profile() {
       { text: "Redo", onPress: () => profile.set({ onboarded: false }) },
     ]);
 
+  // Only the passport picture changes; the color analysis stays as it is.
+  const changePhoto = async () => {
+    const uri = await pickSelfie();
+    if (!uri) return;
+    const old = profile.selfiePhoto;
+    profile.set({ selfiePhoto: persistPhoto(uri, "selfie") });
+    if (old) deletePhoto(old);
+  };
+
   const resetApp = () =>
     Alert.alert(
       "Reset Silo?",
@@ -178,6 +189,11 @@ export default function Profile() {
               borderRadius: t.radius.sm,
               padding: t.space(3),
             }}
+          />
+          <Button
+            variant="secondary"
+            label={profile.selfiePhoto ? "Change photo" : "Add photo"}
+            onPress={changePhoto}
           />
         </Card>
       ) : null}

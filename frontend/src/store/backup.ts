@@ -1,4 +1,4 @@
-import type { Backup } from "@/api/userData";
+import { downloadPhoto, type Backup } from "@/api/userData";
 import { rememberItems, type CatalogItem } from "@/data/catalog";
 import { entriesFromBackup, isEmptyInstall } from "@/lib/cloud";
 import { useMeasurements } from "./measurements";
@@ -25,6 +25,12 @@ export function applyBackup(backup: Backup) {
     useMeasurements
       .getState()
       .replaceAll(entriesFromBackup(backup.measurements));
+}
+
+/** Puts the account's passport photo back as the selfie, when it has one. */
+export async function restorePhoto() {
+  const photo = await downloadPhoto();
+  if (photo) useProfile.setState({ selfiePhoto: photo, photoSynced: photo });
 }
 
 /** Empties the phone: profile, measurements and saved items. */

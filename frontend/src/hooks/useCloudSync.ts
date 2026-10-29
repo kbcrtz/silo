@@ -4,10 +4,17 @@ import {
   backupProfile,
   backupSaved,
   fetchBackup,
+  uploadPhoto,
 } from "@/api/userData";
-import { measurementRows, profileSnapshot, savedSnapshot } from "@/lib/cloud";
+import {
+  measurementRows,
+  photoToUpload,
+  profileSnapshot,
+  savedSnapshot,
+} from "@/lib/cloud";
+import { photoUri } from "@/lib/photos";
 import { useAccount } from "@/store/account";
-import { applyBackup, installIsEmpty } from "@/store/backup";
+import { applyBackup, installIsEmpty, restorePhoto } from "@/store/backup";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
@@ -28,15 +35,17 @@ function debounced(run: () => Promise<unknown>) {
 /** On an empty install, puts back what the server has for this user. */
 async function restore() {
   const backup = installIsEmpty() ? await fetchBackup() : null;
-  if (backup) applyBackup(backup);
+  if (!backup) return;
+  applyBackup(backup);
+  await restorePhoto();
 }
 
 /**
  * Once the stores have loaded: restores an empty install from the server,
- * then backs everything up now and after every change (profile without the
- * selfie, saved items, measurements). Restoring first keeps an empty phone
- * from overwriting the server copy. Starts over when the signed-in user
- * changes, and stops while sign-in has it paused.
+ * then backs everything up now and after every change (profile, the selfie
+ * as the passport photo, saved items, measurements). Restoring first keeps
+ * an empty phone from overwriting the server copy. Starts over when the
+ * signed-in user changes, and stops while sign-in has it paused.
  */
 export function useCloudSync(ready: boolean) {
   const userId = useAccount((s) =>
@@ -59,6 +68,15 @@ export function useCloudSync(ready: boolean) {
             debounced(() =>
               backupProfile(profileSnapshot(useProfile.getState())),
             ),
+          ],
+          [
+            useProfile,
+            debounced(async () => {
+              const photo = photoToUpload(useProfile.getState());
+              if (!photo) return;
+              await uploadPhoto(photoUri(photo));
+              useProfile.setState({ photoSynced: photo });
+            }),
           ],
           [
             useSaved,

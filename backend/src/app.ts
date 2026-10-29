@@ -62,6 +62,12 @@ export function buildApp(deps: {
   tryOn?: TryOn;
   /** Per-user budget for generating those images. */
   tryOnGate?: Gate;
+  /** Per-IP budget for those images across anonymous logins, since a new anonymous login is free. */
+  anonymousTryOnGate?: Gate;
+  /** Per-user budget for POST /events. */
+  eventsGate?: Gate;
+  /** Proxy addresses (comma-separated IPs/CIDRs) whose X-Forwarded-For is believed, so req.ip is the client, not the proxy. */
+  trustProxy?: string;
 }) {
   // Request logs keep the path only: discover's query string carries palette colors and search text.
   const req = (r: { method: string; url: string }) => ({ method: r.method, url: r.url.split("?")[0] });
@@ -72,6 +78,7 @@ export function buildApp(deps: {
     requestIdHeader: false, // never trust a client-supplied id
     // A stalled upload would otherwise hold a color-analysis slot until the socket dies.
     requestTimeout: 60_000,
+    trustProxy: deps.trustProxy,
   });
   // Fastify's own errors (bad JSON, body too large, unknown route) in the app's { error } shape.
   app.setErrorHandler((err: { statusCode?: number }, req, reply) => {
@@ -83,7 +90,15 @@ export function buildApp(deps: {
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not_found" }));
   app.decorateRequest("userId", null);
   app.decorateRequest("anonymous", false);
+  let proxyChecked = false;
   app.addHook("onRequest", async (req, reply) => {
+    if (!proxyChecked && req.headers["x-forwarded-for"]) {
+      proxyChecked = true;
+      // Once per process, so a deploy shows whether TRUST_PROXY matches the host's proxy. Only the address's network half is logged.
+      const proxy = req.socket.remoteAddress ?? "";
+      const network = proxy.includes(".") ? proxy.split(".").slice(0, 2).join(".") : proxy.split(":").slice(0, 3).join(":");
+      req.log.info({ proxyTrusted: req.ip !== proxy, proxyNetwork: network }, "proxy_check");
+    }
     const header = req.headers.authorization;
     const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
     const user = token ? await deps.verify(token) : null;

@@ -7,7 +7,12 @@ import {
 } from "@react-native-google-signin/google-signin";
 import type { Provider } from "@/lib/account";
 import { useAccount } from "@/store/account";
-import { applyBackup, clearLocalData, installIsEmpty } from "@/store/backup";
+import {
+  applyBackup,
+  clearLocalData,
+  installIsEmpty,
+  restorePhoto,
+} from "@/store/backup";
 import { useProfile } from "@/store/profile";
 import { USE_MOCKS, sleep } from "./config";
 import { signInAnonymously, supabase } from "./supabase";
@@ -93,11 +98,12 @@ async function connect(provider: Provider, token: string) {
   // Linking failed, normally because the identity already has an account.
   const signedIn = await supabase.auth.signInWithIdToken({ provider, token });
   if (signedIn.error) throw signedIn.error;
+  const empty = installIsEmpty();
   const backup =
-    anonymous && !installIsEmpty()
-      ? await mergeAnonymous(anonymous)
-      : await fetchBackup();
+    anonymous && !empty ? await mergeAnonymous(anonymous) : await fetchBackup();
   if (backup) applyBackup(backup);
+  // An empty phone has no selfie yet; the account's passport photo is it.
+  if (empty) await restorePhoto();
 }
 
 /** Runs `job` with the backups stopped, so they restart for the right user. */

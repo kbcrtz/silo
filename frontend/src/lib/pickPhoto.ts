@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { Alert } from "react-native";
+import { ActionSheetIOS, Alert } from "react-native";
 
 /**
  * Camera or library, returning the picked image uri or null if the user
@@ -35,4 +35,24 @@ export async function pickPhoto(
       ? await ImagePicker.launchCameraAsync(options)
       : await ImagePicker.launchImageLibraryAsync(options);
   return result.canceled ? null : result.assets[0].uri;
+}
+
+/** The selfie sheet: the front camera or the library. Null when cancelled. */
+export function pickSelfie(): Promise<string | null> {
+  return new Promise((resolve) =>
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: ["Take a selfie", "Choose from library", "Cancel"],
+        cancelButtonIndex: 2,
+      },
+      (i) =>
+        resolve(
+          i === 0
+            ? pickPhoto("camera", "front")
+            : i === 1
+              ? pickPhoto("library")
+              : null,
+        ),
+    ),
+  );
 }

@@ -9,10 +9,20 @@ const data = (state: State) =>
     Object.entries(state).filter(([, v]) => typeof v !== "function"),
   );
 
-/** The profile as backed up online. The selfie stays on the phone, so its file name isn't sent. */
+/** The profile as backed up online. The photo goes up on its own (PUT /me/photo); file names only mean something on this phone. */
 export function profileSnapshot(state: State): State {
-  const { selfiePhoto: _, ...rest } = data(state);
+  const { selfiePhoto: _, photoSynced: __, ...rest } = data(state);
   return rest;
+}
+
+/** The selfie file to upload, or null when the server already has it. */
+export function photoToUpload(p: {
+  selfiePhoto?: string;
+  photoSynced?: string;
+}): string | null {
+  return p.selfiePhoto && p.selfiePhoto !== p.photoSynced
+    ? p.selfiePhoto
+    : null;
 }
 
 export function savedSnapshot(state: State): State {

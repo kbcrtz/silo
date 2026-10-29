@@ -120,6 +120,10 @@ const tryOn = createTryOn({
 });
 // 20 new images per user per 10 minutes, 3 at once; saved images don't count.
 const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 3 });
+// Anonymous logins are free to make, so together they get 60 per IP per 10 minutes: room for a few people on one Wi-Fi.
+const anonymousTryOnGate = createGate({ windowMs: 10 * 60_000, max: 60, concurrency: 3 });
+// The app sends a batch at most every 3 s of tapping; this is far above that and stops a flood of rows.
+const eventsGate = createGate({ windowMs: 10 * 60_000, max: 100, concurrency: 1 });
 
 // One person retaking a selfie stays under this. A loop does not, and only two Gemini calls run at once.
 const gate = createGate({ windowMs: 10 * 60_000, max: 8, concurrency: 2 });
@@ -140,6 +144,10 @@ const app = buildApp({
   trends,
   tryOn,
   tryOnGate,
+  anonymousTryOnGate,
+  eventsGate,
+  // Railway's proxy connects from 100.64.0.0/10 and appends the client's address to X-Forwarded-For.
+  trustProxy: process.env.TRUST_PROXY ?? "100.64.0.0/10",
   locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }),
 });
 await app.listen({ port: Number(process.env.PORT ?? 8080), host: "0.0.0.0" });

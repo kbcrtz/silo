@@ -4,16 +4,16 @@ import { Writable } from "node:stream";
 import { test } from "node:test";
 import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp } from "../src/app.ts";
-import { createGate } from "../src/guard.ts";
+import { createGate, type Gate } from "../src/guard.ts";
 import type { Catalog } from "../src/services/shopifyCatalog.ts";
 import type { AppEvent, Trending, Trends } from "../src/services/trends.ts";
-import { TOKEN, USER, verify } from "./fixtures/auth.ts";
+import { ANON_TOKEN, TOKEN, USER, verify } from "./fixtures/auth.ts";
 import { sweater, trouser } from "./fixtures/shopify.ts";
 
 const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis.v1.json", import.meta.url), "utf8")));
 const SECRET = "test-secret-0123456789";
 
-function setup(opts: { trends?: Trends | null; trending?: Trending } = {}) {
+function setup(opts: { trends?: Trends | null; trending?: Trending; eventsGate?: Gate } = {}) {
   const recorded: { user: string; events: AppEvent[] }[] = [];
   const asked: string[] = [];
   const trends: Trends = {
@@ -46,9 +46,11 @@ function setup(opts: { trends?: Trends | null; trending?: Trending } = {}) {
     verify,
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     trends: opts.trends === null ? undefined : (opts.trends ?? trends),
+    eventsGate: opts.eventsGate,
+    allowAnonymous: true,
   });
-  const call = (method: "GET" | "POST", url: string, payload?: unknown) =>
-    app.inject({ method, url, payload: payload as never, headers: { authorization: `Bearer ${TOKEN}` } });
+  const call = (method: "GET" | "POST", url: string, payload?: unknown, token = TOKEN) =>
+    app.inject({ method, url, payload: payload as never, headers: { authorization: `Bearer ${token}` } });
   return { call, recorded, asked, logs };
 }
 
@@ -69,6 +71,16 @@ test("bad events never reach the database", async () => {
     assert.equal((await call("POST", "/events", { events })).statusCode, 400);
   }
   assert.equal(recorded.length, 0);
+});
+
+test("past the per-user budget, events are dropped with 429; other users keep theirs", async () => {
+  const { call, recorded } = setup({ eventsGate: createGate({ windowMs: 60_000, max: 1, concurrency: 4 }) });
+  assert.equal((await call("POST", "/events", { events: [open] })).statusCode, 204);
+  const res = await call("POST", "/events", { events: [open] });
+  assert.equal(res.statusCode, 429);
+  assert.deepEqual(res.json(), { error: "rate_limited" });
+  assert.equal((await call("POST", "/events", { events: [open] }, ANON_TOKEN)).statusCode, 204);
+  assert.equal(recorded.length, 2);
 });
 
 test("without a database, events answer 503", async () => {

@@ -4,16 +4,18 @@ import {
   eventFor,
   isEmptyInstall,
   measurementRows,
+  photoToUpload,
   profileSnapshot,
   savedSnapshot,
 } from "../cloud";
 
 describe("cloud backup snapshots", () => {
-  it("backs up the profile without the selfie or store functions", () => {
+  it("backs up the profile without the photo's file names or store functions", () => {
     const snap = profileSnapshot({
       onboarded: true,
       shopFor: "womens",
       selfiePhoto: "selfie-123.jpg",
+      photoSynced: "selfie-100.jpg",
       photoTraits: { warmth: 0.2, depth: 0, clarity: -0.4, confidence: 0.8 },
       quizAnswers: { veins: "green" },
       set: () => {},
@@ -25,6 +27,22 @@ describe("cloud backup snapshots", () => {
       photoTraits: { warmth: 0.2, depth: 0, clarity: -0.4, confidence: 0.8 },
       quizAnswers: { veins: "green" },
     });
+  });
+
+  it("uploads the photo only when it differs from the one the server has", () => {
+    expect(
+      photoToUpload({
+        selfiePhoto: "selfie-2.jpg",
+        photoSynced: "selfie-1.jpg",
+      }),
+    ).toBe("selfie-2.jpg");
+    expect(
+      photoToUpload({
+        selfiePhoto: "selfie-2.jpg",
+        photoSynced: "selfie-2.jpg",
+      }),
+    ).toBeNull();
+    expect(photoToUpload({})).toBeNull();
   });
 
   it("backs up saved ids, lists and bookmarks only", () => {
