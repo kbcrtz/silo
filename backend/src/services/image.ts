@@ -58,3 +58,24 @@ export async function prepareSelfie(buf: Buffer): Promise<{ raw: RawImage; model
   }
   return { raw, modelJpeg };
 }
+
+/** Long side of the stored profile photo: sharp on the full-width passport card at 3x. */
+const PHOTO_SIDE = 480;
+
+/** The profile photo as stored: upright, at most 480 px, a ~30 KB JPEG with no EXIF or GPS. */
+export async function compactPhoto(buf: Buffer): Promise<Buffer> {
+  if (buf.length === 0) throw new HttpError("empty_file", 400);
+  if (buf.length > MAX_BYTES) throw new HttpError("file_too_large", 413);
+  if (!sniff(buf)) throw new HttpError("unsupported_image_type", 415);
+  try {
+    return await sharp(buf, { failOn: "error", limitInputPixels: MAX_PIXELS })
+      .rotate()
+      .resize({ width: PHOTO_SIDE, height: PHOTO_SIDE, fit: "inside", withoutEnlargement: true })
+      .removeAlpha()
+      .toColourspace("srgb")
+      .jpeg({ quality: 75, mozjpeg: true })
+      .toBuffer();
+  } catch (e) {
+    throw /pixel limit/i.test(String(e)) ? new HttpError("image_dimensions", 422) : new HttpError("invalid_image", 400);
+  }
+}

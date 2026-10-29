@@ -1,13 +1,7 @@
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import {
-  ActionSheetIOS,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { analyzeSelfieOnce } from "@/api/colorAnalysis";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
@@ -16,7 +10,7 @@ import { Header, stepBadge } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { persistPhoto, photoUri } from "@/lib/photos";
-import { pickPhoto } from "@/lib/pickPhoto";
+import { pickSelfie } from "@/lib/pickPhoto";
 import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
 
@@ -27,26 +21,14 @@ export default function Selfie() {
   const selfie = useProfile((s) => s.selfiePhoto);
   const set = useProfile((s) => s.set);
 
-  const take = async (source: "camera" | "library") => {
-    const uri = await pickPhoto(source, "front");
+  const choose = async () => {
+    const uri = await pickSelfie();
     if (!uri) return;
     const name = persistPhoto(uri, "selfie");
     set({ selfiePhoto: name, photoTraits: undefined });
     // Errors surface when the user asks for results, not here.
     analyzeSelfieOnce(photoUri(name)).catch(() => {});
   };
-
-  const choose = () =>
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: ["Take a selfie", "Choose from library", "Cancel"],
-        cancelButtonIndex: 2,
-      },
-      (i) => {
-        if (i === 0) take("camera");
-        if (i === 1) take("library");
-      },
-    );
 
   return (
     <OnboardingScreen>
@@ -58,8 +40,8 @@ export default function Selfie() {
         />
       </View>
       <Text style={[TYPE.body, { color: BRAND.inkSoft, marginTop: 14 }]}>
-        Face a window, skip filters and remove tinted glasses. Your photo stays
-        on this device.
+        Face a window, skip filters and remove tinted glasses. A small copy is
+        saved to your profile for your passport.
       </Text>
 
       <Pressable

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { HttpError } from "../src/errors.ts";
 import { test } from "node:test";
 import sharp from "sharp";
-import { prepareSelfie } from "../src/services/image.ts";
+import { compactPhoto, prepareSelfie } from "../src/services/image.ts";
 
 const solid = (width: number, height: number) =>
   sharp({ create: { width, height, channels: 3, background: { r: 200, g: 150, b: 120 } } });
@@ -72,4 +72,18 @@ test("samples and sends the same downscaled copy, so large photos stay cheap", a
   assert.deepEqual([meta.width, meta.height], [1536, 1024]);
   assert.deepEqual([out.raw.width, out.raw.height], [1536, 1024]);
   assert.equal(out.raw.data.length, 1536 * 1024 * 3);
+});
+
+test("the profile photo is stored small: upright, at most 480 px, a compact JPEG without metadata", async () => {
+  const big = await solid(3000, 4000).jpeg({ quality: 95 }).withMetadata({ orientation: 6 }).toBuffer();
+  const out = await compactPhoto(big);
+  const meta = await sharp(out).metadata();
+  assert.deepEqual([meta.format, meta.width, meta.height], ["jpeg", 480, 360]); // turned upright, long side 480
+  assert.equal(meta.exif, undefined);
+  assert.ok(out.length < 40_000, `${out.length} bytes`);
+});
+
+test("the profile photo takes the same image types as the selfie analysis", async () => {
+  await assert.rejects(compactPhoto(Buffer.from("not a photo")), (e: unknown) => e instanceof HttpError && e.status === 415);
+  await assert.rejects(compactPhoto(Buffer.alloc(0)), (e: unknown) => e instanceof HttpError && e.status === 400);
 });

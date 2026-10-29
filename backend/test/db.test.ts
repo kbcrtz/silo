@@ -75,6 +75,19 @@ test("deleting the account deletes its data and anonymizes its events", { skip: 
   assert.deepEqual(events, { n: 1, owned: 0 });
 });
 
+test("the profile photo is replaced on change, moves on merge and goes with the account", { skip: !sql }, async () => {
+  const data = createUserData(sql!);
+  const [anon, account] = [await newUser(), await newUser()];
+  assert.equal(await data.getPhoto(account), null);
+  await data.putPhoto(account, Buffer.from("old"));
+  await data.putPhoto(anon, Buffer.from("new"));
+  await data.merge(anon, account);
+  assert.equal((await data.getPhoto(account))?.image.toString(), "new", "the newer photo wins");
+  assert.equal(await data.getPhoto(anon), null);
+  await sql!`DELETE FROM auth.users WHERE id = ${account}`;
+  assert.equal(await data.getPhoto(account), null);
+});
+
 test("try-on images are saved and served by key", { skip: !sql }, async () => {
   const store = postgresStore(sql!);
   const key = `test|${randomUUID()}`;

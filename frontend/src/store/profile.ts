@@ -32,6 +32,8 @@ type ProfileState = {
   gender?: Gender;
   /** File names from lib/photos, not uris. */
   selfiePhoto?: string;
+  /** The selfie file the server has a copy of (PUT /me/photo), so it's uploaded once per change. */
+  photoSynced?: string;
   photoTraits?: PhotoTraits;
   /** Answers about how the selfie was taken; they correct photoTraits. */
   photoContext: PhotoContext;
@@ -70,6 +72,7 @@ export const useProfile = create<ProfileState>()(
           age: undefined,
           gender: undefined,
           selfiePhoto: undefined,
+          photoSynced: undefined,
           photoTraits: undefined,
           colorProfile: undefined,
         }),

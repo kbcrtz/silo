@@ -3,16 +3,20 @@ import {
   backupMeasurements,
   backupProfile,
   backupSaved,
+  downloadPhoto,
   fetchBackup,
+  uploadPhoto,
 } from "@/api/userData";
 import { rememberItems, type CatalogItem } from "@/data/catalog";
 import {
   entriesFromBackup,
   isEmptyInstall,
   measurementRows,
+  photoToUpload,
   profileSnapshot,
   savedSnapshot,
 } from "@/lib/cloud";
+import { photoUri } from "@/lib/photos";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
@@ -40,6 +44,8 @@ async function restore() {
   const backup = empty ? await fetchBackup() : null;
   if (!backup) return;
   if (backup.profile) useProfile.setState(backup.profile);
+  const photo = await downloadPhoto();
+  if (photo) useProfile.setState({ selfiePhoto: photo, photoSynced: photo });
   if (backup.saved) {
     useSaved.setState(backup.saved);
     rememberItems(
@@ -54,8 +60,8 @@ async function restore() {
 
 /**
  * Once the stores have loaded: restores an empty install from the server,
- * then backs everything up now and after every change (profile without the
- * selfie, saved items, measurements). Restoring first keeps an empty phone
+ * then backs everything up now and after every change (profile, the selfie
+ * as the passport photo, saved items, measurements). Restoring first keeps an empty phone
  * from overwriting the server copy.
  */
 export function useCloudSync(hydrated: boolean) {
@@ -74,6 +80,15 @@ export function useCloudSync(hydrated: boolean) {
             debounced(() =>
               backupProfile(profileSnapshot(useProfile.getState())),
             ),
+          ],
+          [
+            useProfile,
+            debounced(async () => {
+              const photo = photoToUpload(useProfile.getState());
+              if (!photo) return;
+              await uploadPhoto(photoUri(photo));
+              useProfile.setState({ photoSynced: photo });
+            }),
           ],
           [
             useSaved,

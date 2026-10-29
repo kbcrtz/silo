@@ -1,6 +1,15 @@
+import { File } from "expo-file-system";
 import type { CatalogItem } from "@/data/catalog";
 import { eventFor, type EventKind } from "@/lib/cloud";
-import { API_URL, USE_MOCKS, apiHeaders, expectOk, isSignedIn } from "./config";
+import { newPhotoName, photoUri } from "@/lib/photos";
+import {
+  API_URL,
+  USE_MOCKS,
+  apiHeaders,
+  expectOk,
+  fileField,
+  isSignedIn,
+} from "./config";
 
 /**
  * Deletes the signed-in user's account and all their data on the server
@@ -78,6 +87,7 @@ async function send(method: "PUT" | "POST", path: string, body: unknown) {
  * - GET /me -> { profile, saved, measurements }
  * - DELETE /me [{ appleAuthorizationCode }] -> 204 (revokes Apple, deletes the account)
  * - POST /me/merge { anonymousToken } -> { profile, saved, measurements }
+ * - PUT /me/photo, GET /me/photo: see uploadPhoto and downloadPhoto
  * No token -> 401 { error: "unauthorized" }.
  */
 export const backupProfile = (data: Record<string, unknown>) =>
@@ -90,6 +100,43 @@ export const backupMeasurements = (
   entries.length
     ? send("POST", "/me/measurements", { entries })
     : Promise.resolve();
+
+/**
+ * Saves the selfie as the account's passport photo; the server keeps a ~30 KB copy.
+ * Backend contract: PUT /me/photo, multipart `photo` (JPEG, PNG or WebP) -> 204
+ */
+export async function uploadPhoto(uri: string) {
+  if (USE_MOCKS || !isSignedIn()) return;
+  const body = new FormData();
+  body.append("photo", fileField(uri, "photo.jpg"));
+  await fetch(`${API_URL}/me/photo`, {
+    method: "PUT",
+    headers: apiHeaders(),
+    body,
+  }).then(expectOk);
+}
+
+/**
+ * The account's passport photo, saved into the photos directory; returns its
+ * file name, or null when there is none (404 no_photo) or the phone is offline.
+ * Backend contract: GET /me/photo -> image/jpeg
+ */
+export async function downloadPhoto(): Promise<string | null> {
+  if (USE_MOCKS || !isSignedIn()) return null;
+  const name = newPhotoName("selfie");
+  try {
+    await File.downloadFileAsync(
+      `${API_URL}/me/photo`,
+      new File(photoUri(name)),
+      {
+        headers: apiHeaders(),
+      },
+    );
+    return name;
+  } catch {
+    return null;
+  }
+}
 
 // Events go in batches: a burst of taps is one request.
 const queue: ReturnType<typeof eventFor>[] = [];

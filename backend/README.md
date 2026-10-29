@@ -48,7 +48,7 @@ The app already calls these, behind mocks, in `frontend/src/api/`. Match these s
 - `GET /catalog/discover` → `{ products: CatalogProduct[], cursor: string | null, source: "shopify" }`. **Implemented**; see [Catalog](#catalog).
 - `GET /catalog/product?id=<gid>&selected=<JSON>` → `{ product: CatalogProduct }` with images, description and variants. **Implemented.**
 - `GET /catalog/tryon-image?id=<gid>&shopFor=&category=&selected=<JSON>&guide=<JSON>` → `image/jpeg`: a full-body mannequin with the shopper's proportions wearing the product, in the variant's color. **Implemented**; see [AI try-on images](#ai-try-on-images).
-- `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`, `POST /events`, `POST /me/merge`, `DELETE /me`: the signed-in user's data, keyed by their Supabase user id. **Implemented**; see [User data](#user-data).
+- `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`, `PUT`/`GET /me/photo`, `POST /events`, `POST /me/merge`, `DELETE /me`: the signed-in user's data, keyed by their Supabase user id. **Implemented**; see [User data](#user-data).
 
 Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non-2xx as "couldn't analyze", offering retake or quiz-only.
 
@@ -148,16 +148,18 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
 
 ## User data
 
-Onboarding (quiz, selfie analysis, passport) runs logged out and keeps everything on the phone. After sign-up the app sends that data here, and keeps it current from then on. Rows are keyed by the Supabase user id from the login token (`src/services/userData.ts`). Without `DATABASE_URL` the routes answer 503 `data_unavailable` and everything else works. Selfie photos never leave the phone.
+Onboarding (quiz, selfie analysis, passport) runs logged out and keeps everything on the phone. After sign-up the app sends that data here, and keeps it current from then on. Rows are keyed by the Supabase user id from the login token (`src/services/userData.ts`). Without `DATABASE_URL` the routes answer 503 `data_unavailable` and everything else works. The selfie is kept only as the passport photo, compacted here to a ~30 KB JPEG (at most 480 px, no EXIF or GPS).
 
 | Route | Body | Table |
 | --- | --- | --- |
-| `PUT /me/profile` | `{ data }`, the profile store without the selfie file name (≤ 32 KB); replaces | `profiles` (jsonb) |
+| `PUT /me/profile` | `{ data }`, the profile store without the photo file names (≤ 32 KB); replaces | `profiles` (jsonb) |
 | `PUT /me/saved` | `{ data }`, saved ids, lists and bookmarks (≤ 256 KB); replaces | `saved` (jsonb) |
 | `POST /me/measurements` | `{ entries: [{ type, value, measuredAt }] }` → `{ added }`; types height, weight, chest, bust, waist, hips, inseam, armLength; dates from 2000 to tomorrow; appends, and resending is a no-op | `measurements` |
+| `PUT /me/photo` | multipart `photo` (JPEG, PNG or WebP, ≤ 8 MB) → 204; stored upright, at most 480 px, ~30 KB JPEG without metadata; replaces. 400 `missing_photo`, 415 `unsupported_image_type`, 413 `file_too_large` | `profile_photos` (bytea) |
+| `GET /me/photo` | → `image/jpeg` with an `ETag`; `If-None-Match` with it answers 304. 404 `no_photo` | |
 | `GET /me` | → `{ profile, saved, measurements }` (newest 1000 measurements); the app restores from it after signing in on an empty install | |
 | `DELETE /me` | Optional `{ appleAuthorizationCode }`. Revokes the Sign in with Apple token first when a code is sent and `APPLE_*` is set (a failed revocation is logged and the deletion goes ahead), then deletes the account through Supabase's admin API (`SUPABASE_SECRET_KEY`); the user's rows go with it, their events stay as anonymous counts. 503 `account_delete_unavailable` without the key, 502 `account_delete_failed` if Supabase refuses | |
-| `POST /me/merge` | `{ anonymousToken }`, sent with the Apple/Google account's own token → `{ profile, saved, measurements }`. For a shopper whose Apple/Google identity already had an account, so linking the anonymous user failed: moves the anonymous user's data in (measurements added, the newer profile wins, the account's saved items win, events move), then deletes the anonymous user. 400 `invalid_merge` unless the body token is a valid anonymous login, different from the caller, and the caller isn't anonymous | |
+| `POST /me/merge` | `{ anonymousToken }`, sent with the Apple/Google account's own token → `{ profile, saved, measurements }`. For a shopper whose Apple/Google identity already had an account, so linking the anonymous user failed: moves the anonymous user's data in (measurements added, the newer profile and photo win, the account's saved items win, events move), then deletes the anonymous user. 400 `invalid_merge` unless the body token is a valid anonymous login, different from the caller, and the caller isn't anonymous | |
 
 **Sign-in (Apple / Google through Supabase Auth).** Apple is enabled on the project with client ID `com.siloapp.ios` (native only: no secret), and manual identity linking is on, so the app links Apple/Google to the anonymous user (`supabase.auth.linkIdentity` with the ID token) and keeps the same user id and data. If the identity already has an account, the app signs in to it and calls `POST /me/merge`. Apple requires token revocation on account deletion: set `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (a Sign in with Apple key, `.p8`; `src/services/appleRevoke.ts`). Google needs its iOS and web client IDs on the project before it can be enabled.
 

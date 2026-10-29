@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Writable } from "node:stream";
 import { test } from "node:test";
+import sharp from "sharp";
 import { loadRules } from "../src/analysis/evaluate.ts";
 import { buildApp } from "../src/app.ts";
 import { createGate } from "../src/guard.ts";
@@ -18,6 +19,8 @@ function fakeData() {
   const profiles = new Map<string, unknown>();
   const saved = new Map<string, unknown>();
   const measurements = new Map<string, Measurement[]>();
+  const photos = new Map<string, { image: Buffer; updatedAt: Date }>();
+  let clock = Date.parse("2026-10-28T10:00:00Z");
   const data: UserData = {
     async get(user) {
       return { profile: profiles.get(user) ?? null, saved: saved.get(user) ?? null, measurements: measurements.get(user) ?? [] };
@@ -34,12 +37,19 @@ function fakeData() {
       measurements.set(user, [...list, ...fresh]);
       return fresh.length;
     },
+    async getPhoto(user) {
+      return photos.get(user) ?? null;
+    },
+    async putPhoto(user, image) {
+      photos.set(user, { image, updatedAt: new Date((clock += 1000)) });
+    },
     async merge(from, to) {
       merges.push([from, to]);
+      if (photos.has(from)) photos.set(to, photos.get(from)!);
       await data.addMeasurements(to, measurements.get(from) ?? []);
       if (profiles.has(from)) profiles.set(to, profiles.get(from)); // the newer one; the anonymous profile is from just now
       if (!saved.has(to) && saved.has(from)) saved.set(to, saved.get(from));
-      for (const m of [profiles, saved, measurements]) m.delete(from);
+      for (const m of [profiles, saved, measurements, photos]) m.delete(from);
     },
   };
   const merges: [string, string][] = [];
@@ -80,7 +90,16 @@ function setup(
       payload: payload as never,
       headers: token ? { authorization: `Bearer ${token}` } : {},
     });
-  return { call, logs };
+  const putPhoto = async (file: Buffer, token = TOKEN, field = "photo") => {
+    const form = new FormData();
+    form.append(field, new Blob([new Uint8Array(file)], { type: "image/jpeg" }), "selfie.jpg");
+    const req = new Request("http://local/", { method: "PUT", body: form });
+    const payload = Buffer.from(await req.arrayBuffer());
+    return app.inject({ method: "PUT", url: "/me/photo", payload, headers: { authorization: `Bearer ${token}`, "content-type": req.headers.get("content-type")! } });
+  };
+  const getPhoto = (token = TOKEN, etag?: string) =>
+    app.inject({ method: "GET", url: "/me/photo", headers: { authorization: `Bearer ${token}`, ...(etag && { "if-none-match": etag }) } });
+  return { call, logs, putPhoto, getPhoto };
 }
 
 const profile = { onboarded: true, shopFor: "womens", colorProfile: { seasonId: "soft-autumn" }, unitSystem: "imperial" };
@@ -200,6 +219,36 @@ test("signing in with Apple/Google to an existing account takes over the anonymo
   assert.deepEqual(me.profile, profile);
   assert.deepEqual(me.saved, { itemIds: ["mine-already"] }, "the account's own saved items win");
   assert.equal(me.measurements.length, 1);
+});
+
+const selfie = () => sharp({ create: { width: 1200, height: 1600, channels: 3, background: { r: 200, g: 150, b: 120 } } }).jpeg().toBuffer();
+
+test("the profile photo is stored compacted and comes back; an unchanged copy isn't sent again", async () => {
+  const { putPhoto, getPhoto } = setup();
+  assert.deepEqual((await getPhoto()).json(), { error: "no_photo" });
+  assert.equal((await putPhoto(await selfie())).statusCode, 204);
+  const res = await getPhoto();
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers["content-type"], "image/jpeg");
+  assert.equal((await sharp(res.rawPayload).metadata()).height, 480);
+  const etag = String(res.headers.etag);
+  assert.equal((await getPhoto(TOKEN, etag)).statusCode, 304);
+  await putPhoto(await selfie()); // changing it
+  assert.equal((await getPhoto(TOKEN, etag)).statusCode, 200);
+});
+
+test("photo uploads need the photo field and a real image", async () => {
+  const { putPhoto } = setup();
+  assert.deepEqual((await putPhoto(await selfie(), TOKEN, "selfie")).json(), { error: "missing_photo" });
+  assert.equal((await putPhoto(Buffer.from("not a photo"))).statusCode, 415);
+});
+
+test("the anonymous user's photo moves into the account on merge", async () => {
+  const data = fakeData();
+  const { putPhoto, getPhoto, call } = setup(data, async () => {});
+  await putPhoto(await selfie(), ANON_TOKEN);
+  await call("POST", "/me/merge", { anonymousToken: ANON_TOKEN });
+  assert.equal((await getPhoto()).statusCode, 200);
 });
 
 test("a merge only takes a genuine anonymous login, into a real Apple/Google account", async () => {
