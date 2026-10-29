@@ -30,7 +30,6 @@ export default function PassportStep() {
   const { width } = useWindowDimensions();
   const data = usePassportData();
   const seasonId = useProfile((s) => s.colorProfile?.seasonId);
-  const set = useProfile((s) => s.set);
   const member = useAccount((s) => s.account.kind === "member");
   const [stamp, setStamp] = useState(false);
 
@@ -48,10 +47,9 @@ export default function PassportStep() {
     };
   }, []);
 
-  // Setting onboarded swaps the root stack's protected groups; the router
-  // moves to the tabs on its own. Not signed in yet: sign-up comes first.
+  // Sign-up comes next unless already signed in; the paywall ends onboarding.
   const finish = () =>
-    member ? set({ onboarded: true }) : router.push("/onboarding/account");
+    router.push(member ? "/onboarding/paywall" : "/onboarding/account");
 
   return (
     <OnboardingScreen

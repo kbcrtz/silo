@@ -17,18 +17,23 @@ const TOP = 30;
 /**
  * An onboarding step: the gradient behind, content scrolling over it with
  * the design's margins. Buttons live in the flow, as in the frames, so a
- * keyboard pushes the content up rather than covering it.
+ * keyboard pushes the content up rather than covering it. A `footer` stays
+ * pinned below the scrolling content instead, for screens whose action must
+ * stay in view (the paywall).
  */
 export function OnboardingScreen({
   backdrop = "neutral",
   children,
   contentStyle,
+  footer,
 }: {
   backdrop?: BackdropId;
   children: ReactNode;
   contentStyle?: ViewStyle;
+  footer?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const bottom = Math.max(insets.bottom, 16) + 16;
   return (
     <View style={{ flex: 1 }}>
       <Backdrop id={backdrop} />
@@ -42,13 +47,24 @@ export function OnboardingScreen({
               flexGrow: 1,
               paddingHorizontal: GUTTER,
               paddingTop: TOP,
-              paddingBottom: Math.max(insets.bottom, 16) + 16,
+              paddingBottom: footer ? 24 : bottom,
             },
             contentStyle,
           ]}
         >
           {children}
         </ScrollView>
+        {footer ? (
+          <View
+            style={{
+              paddingHorizontal: GUTTER,
+              paddingTop: 12,
+              paddingBottom: bottom,
+            }}
+          >
+            {footer}
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </View>
   );

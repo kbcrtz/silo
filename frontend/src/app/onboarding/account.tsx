@@ -8,23 +8,24 @@ import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
 
 /**
- * Sign-up, after the passport: links Apple or Google to the phone's
- * anonymous user so the profile, measurements and saved pieces come back on
- * a new phone. With `?returning=1` (from the first step) it signs a returning
+ * Sign-up, between the passport and the paywall: links Apple or Google to
+ * the phone's anonymous user so the profile, measurements and saved pieces
+ * come back on a new phone. With `?returning=1` (from the first step) it signs a returning
  * shopper in instead; a restored profile is onboarded, and the root stack
  * moves to home on its own.
  */
 export default function AccountStep() {
   const { returning } = useLocalSearchParams<{ returning?: string }>();
-  const set = useProfile((s) => s.set);
 
-  // Setting onboarded swaps the root stack's protected groups.
+  // A restored profile is onboarded, and the root stack moves home itself.
   const done = returning
     ? () => {
         if (!useProfile.getState().onboarded) router.back();
       }
-    : () => set({ onboarded: true });
-  const skip = returning ? () => router.back() : () => set({ onboarded: true });
+    : () => router.push("/onboarding/paywall");
+  const skip = returning
+    ? () => router.back()
+    : () => router.push("/onboarding/paywall");
 
   return (
     <OnboardingScreen contentStyle={{ gap: 20 }}>
