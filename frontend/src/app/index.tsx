@@ -120,11 +120,7 @@ export default function Home() {
   const backdrop = useSeasonBackdrop();
 
   const entries = useMemo(
-    () =>
-      feed.entries.map((r) => ({
-        item: r.item,
-        score: r.color || r.silhouette ? r.score : undefined,
-      })),
+    () => feed.entries.map((r) => ({ item: r.item })),
     [feed.entries],
   );
   const loading = feed.status === "loading";

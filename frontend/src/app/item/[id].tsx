@@ -21,7 +21,6 @@ import { SIZE_CHARTS } from "@/data/sizeCharts";
 import { useLatestMeasurements } from "@/hooks/useRecommendations";
 import { bodyShape } from "@/lib/bodyShape";
 import { recommendSize } from "@/lib/fit";
-import { paletteMatch } from "@/lib/paletteMatch";
 import { tryOnImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
@@ -110,9 +109,7 @@ export default function ItemSheet() {
     );
   }
 
-  const color =
-    t.season && item.colors.length ? paletteMatch(item.colors, t.season) : null;
-  // Live listings: color comes from the merchant's color name, cut from the title.
+  // Live listings: the cut is estimated from the title.
   const estimated = item.source ? "≈ " : "";
   const fit = shape ? silhouetteMatch(item.silhouette, shape.shape) : null;
   const chart = SIZE_CHARTS[item.sizeChartId];
@@ -235,11 +232,6 @@ export default function ItemSheet() {
         <View
           style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space(2) }}
         >
-          {color && t.season ? (
-            <Pill
-              label={`${estimated}${color.score}% ${t.season.name} match`}
-            />
-          ) : null}
           {fit && shape ? (
             <Pill label={`${fit.label} · ${shape.name}`} />
           ) : null}

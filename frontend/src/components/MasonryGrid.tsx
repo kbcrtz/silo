@@ -4,7 +4,7 @@ import type { CatalogItem } from "@/data/catalog";
 import { useTheme } from "@/theme";
 import { ItemCard, type Pick } from "./ItemCard";
 
-type Entry = { item: CatalogItem; score?: number };
+type Entry = { item: CatalogItem };
 
 /**
  * Two-column Pinterest-style grid. Each item goes into whichever column is
@@ -42,12 +42,11 @@ export function MasonryGrid({
       {width > 0 &&
         columns.map((column, i) => (
           <View key={i} style={{ flex: 1, gap: t.space(4) }}>
-            {column.map(({ item, score }) => (
+            {column.map(({ item }) => (
               <ItemCard
                 key={item.id}
                 item={item}
                 width={columnWidth}
-                score={score}
                 footer={footer?.(item)}
                 pick={pick?.(item)}
               />

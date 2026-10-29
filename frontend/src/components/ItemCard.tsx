@@ -17,14 +17,11 @@ export type Pick = { picked: boolean; onPress: () => void };
 export function ItemCard({
   item,
   width,
-  score,
   footer,
   pick,
 }: {
   item: CatalogItem;
   width: number;
-  /** 0-100 recommendation score; the badge is hidden without one. */
-  score?: number;
   /** Below the caption, e.g. a Shop link on saved items. */
   footer?: ReactNode;
   pick?: Pick;
@@ -47,7 +44,7 @@ export function ItemCard({
         }}
       >
         <ProductImage item={item} />
-        {score !== undefined || item.popular ? (
+        {item.popular ? (
           <View
             style={{
               position: "absolute",
@@ -61,11 +58,7 @@ export function ItemCard({
               style={{ paddingHorizontal: t.space(2) }}
             >
               <Text variant="caption" style={{ color: BRAND.ink }}>
-                {score !== undefined
-                  ? `${item.source ? "≈" : ""}${score}% match`
-                  : ""}
-                {score !== undefined && item.popular ? " · " : ""}
-                {item.popular ? "Popular" : ""}
+                Popular
               </Text>
             </GlassPill>
           </View>
