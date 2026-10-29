@@ -12,6 +12,14 @@ export const TEMPLATE_VERSION = 4;
 
 const NOUN: Record<Garment, string> = { top: "top", bottom: "bottoms", outerwear: "jacket or coat", dress: "dress" };
 
+const STUDIO = "standing straight with arms relaxed at its sides, framed from the top of the head to the feet, on a seamless pure white (#FFFFFF) background with no floor line, no shadow and no vignette, soft even studio lighting.";
+const formOf = (department: Department) => (department === "womens" ? "female" : department === "mens" ? "male" : "gender-neutral");
+/** The mannequin with the diagram's body, for prompts with a body guide as image 1. */
+const shapedMannequin = (department: Department) =>
+  `A clean full-body studio product photo for a fashion app's try-on view: a matte light-gray, faceless ${formOf(department)} dress-form mannequin, a solid 3D figure with soft studio shading, whose body has exactly the silhouette in image 1: the same shoulder, chest, waist, hip, thigh and leg widths relative to its height, and the same leg length. Do not slim, lengthen or idealize the body: a fuller body stays fuller, a petite body stays petite. Front view, ${STUDIO}`;
+// Naming the product helps the model pick the right piece from a photo with other clothes in it.
+const quoted = (title: string) => `("${title.replace(/["\n]/g, "").slice(0, 120)}")`;
+
 /**
  * The fixed prompt every try-on image uses, so all products come out in one
  * consistent studio style: a full-body faceless mannequin wearing only the
@@ -21,25 +29,48 @@ const NOUN: Record<Garment, string> = { top: "top", bottom: "bottoms", outerwear
  * the diagram, the garment's look and cut from the photo.
  */
 export function tryOnPrompt({ category, department, cut, title, build }: { category: Garment; department: Department; cut?: string; title?: string; build?: string }): string {
-  const form = department === "womens" ? "female" : department === "mens" ? "male" : "gender-neutral";
   const noun = NOUN[category];
-  const studio = "standing straight with arms relaxed at its sides, framed from the top of the head to the feet, on a seamless pure white (#FFFFFF) background with no floor line, no shadow and no vignette, soft even studio lighting.";
-  // Naming the product helps the model pick the right piece from a photo with other clothes in it.
-  const named = title ? ` ("${title.replace(/["\n]/g, "").slice(0, 120)}")` : "";
+  const named = title ? ` ${quoted(title)}` : "";
   return [
     ...(build
       ? [
           `Image 1 is a body diagram, not a picture: the flat pale-blue silhouette is one specific person's body, ${build}. Image 2 is a store photo of a product${named}.`,
-          `A clean full-body studio product photo for a fashion app's try-on view: a matte light-gray, faceless ${form} dress-form mannequin, a solid 3D figure with soft studio shading, whose body has exactly the silhouette in image 1: the same shoulder, chest, waist, hip, thigh and leg widths relative to its height, and the same leg length. Do not slim, lengthen or idealize the body: a fuller body stays fuller, a petite body stays petite. Front view, ${studio}`,
+          shapedMannequin(department),
           `The mannequin wears ONLY the ${noun} from image 2. It keeps the colors, pattern, fabric, neckline, collar, pockets, buttons, cut, length and every other detail of its photo, sized to this body: fitted pieces follow its curves, loose pieces hang from it. Ignore the person, pose, background and any other clothing in the store photo.`,
         ]
       : [
           "A clean full-body studio product photo for a fashion app's try-on view.",
-          `A matte light-gray, faceless ${form} dress-form mannequin, front view, ${studio}`,
+          `A matte light-gray, faceless ${formOf(department)} dress-form mannequin, front view, ${STUDIO}`,
           `The mannequin wears ONLY the ${noun} from the store photo. Reproduce it faithfully: the same colors, pattern, fabric, collar, pockets, buttons, sleeve length and overall length${cut ? `, worn as ${cut}` : ""}. Ignore the person, pose, background and any other clothing in the store photo.`,
         ]),
     `Everywhere the ${noun} doesn't cover, the mannequin is bare: smooth matte light-gray mannequin surface, with no other clothing, no shoes and nothing else.`,
     ...(build ? ["Never copy the diagram's flat style or its blue color: the mannequin is a shaded 3D light-gray figure."] : []),
+    "No text, no watermarks, no accessories, no people.",
+  ].join("\n");
+}
+
+/** Bumped when the full-fit template changes. */
+export const FIT_VERSION = 1;
+/** Inner layers first, so the jacket comes last and is worn over them. */
+export const FIT_ORDER: Garment[] = ["top", "bottom", "dress", "outerwear"];
+
+/**
+ * One image of a whole fit (2 or 3 pieces, in FIT_ORDER) on the shopper's
+ * body: image 1 is the body diagram, then one store photo per piece. Each
+ * photo is named by its listing title, which stopped the model taking a
+ * color from the wrong photo in testing.
+ */
+export function fitPrompt({ pieces, department, build }: { pieces: { category: Garment; title: string }[]; department: Department; build: string }): string {
+  const image = (i: number) => `image ${i + 2}`;
+  const under = pieces.find((p) => p.category === "top" || p.category === "dress")?.category;
+  const photos = pieces.map((p, i) => `${image(i)} is the ${NOUN[p.category]} ${quoted(p.title)}`).join(", ");
+  const wear = pieces.map((p, i) => `the ${NOUN[p.category]} from ${image(i)}${p.category === "outerwear" && under ? `, worn open over the ${under}` : ""}`).join(", ");
+  return [
+    `Image 1 is a body diagram, not a picture: the flat pale-blue silhouette is one specific person's body, ${build}. Images 2 to ${pieces.length + 1} are store photos of products: ${photos}.`,
+    shapedMannequin(department),
+    `The mannequin wears ONLY these pieces together as one outfit: ${wear}. Each piece keeps the colors, pattern, fabric, neckline, collar, pockets, buttons, cut, length and every other detail of its own photo, sized to this body: fitted pieces follow its curves, loose pieces hang from it. Never swap colors or details between pieces. Ignore the people, poses, backgrounds and any other clothing in the store photos.`,
+    "Everywhere the outfit doesn't cover, the mannequin is bare: smooth matte light-gray mannequin surface, with no other clothing, no shoes and nothing else.",
+    "Never copy the diagram's flat style or its blue color: the mannequin is a shaded 3D light-gray figure.",
     "No text, no watermarks, no accessories, no people.",
   ].join("\n");
 }
@@ -151,8 +182,8 @@ export type TryOnStore = {
 };
 export type TryOn = {
   fetchPhoto(url: string): Promise<Photo>;
-  /** `guide`: the body guide PNG, sent as image 1. */
-  generate(photo: Photo, prompt: string, guide?: Buffer): Promise<Buffer>;
+  /** `photos`: one store photo per piece. `guide`: the body guide PNG, sent as image 1. */
+  generate(photos: Photo[], prompt: string, guide?: Buffer): Promise<Buffer>;
   store: TryOnStore;
 };
 
@@ -174,9 +205,9 @@ export function createTryOn(opts: { generateContent: GenerateContent; model: str
       if (data.length > MAX_PHOTO_BYTES) throw new HttpError("no_photo", 422);
       return { data, mimeType: type.split(";")[0] };
     },
-    async generate(photo, prompt, guide) {
+    async generate(photos, prompt, guide) {
       // The body diagram goes first: placed after the photos, the model paid it less attention.
-      const images = [...(guide ? [{ data: guide, mimeType: "image/png" }] : []), photo];
+      const images = [...(guide ? [{ data: guide, mimeType: "image/png" }] : []), ...photos];
       const request = {
         model: opts.model,
         contents: [{ role: "user", parts: [...images.map((i) => ({ inlineData: { mimeType: i.mimeType, data: i.data.toString("base64") } })), { text: prompt }] }],

@@ -40,7 +40,7 @@ const DiscoverQuery = z.strictObject({
     .optional(),
 });
 
-const Selected = z.array(z.object({ name: z.string().max(100), label: z.string().max(100) })).max(10);
+export const Selected = z.array(z.object({ name: z.string().max(100), label: z.string().max(100) })).max(10);
 /** A query parameter holding JSON, checked against `schema`. */
 export const jsonParam = <T extends z.ZodType>(max: number, schema: T) =>
   z

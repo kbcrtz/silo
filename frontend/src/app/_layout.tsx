@@ -66,6 +66,8 @@ export default function RootLayout() {
           <Stack.Screen name="saved/[id]" options={pushed} />
           {/* Draws its own glass back button over the season gradient. */}
           <Stack.Screen name="profile" />
+          {/* Opened from the item sheet: a modal, since a pushed screen there stacks a blank header over the sheet. */}
+          <Stack.Screen name="fit" options={{ presentation: "modal" }} />
           <Stack.Screen
             name="measurements"
             options={{ headerShown: true, title: "Measurements" }}

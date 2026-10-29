@@ -31,9 +31,9 @@ import { deletePhoto, persistPhoto, photoUri } from "@/lib/photos";
 import { pickSelfie } from "@/lib/pickPhoto";
 import { formatMeasurement } from "@/lib/units";
 import { useAccount } from "@/store/account";
+import { clearLocalData } from "@/store/backup";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
-import { useSaved } from "@/store/saved";
 import { BRAND, TYPE } from "@/theme/brand";
 
 const FIT_OPTIONS: { id: FitPreference; label: string }[] = [
@@ -244,11 +244,7 @@ export default function Profile() {
         {
           text: "Reset",
           style: "destructive",
-          onPress: () => {
-            useMeasurements.getState().replaceAll([]);
-            useSaved.getState().clear();
-            profile.reset();
-          },
+          onPress: clearLocalData,
         },
       ],
     );

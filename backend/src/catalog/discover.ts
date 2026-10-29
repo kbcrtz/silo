@@ -58,6 +58,11 @@ export type DiscoverPage = {
   estimateError?: string;
 };
 
+/** The department a title names outright ("Women's Pleated Trouser"), else null. */
+export function titleDepartment(title: string): "womens" | "mens" | null {
+  return /\b(wom[ae]n['’]?s|ladies)\b/i.test(title) ? "womens" : /\bmen['’]?s\b/i.test(title) ? "mens" : null;
+}
+
 /**
  * One feed page. A category or search is a single 20-item search; For You
  * walks its query plan two queries at a time and, after the first pass,
@@ -111,12 +116,14 @@ export async function discover(
   const products: CatalogProduct[] = [];
   const raws: unknown[] = [];
   let dropped = 0;
+  // The department is only a word in the search, so Shopify mixes in some of the other one.
+  const other = params.shopFor === "womens" ? "mens" : params.shopFor === "mens" ? "womens" : null;
   const longest = Math.max(0, ...results.map((r) => r.products.length));
   for (let row = 0; row < longest; row++) {
     results.forEach((r, k) => {
       if (row >= r.products.length) return;
       const product = normalizeProduct(r.products[row], plan[picks[k]].category);
-      if (!product) return void dropped++;
+      if (!product || (other && titleDepartment(product.title) === other)) return void dropped++;
       const shown = perMerchant.get(product.merchant.name) ?? 0;
       if (seen.has(product.id) || shown >= PER_MERCHANT) return;
       seen.add(product.id);
@@ -140,7 +147,7 @@ export async function discover(
     insights.forEach((insight, k) => insight && (products[k].estimate = { ...insight, source: "ai" }));
     page.estimated = insights.filter(Boolean).length;
     // Shoes and bags tagged as clothing by Shopify can't go on the mannequin.
-    page.products = products.filter((p) => p.estimate?.clothing !== false);
+    page.products = products.filter((p) => p.estimate?.clothing !== false && (!other || p.estimate?.department !== other));
   } catch (e) {
     page.estimateError = e instanceof HttpError ? e.code : "estimate_failed";
   }

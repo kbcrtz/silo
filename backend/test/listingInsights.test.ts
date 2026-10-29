@@ -17,6 +17,7 @@ const insight = (i: number, patch: Record<string, unknown> = {}) => ({
   pattern: "solid",
   accent: null,
   clothing: true,
+  department: "unisex",
   evidence: "Olive Green; Relaxed fit & drawstring waist",
   ...patch,
 });
@@ -70,6 +71,7 @@ test("answers line up with listings by index; a bad item is skipped, not fatal",
     pattern: "solid",
     accent: null,
     clothing: true,
+    department: "unisex",
     evidence: "Olive Green; Relaxed fit & drawstring waist",
   });
 });
@@ -116,6 +118,7 @@ test("the prompt asks whether it's a garment and treats Tall as longer, not crop
   let prompt = "";
   await enricher(async (p: any) => ((prompt = p.input[0].text), { output_text: JSON.stringify({ items: [insight(0)] }) }))([listingFacts(trouser)!]);
   assert.match(prompt, /clothing: false for/);
+  assert.match(prompt, /department: womens/);
   assert.match(prompt, /Tall/);
 });
 

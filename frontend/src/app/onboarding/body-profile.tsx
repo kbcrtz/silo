@@ -265,8 +265,8 @@ export default function BodyProfile() {
           { color: BRAND.inkMuted, textAlign: "center", marginTop: 16 },
         ]}
       >
-        {"Saved on this device and backed up to Silo's server. "}
-        Your selfie stays on your phone.
+        Saved on this device and backed up to Silo&apos;s server, with a small
+        copy of your selfie for your passport.
       </Text>
     </OnboardingScreen>
   );
