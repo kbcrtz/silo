@@ -9,6 +9,7 @@ export const SILHOUETTES = ["fitted", "relaxed", "boxy", "wrap", "tailored", "cr
 const LENGTHS = ["waist", "hip", "thigh", "knee", "midi", "ankle"] as const;
 const SLEEVES = ["none", "short", "long"] as const;
 const PATTERNS = ["solid", "plaid", "stripes", "print"] as const;
+const DEPARTMENTS = ["womens", "mens", "unisex"] as const;
 const hex = z
   .string()
   .regex(/^#[0-9A-Fa-f]{6}$/)
@@ -25,6 +26,7 @@ const Item = z.strictObject({
   pattern: z.enum(PATTERNS),
   accent: hex,
   clothing: z.boolean(),
+  department: z.enum(DEPARTMENTS),
   evidence: z.string().max(200),
 });
 // Gemini takes a JSON Schema; the draft URI is not part of its supported subset.
@@ -40,6 +42,8 @@ export type Insight = {
   accent: string | null;
   /** False for shoes, bags and other non-garments that slip through Shopify's clothing filter. */
   clothing: boolean;
+  /** Who it's made for; Shopify search mixes some of the other department into a "men's" or "women's" search. */
+  department: (typeof DEPARTMENTS)[number];
   /** The listing's own words the estimate rests on. */
   evidence: string;
 };
@@ -60,6 +64,7 @@ For each listing, by its index i:
 - length: where the hem falls on the body: waist, hip, thigh, knee, midi or ankle. "Tall", "long" or "longline" means longer, never cropped; only "crop" or "cropped" means waist.
 - sleeve: none, short or long. Null for bottoms.
 - clothing: false for anything that isn't a garment worn on the body: shoes, sneakers, boots, bags, jewelry, hats, socks, belts. Fill the other fields anyway.
+- department: womens when the listing is made or sold for women (women's, ladies, her, maternity, a women's cut or women's sizes), mens when for men (men's, his, a men's cut or men's sizes), unisex when it says unisex or the text doesn't say.
 - evidence: the few words from the listing you relied on, under 10 words.`;
 
 /**
@@ -101,7 +106,7 @@ export function createEnricher(opts: { create: CreateInteraction; model: string;
     for (const raw of items) {
       const item = Item.safeParse(raw);
       if (!item.success || item.data.i >= out.length || out[item.data.i]) continue;
-      const { hex, confidence, category, silhouette, length, sleeve, pattern, accent, clothing, evidence } = item.data;
+      const { hex, confidence, category, silhouette, length, sleeve, pattern, accent, clothing, department, evidence } = item.data;
       out[item.data.i] = {
         hex,
         confidence,
@@ -109,6 +114,7 @@ export function createEnricher(opts: { create: CreateInteraction; model: string;
         pattern,
         accent: pattern === "solid" ? null : accent,
         clothing,
+        department,
         evidence,
       };
     }

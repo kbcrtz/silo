@@ -167,6 +167,7 @@ describe("toCatalogItem with the backend's AI estimate", () => {
     pattern: "solid" as const,
     accent: null,
     clothing: true,
+    department: "unisex" as const,
     evidence: "Tobacco; relaxed wide leg",
     source: "ai" as const,
   };

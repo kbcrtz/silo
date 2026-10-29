@@ -103,6 +103,7 @@ const insight = (patch: Partial<Insight> = {}): Insight => ({
   pattern: "solid",
   accent: null,
   clothing: true,
+  department: "unisex",
   evidence: "relaxed trouser",
   ...patch,
 });

@@ -53,6 +53,8 @@ export type CatalogProduct = {
     pattern: "solid" | "plaid" | "stripes" | "print";
     accent: string | null;
     clothing: boolean;
+    /** Who it's made for; the backend already drops the other department from a men's or women's feed. */
+    department: "womens" | "mens" | "unisex";
     evidence: string;
     source: "ai";
   };

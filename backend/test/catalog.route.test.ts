@@ -206,7 +206,7 @@ test("each product gets the AI's estimate of its color and cut from the listing 
     seen.push(facts);
     return facts.map((f, i) =>
       i === 0
-        ? { hex: "#6B7A3A", confidence: "high" as const, cut: { category: "bottom" as const, silhouette: "relaxed" as const, length: "ankle" as const }, pattern: "solid" as const, accent: null, clothing: true, evidence: "Olive Green; relaxed fit" }
+        ? { hex: "#6B7A3A", confidence: "high" as const, cut: { category: "bottom" as const, silhouette: "relaxed" as const, length: "ankle" as const }, pattern: "solid" as const, accent: null, clothing: true, department: "unisex" as const, evidence: "Olive Green; relaxed fit" }
         : null,
     );
   };
@@ -221,6 +221,7 @@ test("each product gets the AI's estimate of its color and cut from the listing 
     pattern: "solid",
     accent: null,
     clothing: true,
+    department: "unisex",
     evidence: "Olive Green; relaxed fit",
     source: "ai",
   });
@@ -261,11 +262,41 @@ test("listings the AI says aren't clothing (sneakers, bags) are dropped from the
       pattern: "solid" as const,
       accent: null,
       clothing: i !== 0,
+      department: "unisex" as const,
       evidence: i === 0 ? "sneaker" : "trouser",
     }));
   const { get } = setup({ products: [trouser, sweater], enrich });
   const body = (await get("/catalog/discover?category=all")).json();
   assert.deepEqual(body.products.map((p: any) => p.id), [sweater.id]);
+});
+
+test("a men's feed drops listings the AI reads as women's, and the other way round; unisex stays", async () => {
+  const department = ["womens", "unisex"] as const;
+  const enrich: Enrich = async (facts) =>
+    facts.map((_, i) => ({
+      hex: null,
+      confidence: "low" as const,
+      cut: { category: "bottom" as const, silhouette: "straight" as const, length: "ankle" as const },
+      pattern: "solid" as const,
+      accent: null,
+      clothing: true,
+      department: department[i],
+      evidence: "trouser",
+    }));
+  const ids = async (shopFor: string) =>
+    (await setup({ products: [trouser, sweater], enrich }).get(`/catalog/discover?category=all&shopFor=${shopFor}`)).json().products.map((p: any) => p.id);
+  assert.deepEqual(await ids("mens"), [sweater.id]);
+  assert.deepEqual(await ids("womens"), [trouser.id, sweater.id]);
+  assert.deepEqual(await ids("both"), [trouser.id, sweater.id]);
+});
+
+test("without estimates, a title naming the other department still keeps it out", async () => {
+  const womens = { ...trouser, id: "gid://shopify/p/W0m3n5", title: "Women’s Pleated Trouser" }; // the curly apostrophe stores often use
+  const mens = { ...sweater, id: "gid://shopify/p/M3n5", title: "Men's Merino Crew" };
+  const ids = async (shopFor: string) =>
+    (await setup({ products: [womens, mens] }).get(`/catalog/discover?category=all&shopFor=${shopFor}`)).json().products.map((p: any) => p.id);
+  assert.deepEqual(await ids("mens"), [mens.id]);
+  assert.deepEqual(await ids("womens"), [womens.id]);
 });
 
 test("a seed reshuffles the first page; the cursor keeps that seed's plan for later pages", async () => {
