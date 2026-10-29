@@ -23,6 +23,12 @@ type Props = {
   /** The hairline around the edge, as in the design. */
   edge?: string;
   interactive?: boolean;
+  /**
+   * An opaque fill instead of glass, for selected (ink) states. Liquid glass
+   * only tints, and on a device it adapts to what's behind it and to dark
+   * mode, so an ink tint can wash out to white under white text.
+   */
+  solid?: boolean;
 };
 
 /**
@@ -37,6 +43,7 @@ export function Glass({
   fill = BRAND.glassFill,
   edge = BRAND.glassEdge,
   interactive,
+  solid,
 }: Props) {
   const outline = (
     <View
@@ -47,7 +54,7 @@ export function Glass({
       ]}
     />
   );
-  if (LIQUID_GLASS) {
+  if (LIQUID_GLASS && !solid) {
     return (
       <GlassView
         glassEffectStyle={variant}

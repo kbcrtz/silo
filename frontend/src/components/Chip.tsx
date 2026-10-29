@@ -28,6 +28,7 @@ export function Chip({
       <GlassPill
         height={height}
         fill={selected ? BRAND.ink : undefined}
+        solid={selected}
         interactive
         style={{ paddingHorizontal: 15 }}
       >

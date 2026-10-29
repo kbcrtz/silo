@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { sleep } from "@/api/config";
+import { sleep, USE_MOCKS } from "@/api/config";
 import { startSession } from "@/api/supabase";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useHydrated } from "@/store/storage";
 import { useCloudSync } from "@/hooks/useCloudSync";
+import { useAccount } from "@/store/account";
 import { useTheme } from "@/theme";
 import { BRAND, useBrandFonts } from "@/theme/brand";
 
@@ -23,6 +24,9 @@ export default function RootLayout() {
   }, []);
   useCloudSync(hydrated && sessionReady);
   const onboarded = useProfile((s) => s.onboarded);
+  const member = useAccount((s) => s.account.kind === "member");
+  // Everyone signs in; mock mode has no accounts to sign in to.
+  const inApp = onboarded && (member || USE_MOCKS);
   const fontsLoaded = useBrandFonts();
   const t = useTheme();
 
@@ -42,11 +46,11 @@ export default function RootLayout() {
           headerBackButtonDisplayMode: "minimal",
         }}
       >
-        {/* Flipping `onboarded` swaps which group exists; the router redirects on its own. */}
-        <Stack.Protected guard={!onboarded}>
+        {/* Flipping `inApp` swaps which group exists; the router redirects on its own. */}
+        <Stack.Protected guard={!inApp}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
-        <Stack.Protected guard={onboarded}>
+        <Stack.Protected guard={inApp}>
           {/* One home screen; everything else opens from its top bar. */}
           <Stack.Screen name="index" />
           <Stack.Screen

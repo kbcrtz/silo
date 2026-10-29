@@ -27,11 +27,14 @@ export function GlassPill({
   fill = PILL_FILL,
   shadow = true,
   interactive,
+  solid,
   style,
   children,
 }: {
   height: number;
   fill?: string;
+  /** Opaque, for a selected (ink) pill; see Glass. */
+  solid?: boolean;
   /** Off for pills that sit over a photo, where a shadow would muddy it. */
   shadow?: boolean;
   interactive?: boolean;
@@ -44,6 +47,7 @@ export function GlassPill({
       fill={fill}
       edge={PILL_EDGE}
       interactive={interactive}
+      solid={solid}
       style={[
         {
           height,

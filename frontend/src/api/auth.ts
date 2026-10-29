@@ -142,13 +142,15 @@ export function signIn(provider: Provider): Promise<boolean> {
 
 /** Leaves the account: empties the phone and starts over as a new anonymous user. */
 async function startOver() {
+  // Emptied first, so the app goes back to the opening rather than to the
+  // sign-in that onboarded users without an account are sent to.
+  clearLocalData();
   if (supabase && !USE_MOCKS) {
     await GoogleSignin.signOut().catch(() => {});
     // Signs out locally even when the server can't be reached.
     await supabase.auth.signOut().catch(() => {});
   }
   useAccount.setState({ account: { kind: "none" } });
-  clearLocalData();
   if (!USE_MOCKS) await signInAnonymously().catch(() => {});
 }
 
