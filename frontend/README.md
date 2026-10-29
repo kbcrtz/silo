@@ -18,7 +18,7 @@ npm start          # later runs: just start Metro and open the installed app
 
 Rebuild (`npm run ios`) only after adding a native package or changing `app.json`. JS changes reload over Metro.
 
-In the app, **Use demo profile** on the welcome screen (or **Load demo profile** on the Profile screen) skips onboarding with a finished Soft Autumn profile and measurement history.
+In the app, long-pressing the **Silo** wordmark on the welcome screen skips onboarding with a finished Soft Autumn profile and measurement history.
 
 ## Building for phones (EAS)
 

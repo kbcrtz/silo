@@ -42,10 +42,10 @@ const G_PATHS = [
   },
 ];
 
-function GoogleLogo() {
+export function GoogleLogo({ size = ICON }: { size?: number }) {
   return (
-    <Canvas style={{ width: ICON, height: ICON }}>
-      <Group transform={[{ scale: ICON / 48 }]}>
+    <Canvas style={{ width: size, height: size }}>
+      <Group transform={[{ scale: size / 48 }]}>
         {G_PATHS.map((p) => (
           <Path key={p.color} path={p.d} color={p.color} />
         ))}

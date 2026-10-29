@@ -64,7 +64,8 @@ export default function RootLayout() {
           />
           <Stack.Screen name="saved/index" options={pushed} />
           <Stack.Screen name="saved/[id]" options={pushed} />
-          <Stack.Screen name="profile" options={pushed} />
+          {/* Draws its own glass back button over the season gradient. */}
+          <Stack.Screen name="profile" />
           <Stack.Screen
             name="measurements"
             options={{ headerShown: true, title: "Measurements" }}

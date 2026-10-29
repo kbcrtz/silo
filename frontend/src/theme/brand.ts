@@ -37,6 +37,8 @@ export const BRAND = {
   inkSoft: "rgba(23,19,17,0.55)",
   inkMuted: "rgba(23,19,17,0.45)",
   inkFaint: "rgba(23,19,17,0.22)",
+  /** Dividers between rows on glass. */
+  hairline: "rgba(23,19,17,0.1)",
   /** Outlines on inputs and choice buttons. */
   outline: "#8B8B8D",
   outlineSoft: "rgba(139,139,141,0.45)",

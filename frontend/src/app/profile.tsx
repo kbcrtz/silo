@@ -1,22 +1,25 @@
-import { Link } from "expo-router";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { useMemo } from "react";
 import {
   Alert,
-  Pressable,
+  ScrollView,
+  Text,
   TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { removeAccount, signOut } from "@/api/auth";
-import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
-import { Chip } from "@/components/Chip";
+import { GlassRow, GlassSection, GlassSegmented } from "@/components/GlassList";
+import { Backdrop, useSeasonBackdrop } from "@/components/onboarding/Backdrop";
+import { Header } from "@/components/onboarding/Header";
+import { Headline } from "@/components/onboarding/Headline";
+import { GUTTER } from "@/components/onboarding/OnboardingScreen";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { usePassportData } from "@/components/passport/usePassportData";
-import { Screen } from "@/components/Screen";
-import { SignInButtons } from "@/components/SignInButtons";
-import { Text } from "@/components/Text";
-import { loadDemoProfile } from "@/data/demo";
+import { GoogleLogo, SignInButtons } from "@/components/SignInButtons";
 import { bodyShape } from "@/lib/bodyShape";
 import type { FitPreference } from "@/lib/fit";
 import {
@@ -24,21 +27,99 @@ import {
   MEASUREMENT_INFO,
   MEASUREMENT_TYPES,
 } from "@/lib/measurements";
-import { deletePhoto, persistPhoto } from "@/lib/photos";
+import { deletePhoto, persistPhoto, photoUri } from "@/lib/photos";
 import { pickSelfie } from "@/lib/pickPhoto";
 import { formatMeasurement } from "@/lib/units";
 import { useAccount } from "@/store/account";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
-import { useTheme } from "@/theme";
+import { BRAND, TYPE } from "@/theme/brand";
 
-const FIT_PREFERENCES: FitPreference[] = ["slim", "regular", "relaxed"];
+const FIT_OPTIONS: { id: FitPreference; label: string }[] = [
+  { id: "slim", label: "Slim" },
+  { id: "regular", label: "Regular" },
+  { id: "relaxed", label: "Relaxed" },
+];
 
 const PROVIDER_NAMES = { apple: "Apple", google: "Google" };
+/** The widest the passport gets, so it doesn't swamp a large phone. */
+const CARD_MAX = 340;
+/** Inside a section, where content lines up with its rows. */
+const PAD = 18;
+
+/** The section's photo: the selfie in a small circle, or a placeholder. */
+function PhotoThumb({ selfie }: { selfie?: string }) {
+  return selfie ? (
+    <Image
+      source={photoUri(selfie)}
+      contentFit="cover"
+      style={{ width: 32, height: 32, borderRadius: 16 }}
+    />
+  ) : (
+    <SymbolView
+      name="person.crop.circle"
+      size={24}
+      weight="light"
+      tintColor={BRAND.ink}
+      style={{ width: 32, height: 32 }}
+    />
+  );
+}
+
+/** Body shape over the latest of each measurement, three to a row. */
+function BodySummary() {
+  const entries = useMeasurements((s) => s.entries);
+  const unitSystem = useProfile((s) => s.unitSystem);
+  const latest = useMemo(() => latestMeasurements(entries), [entries]);
+  const shape = bodyShape(latest);
+  const types = MEASUREMENT_TYPES.filter((type) => latest[type] !== undefined);
+
+  return (
+    <View style={{ padding: PAD, gap: 14 }}>
+      {shape ? (
+        <View style={{ gap: 2 }}>
+          <Text style={[TYPE.eyebrow, { color: BRAND.inkSoft }]}>
+            BODY SHAPE
+          </Text>
+          <Text style={TYPE.metal}>{shape.name}</Text>
+        </View>
+      ) : (
+        <Text style={[TYPE.eyebrow, { color: BRAND.inkSoft }]}>
+          {types.length ? "LATEST MEASUREMENTS" : "BODY SHAPE"}
+        </Text>
+      )}
+      {types.length ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 12 }}>
+          {types.map((type) => (
+            <View key={type} style={{ width: "33.33%", gap: 2 }}>
+              <Text style={[TYPE.caption, { color: BRAND.inkSoft }]}>
+                {MEASUREMENT_INFO[type].label}
+              </Text>
+              <Text
+                style={[TYPE.control, { fontFamily: TYPE.button.fontFamily }]}
+              >
+                {formatMeasurement(type, latest[type]!, unitSystem)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={[TYPE.bodySmall, { color: BRAND.inkSoft }]}>
+          Add your measurements for sizes picked to fit you.
+        </Text>
+      )}
+      {!shape && types.length ? (
+        <Text style={[TYPE.bodySmall, { color: BRAND.inkSoft }]}>
+          Add chest, waist and hips to see your body shape.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 /** Signed in: who as, sign out and delete. Otherwise the sign-in buttons. */
-function AccountCard() {
+function AccountSection() {
   const account = useAccount((s) => s.account);
 
   const confirmSignOut = () =>
@@ -73,44 +154,71 @@ function AccountCard() {
 
   if (account.kind !== "member")
     return (
-      <Card>
-        <Text variant="caption" tone="muted">
-          ACCOUNT
-        </Text>
-        <Text tone="muted">
-          Sign in to back up your Silo and get it back on any iPhone.
-        </Text>
-        <SignInButtons onSignedIn={() => {}} />
-      </Card>
+      <GlassSection title="Account">
+        <View style={{ padding: PAD, gap: 16 }}>
+          <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
+            Sign in to back up your colors, measurements and saved pieces, and
+            get them back on any iPhone.
+          </Text>
+          <SignInButtons onSignedIn={() => {}} />
+        </View>
+      </GlassSection>
     );
 
+  const provider = account.provider;
   return (
-    <Card>
-      <Text variant="caption" tone="muted">
-        ACCOUNT
-      </Text>
-      <Text>
-        {account.provider
-          ? `Signed in with ${PROVIDER_NAMES[account.provider]}`
-          : "Signed in"}
-      </Text>
-      {account.email ? <Text tone="muted">{account.email}</Text> : null}
-      <Button variant="ghost" label="Sign out" onPress={confirmSignOut} />
-      <Button variant="ghost" label="Delete account" onPress={confirmDelete} />
-    </Card>
+    <GlassSection title="Account">
+      <GlassRow
+        leading={
+          <View style={{ width: 24, alignItems: "center" }}>
+            {provider === "google" ? (
+              <GoogleLogo size={18} />
+            ) : (
+              <SymbolView
+                name={
+                  provider === "apple" ? "apple.logo" : "person.crop.circle"
+                }
+                size={19}
+                weight="regular"
+                tintColor={BRAND.ink}
+                style={{ width: 24, height: 24 }}
+              />
+            )}
+          </View>
+        }
+        label={
+          provider ? `Signed in with ${PROVIDER_NAMES[provider]}` : "Signed in"
+        }
+        detail={account.email ?? "Backed up to your account"}
+      />
+      <GlassRow
+        icon="rectangle.portrait.and.arrow.right"
+        label="Sign out"
+        onPress={confirmSignOut}
+      />
+      <GlassRow
+        icon="trash"
+        label="Delete account"
+        destructive
+        onPress={confirmDelete}
+      />
+    </GlassSection>
   );
 }
 
+/**
+ * The profile, over the season gradient like the rest of the app: the
+ * passport up top, then grouped glass sections for what it prints, the
+ * body behind the sizes, the account and the app.
+ */
 export default function Profile() {
-  const t = useTheme();
-  const profile = useProfile();
-  const entries = useMeasurements((s) => s.entries);
-  const latest = useMemo(() => latestMeasurements(entries), [entries]);
-  const shape = bodyShape(latest);
-  const season = t.season;
-  const passport = usePassportData();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const backdrop = useSeasonBackdrop();
+  const profile = useProfile();
+  const passport = usePassportData();
   const member = useAccount((s) => s.account.kind === "member");
+  const cardWidth = Math.min(width - GUTTER * 2, CARD_MAX);
 
   const redoOnboarding = () =>
     Alert.alert("Redo onboarding?", "Your measurement history is kept.", [
@@ -146,129 +254,132 @@ export default function Profile() {
     );
 
   return (
-    <Screen edges={[]}>
-      <Text variant="title">Profile</Text>
-
-      {passport && season ? (
-        <View style={{ gap: t.space(3), alignItems: "center" }}>
-          <PassportCard data={passport} width={width - t.space(10)} />
-          <Text variant="caption" tone="muted">
-            Tilt to shimmer · Drag to turn · Tap to flip
-          </Text>
-        </View>
-      ) : (
-        <Card>
-          <Text variant="caption" tone="muted">
-            YOUR PASSPORT
-          </Text>
-          <Text tone="muted">
-            Finish color analysis to get your Silo passport.
-          </Text>
-        </Card>
-      )}
-
-      {season && profile.colorProfile ? (
-        <Card>
-          <Text variant="caption" tone="muted">
-            ON YOUR PASSPORT
-          </Text>
-          <TextInput
-            value={profile.displayName ?? ""}
-            onChangeText={(displayName) => profile.set({ displayName })}
-            placeholder="Your name"
-            placeholderTextColor={t.colors.textMuted}
-            autoCapitalize="words"
-            returnKeyType="done"
-            maxLength={24}
-            style={{
-              ...t.type.body,
-              color: t.colors.text,
-              backgroundColor: t.colors.bg,
-              borderColor: t.colors.border,
-              borderWidth: 1,
-              borderRadius: t.radius.sm,
-              padding: t.space(3),
-            }}
+    <View style={{ flex: 1 }}>
+      <Backdrop id={backdrop} />
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: insets.top + 8,
+          paddingHorizontal: GUTTER,
+          paddingBottom: insets.bottom + 32,
+          gap: 28,
+        }}
+      >
+        <View style={{ gap: 20 }}>
+          <Header badge="SILO ID" />
+          <Headline
+            size="medium"
+            eyebrow={
+              passport
+                ? `${passport.season.name} · Issued ${passport.issued}`
+                : "Your profile"
+            }
+            title={"Your\n*Silo.*"}
           />
-          <Button
-            variant="secondary"
-            label={profile.selfiePhoto ? "Change photo" : "Add photo"}
+        </View>
+
+        {passport ? (
+          <View style={{ alignItems: "center", gap: 12 }}>
+            <PassportCard data={passport} width={cardWidth} />
+            <Text style={[TYPE.caption, { color: BRAND.inkSoft }]}>
+              Tilt to shimmer · Drag to turn · Tap to flip
+            </Text>
+          </View>
+        ) : (
+          <GlassSection>
+            <GlassRow
+              icon="person.text.rectangle"
+              label="Get your passport"
+              detail="Finish color analysis to have one issued."
+              onPress={redoOnboarding}
+            />
+          </GlassSection>
+        )}
+
+        <GlassSection title="On your passport">
+          <GlassRow
+            icon="signature"
+            label="Name"
+            trailing={
+              <TextInput
+                value={profile.displayName ?? ""}
+                onChangeText={(displayName) => profile.set({ displayName })}
+                placeholder="Add your name"
+                placeholderTextColor={BRAND.placeholder}
+                selectionColor={BRAND.ink}
+                autoCapitalize="words"
+                autoCorrect={false}
+                returnKeyType="done"
+                maxLength={24}
+                maxFontSizeMultiplier={1.3}
+                accessibilityLabel="Name on your passport"
+                style={[
+                  TYPE.control,
+                  { flex: 1, textAlign: "right", paddingVertical: 8 },
+                ]}
+              />
+            }
+          />
+          <GlassRow
+            leading={<PhotoThumb selfie={profile.selfiePhoto} />}
+            label="Photo"
+            value={profile.selfiePhoto ? "Change" : "Add"}
             onPress={changePhoto}
           />
-        </Card>
-      ) : null}
+        </GlassSection>
 
-      <Link href="/measurements" asChild>
-        <Pressable>
-          <Card>
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <Text variant="caption" tone="muted">
-                MEASUREMENTS
-              </Text>
-              <Text variant="caption" tone="accent">
-                Edit & history ›
-              </Text>
-            </View>
-            {shape ? <Text variant="heading">{shape.name} shape</Text> : null}
-            {MEASUREMENT_TYPES.filter((type) => latest[type] !== undefined).map(
-              (type) => (
-                <View
-                  key={type}
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Text tone="muted">{MEASUREMENT_INFO[type].label}</Text>
-                  <Text>
-                    {formatMeasurement(type, latest[type]!, profile.unitSystem)}
-                  </Text>
-                </View>
-              ),
-            )}
-            {Object.keys(latest).length === 0 ? (
-              <Text tone="muted">No measurements yet.</Text>
-            ) : null}
-          </Card>
-        </Pressable>
-      </Link>
-
-      <Card>
-        <Text variant="caption" tone="muted">
-          FIT PREFERENCE
-        </Text>
-        <View style={{ flexDirection: "row", gap: t.space(2) }}>
-          {FIT_PREFERENCES.map((p) => (
-            <Chip
-              key={p}
-              label={p[0].toUpperCase() + p.slice(1)}
-              selected={profile.fitPreference === p}
-              onPress={() => profile.set({ fitPreference: p })}
+        <GlassSection
+          title="Your fit"
+          note="Sizes are recommended from your latest measurements and the fit you like."
+        >
+          <BodySummary />
+          <GlassRow
+            icon="ruler"
+            label="Measurements"
+            value="Edit & history"
+            chevron
+            onPress={() => router.push("/measurements")}
+          />
+          <View style={{ padding: PAD, gap: 12 }}>
+            <Text style={TYPE.control}>Fit preference</Text>
+            <GlassSegmented
+              options={FIT_OPTIONS}
+              value={profile.fitPreference}
+              onChange={(fitPreference) => profile.set({ fitPreference })}
             />
-          ))}
-        </View>
-      </Card>
+          </View>
+        </GlassSection>
 
-      <AccountCard />
+        <AccountSection />
 
-      <View style={{ gap: t.space(2), marginTop: t.space(2) }}>
-        <Button
-          variant="ghost"
-          label="Redo onboarding"
-          onPress={redoOnboarding}
-        />
-        <Button
-          variant="ghost"
-          label="Load demo profile"
-          onPress={loadDemoProfile}
-        />
-        {/* Signed in, a reset would back the empty phone up over the account. */}
-        {member ? null : (
-          <Button variant="ghost" label="Reset app" onPress={resetApp} />
-        )}
-      </View>
-    </Screen>
+        <GlassSection title="Silo">
+          <GlassRow
+            icon="arrow.counterclockwise"
+            label="Redo onboarding"
+            onPress={redoOnboarding}
+          />
+          {/* Signed in, a reset would back the empty phone up over the account. */}
+          {member ? null : (
+            <GlassRow
+              icon="xmark.circle"
+              label="Reset app"
+              destructive
+              onPress={resetApp}
+            />
+          )}
+        </GlassSection>
+
+        <Text
+          style={[
+            TYPE.wordmark,
+            { alignSelf: "center", color: BRAND.inkFaint, marginTop: -4 },
+          ]}
+        >
+          Silo
+        </Text>
+      </ScrollView>
+    </View>
   );
 }

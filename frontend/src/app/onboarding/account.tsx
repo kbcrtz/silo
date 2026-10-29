@@ -4,6 +4,7 @@ import { Header } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { SignInButtons } from "@/components/SignInButtons";
+import { familyOf } from "@/data/families";
 import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
 
@@ -16,6 +17,8 @@ import { BRAND, TYPE } from "@/theme/brand";
  */
 export default function AccountStep() {
   const { returning } = useLocalSearchParams<{ returning?: string }>();
+  // The season's gradient once there is one; a returning shopper has none yet.
+  const seasonId = useProfile((s) => s.colorProfile?.seasonId);
 
   // A restored profile is onboarded, and the root stack moves home itself.
   const done = returning
@@ -28,7 +31,10 @@ export default function AccountStep() {
     : () => router.push("/onboarding/paywall");
 
   return (
-    <OnboardingScreen contentStyle={{ gap: 20 }}>
+    <OnboardingScreen
+      backdrop={seasonId ? familyOf(seasonId) : "neutral"}
+      contentStyle={{ gap: 20 }}
+    >
       <Header badge={returning ? "SIGN IN" : "SILO ID"} />
       <View style={{ marginTop: 96 }}>
         <Headline
