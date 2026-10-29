@@ -43,8 +43,7 @@ const revokeApple =
     ? appleRevoker({
         teamId: APPLE_TEAM_ID,
         keyId: APPLE_KEY_ID,
-        // Hosting dashboards often store a .p8 on one line with literal \n.
-        privateKey: APPLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        privateKey: APPLE_PRIVATE_KEY,
         clientId: process.env.APPLE_CLIENT_ID ?? "com.siloapp.ios",
         fetch,
       })

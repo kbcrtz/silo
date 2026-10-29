@@ -42,3 +42,18 @@ test("Apple refusing either step is an error", async () => {
   await assert.rejects(revoker(fakeApple({ tokenStatus: 400 }).fetch)("bad-code"), { code: "apple_revoke_failed" });
   await assert.rejects(revoker(fakeApple({ revokeStatus: 500 }).fetch)("auth-code"), { code: "apple_revoke_failed" });
 });
+
+test("a key pasted on one line with literal \\n, quotes or spaces around it still signs", async () => {
+  const { calls, fetch } = fakeApple();
+  const pasted = ` "${pem.trim().replace(/\n/g, "\\n")}" \n`;
+  await appleRevoker({ teamId: "TEAM123456", keyId: "KEY1234567", privateKey: pasted, clientId: "com.siloapp.ios", fetch })("auth-code");
+  await jwtVerify(calls[0].form.get("client_secret")!, publicKey, { audience: "https://appleid.apple.com" });
+});
+
+test("a broken key fails the revocation, never the server", async () => {
+  const { calls, fetch } = fakeApple();
+  const revoke = appleRevoker({ teamId: "TEAM123456", keyId: "KEY1234567", privateKey: "not a key", clientId: "com.siloapp.ios", fetch });
+  await new Promise((r) => setTimeout(r, 10)); // an unhandled rejection would fail the test run here
+  await assert.rejects(revoke("auth-code"), /apple_revoke_failed/);
+  assert.equal(calls.length, 0);
+});
