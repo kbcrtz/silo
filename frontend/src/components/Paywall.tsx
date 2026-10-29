@@ -279,6 +279,7 @@ function PlanRow({
         radius={26}
         variant="clear"
         fill={selected ? BRAND.ink : BRAND.glassFill}
+        solid={selected}
         edge={selected ? BRAND.ink : BRAND.outlineSoft}
         style={{
           height: 60,

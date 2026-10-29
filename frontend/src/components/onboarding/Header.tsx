@@ -16,7 +16,8 @@ const EDGE = "rgba(255,255,255,0.75)";
 export function Header({
   badge,
   wordmark,
-  onBack = () => router.back(),
+  // Opened from a link with nothing behind it, back goes home.
+  onBack = () => (router.canGoBack() ? router.back() : router.replace("/")),
 }: {
   badge: string;
   wordmark?: boolean;

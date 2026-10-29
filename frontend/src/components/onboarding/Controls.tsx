@@ -61,6 +61,7 @@ export function OptionButton({
         radius={20}
         variant="clear"
         fill={selected ? BRAND.ink : BRAND.glassTint}
+        solid={selected}
         edge={selected ? BRAND.ink : BRAND.outline}
         style={{ height: 48, alignItems: "center", justifyContent: "center" }}
       >
@@ -94,6 +95,7 @@ export function Chip({
       <Glass
         radius={22}
         fill={selected ? BRAND.ink : "rgba(255,255,255,0.42)"}
+        solid={selected}
         edge={selected ? BRAND.ink : "rgba(255,255,255,0.75)"}
         interactive
         style={{ height: 44, paddingHorizontal: 15, justifyContent: "center" }}

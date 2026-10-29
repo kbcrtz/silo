@@ -11,31 +11,31 @@ import { BRAND, TYPE } from "@/theme/brand";
 /**
  * Sign-up, between the passport and the paywall: links Apple or Google to
  * the phone's anonymous user so the profile, measurements and saved pieces
- * come back on a new phone. With `?returning=1` (from the first step) it signs a returning
- * shopper in instead; a restored profile is onboarded, and the root stack
- * moves to home on its own.
+ * come back on a new phone. Everyone signs in; there is no skipping it. With
+ * `?returning=1` (from the first step) it signs a returning shopper in
+ * instead. Onboarded users without an account land here from the opening.
+ * Either way, once signed in and onboarded the root stack moves home itself.
  */
 export default function AccountStep() {
   const { returning } = useLocalSearchParams<{ returning?: string }>();
   // The season's gradient once there is one; a returning shopper has none yet.
   const seasonId = useProfile((s) => s.colorProfile?.seasonId);
 
-  // A restored profile is onboarded, and the root stack moves home itself.
-  const done = returning
-    ? () => {
-        if (!useProfile.getState().onboarded) router.back();
-      }
-    : () => router.push("/onboarding/paywall");
-  const skip = returning
-    ? () => router.back()
-    : () => router.push("/onboarding/paywall");
+  // Onboarded (restored, or from before sign-in was required): the root stack moves home itself.
+  const done = () => {
+    if (useProfile.getState().onboarded) return;
+    if (returning) router.back();
+    else router.push("/onboarding/paywall");
+  };
+  // Sent here from the opening, there's nothing to go back to.
+  const canGoBack = router.canGoBack();
 
   return (
     <OnboardingScreen
       backdrop={seasonId ? familyOf(seasonId) : "neutral"}
       contentStyle={{ gap: 20 }}
     >
-      <Header badge={returning ? "SIGN IN" : "SILO ID"} />
+      <Header badge={returning ? "SIGN IN" : "SILO ID"} wordmark={!canGoBack} />
       <View style={{ marginTop: 96 }}>
         <Headline
           eyebrow={returning ? "Good to see you" : "Keep your passport"}
@@ -45,21 +45,21 @@ export default function AccountStep() {
       <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
         {returning
           ? "Sign in to bring back your colors, measurements and saved pieces."
-          : "Sign in to back up your colors, measurements and saved pieces, and get them back on any iPhone."}
+          : "Sign in to keep your colors, measurements and saved pieces, and get them back on any iPhone."}
       </Text>
 
       <View style={{ marginTop: "auto", gap: 16 }}>
         <SignInButtons onSignedIn={done} />
-        <Pressable
-          accessibilityRole="button"
-          onPress={skip}
-          hitSlop={8}
-          style={{ alignSelf: "center", padding: 8 }}
-        >
-          <Text style={[TYPE.control, { color: BRAND.inkSoft }]}>
-            {returning ? "Back" : "Not now"}
-          </Text>
-        </Pressable>
+        {returning ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={{ alignSelf: "center", padding: 8 }}
+          >
+            <Text style={[TYPE.control, { color: BRAND.inkSoft }]}>Back</Text>
+          </Pressable>
+        ) : null}
       </View>
     </OnboardingScreen>
   );

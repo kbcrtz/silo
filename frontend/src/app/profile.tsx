@@ -15,7 +15,7 @@ import { GlassScreen } from "@/components/GlassScreen";
 import { GUTTER } from "@/components/onboarding/OnboardingScreen";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { usePassportData } from "@/components/passport/usePassportData";
-import { GoogleLogo, SignInButtons } from "@/components/SignInButtons";
+import { GoogleLogo } from "@/components/SignInButtons";
 import { bodyShape } from "@/lib/bodyShape";
 import type { FitPreference } from "@/lib/fit";
 import {
@@ -27,7 +27,6 @@ import { deletePhoto, persistPhoto, photoUri } from "@/lib/photos";
 import { pickSelfie } from "@/lib/pickPhoto";
 import { formatMeasurement } from "@/lib/units";
 import { useAccount } from "@/store/account";
-import { clearLocalData } from "@/store/backup";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
@@ -148,18 +147,8 @@ function AccountSection() {
       ],
     );
 
-  if (account.kind !== "member")
-    return (
-      <GlassSection title="Account">
-        <View style={{ padding: PAD, gap: 16 }}>
-          <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
-            Sign in to back up your colors, measurements and saved pieces, and
-            get them back on any iPhone.
-          </Text>
-          <SignInButtons onSignedIn={() => {}} />
-        </View>
-      </GlassSection>
-    );
+  // Everyone in the app is signed in; mock mode has no account to show.
+  if (account.kind !== "member") return null;
 
   const provider = account.provider;
   return (
@@ -211,7 +200,6 @@ export default function Profile() {
   const { width } = useWindowDimensions();
   const profile = useProfile();
   const passport = usePassportData();
-  const member = useAccount((s) => s.account.kind === "member");
   const cardWidth = Math.min(width - GUTTER * 2, CARD_MAX);
 
   const redoOnboarding = () =>
@@ -228,20 +216,6 @@ export default function Profile() {
     profile.set({ selfiePhoto: persistPhoto(uri, "selfie") });
     if (old) deletePhoto(old);
   };
-
-  const resetApp = () =>
-    Alert.alert(
-      "Reset Silo?",
-      "Clears your profile, measurements and saved items.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reset",
-          style: "destructive",
-          onPress: clearLocalData,
-        },
-      ],
-    );
 
   return (
     <GlassScreen
@@ -333,15 +307,6 @@ export default function Profile() {
           label="Redo onboarding"
           onPress={redoOnboarding}
         />
-        {/* Signed in, a reset would back the empty phone up over the account. */}
-        {member ? null : (
-          <GlassRow
-            icon="xmark.circle"
-            label="Reset app"
-            destructive
-            onPress={resetApp}
-          />
-        )}
       </GlassSection>
 
       <Text

@@ -73,18 +73,27 @@ export function ItemCard({
         {pick ? (
           <PickMark picked={pick.picked} />
         ) : saved ? (
-          <SymbolView
-            name="heart.fill"
-            size={18}
-            tintColor="#FFFFFF"
+          // On a dark disc: most product photos are white behind the item.
+          <View
             style={{
               position: "absolute",
               top: t.space(2),
               right: t.space(2),
-              width: 18,
-              height: 18,
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(23,19,17,0.45)",
             }}
-          />
+          >
+            <SymbolView
+              name="heart.fill"
+              size={14}
+              tintColor={BRAND.white}
+              style={{ width: 15, height: 15 }}
+            />
+          </View>
         ) : null}
       </View>
       <View style={{ paddingHorizontal: t.space(1) }}>
