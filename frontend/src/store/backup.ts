@@ -1,7 +1,6 @@
 import { downloadPhoto, type Backup } from "@/api/userData";
 import { rememberItems, type CatalogItem } from "@/data/catalog";
 import { entriesFromBackup, isEmptyInstall } from "@/lib/cloud";
-import { useFit } from "./fit";
 import { useMeasurements } from "./measurements";
 import { useProfile } from "./profile";
 import { useSaved } from "./saved";
@@ -34,10 +33,9 @@ export async function restorePhoto() {
   if (photo) useProfile.setState({ selfiePhoto: photo, photoSynced: photo });
 }
 
-/** Empties the phone: profile, measurements, saved items and the fit. */
+/** Empties the phone: profile, measurements and saved items. */
 export function clearLocalData() {
   useMeasurements.getState().replaceAll([]);
   useSaved.getState().clear();
-  useFit.setState({ pieces: {} });
   useProfile.getState().reset();
 }

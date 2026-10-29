@@ -12,9 +12,6 @@ import { useCloudSync } from "@/hooks/useCloudSync";
 import { useTheme } from "@/theme";
 import { BRAND, useBrandFonts } from "@/theme/brand";
 
-/** Pushed screens show only the back button; they title themselves. */
-const pushed = { headerShown: true, title: "" };
-
 export default function RootLayout() {
   const hydrated = useHydrated([useProfile, useMeasurements, useSaved]);
   const [sessionReady, setSessionReady] = useState(false);
@@ -62,16 +59,12 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: BRAND.white },
             }}
           />
-          <Stack.Screen name="saved/index" options={pushed} />
-          <Stack.Screen name="saved/[id]" options={pushed} />
-          {/* Draws its own glass back button over the season gradient. */}
+          {/* These draw their own glass back button over the season gradient. */}
+          <Stack.Screen name="saved/index" />
+          <Stack.Screen name="saved/[id]" />
+          <Stack.Screen name="fit" />
           <Stack.Screen name="profile" />
-          {/* Opened from the item sheet: a modal, since a pushed screen there stacks a blank header over the sheet. */}
-          <Stack.Screen name="fit" options={{ presentation: "modal" }} />
-          <Stack.Screen
-            name="measurements"
-            options={{ headerShown: true, title: "Measurements" }}
-          />
+          <Stack.Screen name="measurements" />
         </Stack.Protected>
       </Stack>
     </GestureHandlerRootView>

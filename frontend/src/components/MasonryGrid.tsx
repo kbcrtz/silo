@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 import type { CatalogItem } from "@/data/catalog";
 import { useTheme } from "@/theme";
-import { ItemCard } from "./ItemCard";
+import { ItemCard, type Pick } from "./ItemCard";
 
 type Entry = { item: CatalogItem; score?: number };
 
@@ -14,9 +14,12 @@ type Entry = { item: CatalogItem; score?: number };
 export function MasonryGrid({
   entries,
   footer,
+  pick,
 }: {
   entries: Entry[];
   footer?: (item: CatalogItem) => ReactNode;
+  /** Turns the grid into a picker; cards stop opening their item. */
+  pick?: (item: CatalogItem) => Pick;
 }) {
   const t = useTheme();
   const gap = t.space(3);
@@ -46,6 +49,7 @@ export function MasonryGrid({
                 width={columnWidth}
                 score={score}
                 footer={footer?.(item)}
+                pick={pick?.(item)}
               />
             ))}
           </View>

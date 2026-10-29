@@ -1,59 +1,71 @@
-import { Pressable, View } from "react-native";
-import { AiTryOn } from "@/components/AiTryOn";
-import { Mannequin } from "@/components/Mannequin";
-import { MasonryGrid } from "@/components/MasonryGrid";
-import { Screen } from "@/components/Screen";
-import { Text } from "@/components/Text";
-import { shopUrl } from "@/data/catalog";
+import { useLocalSearchParams } from "expo-router";
+import { useMemo } from "react";
+import { Text, View } from "react-native";
 import { fitImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
+import { AiTryOn } from "@/components/AiTryOn";
+import { GlassRow, GlassSection } from "@/components/GlassList";
+import { GlassScreen } from "@/components/GlassScreen";
+import { ProductImage } from "@/components/ItemCard";
+import { Mannequin } from "@/components/Mannequin";
+import { findItem, shopUrl } from "@/data/catalog";
 import { useLatestMeasurements } from "@/hooks/useRecommendations";
-import { fitPieces } from "@/lib/outfit";
+import { fitFromItems, fitPieces } from "@/lib/outfit";
 import { openProduct } from "@/lib/shop";
-import { useFit } from "@/store/fit";
 import { useProfile } from "@/store/profile";
 import { useTheme } from "@/theme";
-import { BRAND } from "@/theme/brand";
+import { BRAND, TYPE } from "@/theme/brand";
 
-const VISUAL_HEIGHT = 420;
+const VISUAL_HEIGHT = 460;
 
-/** The pieces the user picked, worn together in one AI try-on image. */
+/**
+ * The pieces picked in a saved list (`?ids=a,b`), worn together in one AI
+ * try-on image on the user's body, with a Shop link for each.
+ */
 export default function FitScreen() {
+  const { ids } = useLocalSearchParams<{ ids?: string }>();
   const t = useTheme();
-  const pieces = fitPieces(useFit((s) => s.pieces));
+  const pieces = useMemo(
+    () =>
+      fitPieces(
+        fitFromItems((ids ?? "").split(",").filter(Boolean).map(findItem)),
+      ),
+    [ids],
+  );
   const shopFor = useProfile((s) => s.shopFor);
   const latest = useLatestMeasurements();
   const source = fitImageSource(pieces, shopFor, latest);
-  // While the image is made (or if it fails), the drawn mannequin in the main piece.
+  // While the image is made (or if it fails), the drawn mannequin in the whole fit.
   const drawn = pieces[0] ? (
     <Mannequin
       measurements={latest}
       shopFor={shopFor}
-      item={pieces[0]}
-      height={VISUAL_HEIGHT - t.space(14)}
+      items={pieces}
+      height={VISUAL_HEIGHT - 56}
     />
   ) : null;
 
   return (
-    <Screen edges={[]}>
-      <View style={{ gap: t.space(1) }}>
-        <Text variant="title">Your fit</Text>
-        <Text tone="muted">
-          {pieces.length >= 2
-            ? "Every piece together on your body."
-            : "Add a top and bottoms, or a dress, from any item's Add to fit. A jacket goes over either."}
-        </Text>
-      </View>
-
+    <GlassScreen
+      badge="TRY ON"
+      eyebrow={`${pieces.length} pieces · on your body`}
+      title={"Worn\n*together.*"}
+    >
       {drawn ? (
         <View
           style={{
             height: VISUAL_HEIGHT,
-            borderRadius: t.radius.lg,
+            borderRadius: 28,
             overflow: "hidden",
             backgroundColor: BRAND.white,
+            borderWidth: 1,
+            borderColor: BRAND.glassEdge,
             alignItems: "center",
-            paddingTop: t.space(4),
+            paddingTop: 16,
+            shadowColor: BRAND.shadow,
+            shadowOpacity: 0.08,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 10 },
           }}
         >
           {source ? (
@@ -62,42 +74,50 @@ export default function FitScreen() {
             drawn
           )}
         </View>
-      ) : null}
+      ) : (
+        <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
+          These pieces aren&apos;t saved anymore. Pick two or three from a saved
+          list to try them on together.
+        </Text>
+      )}
 
       {pieces.length ? (
-        <MasonryGrid
-          entries={pieces.map((item) => ({ item }))}
-          footer={(item) => (
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginTop: t.space(1),
+        <GlassSection
+          title="In this fit"
+          note={
+            source
+              ? undefined
+              : "Demo pieces show on the drawn mannequin; the AI image is for store listings."
+          }
+        >
+          {pieces.map((item) => (
+            <GlassRow
+              key={item.id}
+              leading={
+                <View
+                  style={{
+                    width: 40,
+                    height: 50,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    backgroundColor: item.colors[0],
+                  }}
+                >
+                  <ProductImage item={item} />
+                </View>
+              }
+              label={item.name}
+              detail={`${item.brand} · ${item.priceLabel ?? `$${item.price}`}`}
+              value="Shop"
+              chevron
+              onPress={() => {
+                track("shop", item, t.season?.id);
+                openProduct(shopUrl(item), t.colors.accentText);
               }}
-            >
-              <Pressable
-                hitSlop={6}
-                onPress={() => useFit.getState().remove(item.category)}
-              >
-                <Text variant="caption" tone="muted">
-                  Remove
-                </Text>
-              </Pressable>
-              <Pressable
-                hitSlop={6}
-                onPress={() => {
-                  track("shop", item, t.season?.id);
-                  openProduct(shopUrl(item), t.colors.accentText);
-                }}
-              >
-                <Text variant="caption" tone="accent">
-                  Shop ›
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        />
+            />
+          ))}
+        </GlassSection>
       ) : null}
-    </Screen>
+    </GlassScreen>
   );
 }

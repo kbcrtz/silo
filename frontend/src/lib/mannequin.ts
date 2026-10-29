@@ -34,6 +34,8 @@ export type Garment = {
 export type Layer = {
   role: "item" | "baseTop" | "baseBottom";
   garment: Garment;
+  /** For an item layer, which of the pieces it is. */
+  piece?: number;
 };
 
 /** What the garment builders need to know about a piece of clothing. */
@@ -857,27 +859,35 @@ const BASE_BOTTOM: Cut = {
 };
 
 /**
- * The item plus whatever plain pieces it needs to read as an outfit, back to
- * front: a top goes over trousers, a bottom over a tucked-in tee, outerwear
- * over both. A dress is the whole outfit.
+ * The pieces plus whatever plain pieces they need to read as an outfit, back
+ * to front: a top goes over trousers, a bottom over a tucked-in tee,
+ * outerwear over both. A dress takes the place of the top and bottoms.
  */
-export function outfit(L: Landmarks, item: Cut): Layer[] {
-  const top: Layer = { role: "baseTop", garment: garmentOutlines(L, BASE_TOP) };
-  const bottom: Layer = {
+export function outfit(L: Landmarks, pieces: Cut[]): Layer[] {
+  const own = (category: Cut["category"]): Layer | null => {
+    const piece = pieces.findIndex((p) => p.category === category);
+    return piece < 0
+      ? null
+      : { role: "item", garment: garmentOutlines(L, pieces[piece]), piece };
+  };
+  const dress = own("dress");
+  const top = own("top");
+  const bottom = own("bottom");
+  const outer = own("outerwear");
+  const baseTop: Layer = {
+    role: "baseTop",
+    garment: garmentOutlines(L, BASE_TOP),
+  };
+  const baseBottom: Layer = {
     role: "baseBottom",
     garment: garmentOutlines(L, BASE_BOTTOM),
   };
-  const own: Layer = { role: "item", garment: garmentOutlines(L, item) };
-  switch (item.category) {
-    case "dress":
-      return [own];
-    case "bottom":
-      return [top, own];
-    case "top":
-      return [bottom, own];
-    case "outerwear":
-      return [bottom, top, own];
-  }
+  const under = dress
+    ? [dress]
+    : bottom && !top
+      ? [baseTop, bottom]
+      : [bottom ?? baseBottom, top ?? baseTop];
+  return outer ? [...under, outer] : under;
 }
 
 type Box = { x: number; y: number; width: number; height: number };

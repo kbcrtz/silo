@@ -1,5 +1,13 @@
 import { CATALOG, type Category } from "@/data/catalog";
-import { addToFit, fitPieces } from "../outfit";
+import {
+  addToFit,
+  canMakeFit,
+  canTryOn,
+  fitFromItems,
+  fitIds,
+  fitPieces,
+  toggleInFit,
+} from "../outfit";
 
 const of = (category: Category) =>
   CATALOG.find((i) => i.category === category)!;
@@ -40,5 +48,45 @@ describe("fitPieces", () => {
       "bottom",
       "outerwear",
     ]);
+  });
+});
+
+describe("toggleInFit", () => {
+  it("picks a piece, and a second tap puts it back", () => {
+    const top = of("top");
+    const fit = toggleInFit({}, top);
+    expect(fit).toEqual({ top });
+    expect(toggleInFit(fit, top)).toEqual({});
+  });
+
+  it("swaps another piece of the same kind in", () => {
+    const top = of("top");
+    const other = { ...top, id: "other-top" };
+    expect(toggleInFit({ top }, other)).toEqual({ top: other });
+  });
+});
+
+describe("trying a fit on", () => {
+  it("needs at least two pieces", () => {
+    expect(canTryOn({ top: of("top") })).toBe(false);
+    expect(canTryOn({ top: of("top"), bottom: of("bottom") })).toBe(true);
+  });
+
+  it("round-trips through ids, dropping unknown items", () => {
+    const fit = { bottom: of("bottom"), top: of("top") };
+    expect(fitIds(fit)).toEqual([of("top").id, of("bottom").id]);
+    expect(fitFromItems([of("top"), undefined, of("bottom")])).toEqual(fit);
+  });
+});
+
+describe("canMakeFit", () => {
+  it("needs two kinds that go together", () => {
+    const top = of("top");
+    expect(canMakeFit([top])).toBe(false);
+    expect(canMakeFit([top, { ...top, id: "other-top" }])).toBe(false);
+    expect(canMakeFit([of("dress"), top, of("bottom")])).toBe(true);
+    expect(canMakeFit([of("dress"), top])).toBe(false);
+    expect(canMakeFit([of("dress"), of("outerwear")])).toBe(true);
+    expect(canMakeFit([top, of("outerwear")])).toBe(true);
   });
 });

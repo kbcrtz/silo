@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { TextInput, View } from "react-native";
+import { useRef, useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
 import {
   isPlausible,
   MEASUREMENT_INFO,
@@ -15,8 +15,8 @@ import {
   type UnitSystem,
 } from "@/lib/units";
 import { useTheme } from "@/theme";
-import { Chip } from "./Chip";
-import { Text } from "./Text";
+import { BRAND, TYPE } from "@/theme/brand";
+import { GlassSection, GlassSegmented } from "./GlassList";
 
 type Props = {
   initial: Measurements;
@@ -26,8 +26,14 @@ type Props = {
   onChange: (values: Measurements) => void;
 };
 
+const UNITS: { id: UnitSystem; label: string }[] = [
+  { id: "imperial", label: "in / lb" },
+  { id: "metric", label: "cm / kg" },
+];
+
 /**
- * Inputs hold display-unit strings; switching units converts what is typed
+ * One glass row per measurement, with how to measure it underneath (or the
+ * plausible range, when what's typed is out of it). Inputs hold display-unit strings; switching units converts what is typed
  * through the stored-unit values so nothing drifts or gets lost.
  */
 export function MeasurementForm({
@@ -39,6 +45,7 @@ export function MeasurementForm({
   const t = useTheme();
   const [values, setValues] = useState<Measurements>(initial);
   const [text, setText] = useState(() => toTexts(initial, unitSystem));
+  const inputs = useRef<Partial<Record<MeasurementType, TextInput | null>>>({});
 
   const edit = (type: MeasurementType, raw: string) => {
     setText((prev) => ({ ...prev, [type]: raw }));
@@ -60,62 +67,80 @@ export function MeasurementForm({
   };
 
   return (
-    <View style={{ gap: t.space(4) }}>
-      <View style={{ flexDirection: "row", gap: t.space(2) }}>
-        <Chip
-          label="in / lb"
-          selected={unitSystem === "imperial"}
-          onPress={() => switchUnits("imperial")}
-        />
-        <Chip
-          label="cm / kg"
-          selected={unitSystem === "metric"}
-          onPress={() => switchUnits("metric")}
-        />
-      </View>
-      {MEASUREMENT_TYPES.map((type) => {
-        const info = MEASUREMENT_INFO[type];
-        const label = info.label;
-        return (
-          <View key={type} style={{ gap: t.space(1) }}>
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <Text variant="heading">{label}</Text>
-              <Text tone="muted">{unitLabel(type, unitSystem)}</Text>
-            </View>
-            <TextInput
-              value={text[type] ?? ""}
-              onChangeText={(raw) => edit(type, raw)}
-              keyboardType="decimal-pad"
-              placeholder={
-                type === "height" && unitSystem === "imperial"
-                  ? "Total inches, e.g. 67"
-                  : "—"
-              }
-              placeholderTextColor={t.colors.textMuted}
+    <View style={{ gap: 20 }}>
+      <GlassSegmented
+        options={UNITS}
+        value={unitSystem}
+        onChange={switchUnits}
+      />
+      <GlassSection title="Your measurements">
+        {MEASUREMENT_TYPES.map((type) => {
+          const info = MEASUREMENT_INFO[type];
+          const invalid = !!text[type] && values[type] === undefined;
+          return (
+            <Pressable
+              key={type}
+              onPress={() => inputs.current[type]?.focus()}
               style={{
-                ...t.type.body,
-                color: t.colors.text,
-                backgroundColor: t.colors.surface,
-                borderColor: t.colors.border,
-                borderWidth: 1,
-                borderRadius: t.radius.sm,
-                padding: t.space(3),
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 14,
               }}
-            />
-            {text[type] && values[type] === undefined ? (
-              <Text variant="caption" tone="danger">
-                {rangeHint(type, unitSystem)}
-              </Text>
-            ) : (
-              <Text variant="caption" tone="muted">
-                {info.howTo}
-              </Text>
-            )}
-          </View>
-        );
-      })}
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={TYPE.control}>{info.label}</Text>
+                <Text
+                  style={[
+                    TYPE.bodySmall,
+                    { color: invalid ? t.colors.danger : BRAND.inkSoft },
+                  ]}
+                >
+                  {invalid ? rangeHint(type, unitSystem) : info.howTo}
+                </Text>
+              </View>
+              <View
+                style={{
+                  width: 104,
+                  height: 40,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: invalid ? t.colors.danger : BRAND.outlineSoft,
+                  backgroundColor: BRAND.glassFillStrong,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 12,
+                  gap: 6,
+                }}
+              >
+                <TextInput
+                  ref={(r) => {
+                    inputs.current[type] = r;
+                  }}
+                  value={text[type] ?? ""}
+                  onChangeText={(raw) => edit(type, raw)}
+                  keyboardType="decimal-pad"
+                  placeholder={
+                    type === "height" && unitSystem === "imperial" ? "67" : "—"
+                  }
+                  placeholderTextColor={BRAND.placeholder}
+                  selectionColor={BRAND.ink}
+                  maxFontSizeMultiplier={1.3}
+                  accessibilityLabel={`${info.label} in ${unitLabel(type, unitSystem)}`}
+                  style={[
+                    TYPE.control,
+                    { flex: 1, textAlign: "right", paddingVertical: 0 },
+                  ]}
+                />
+                <Text style={[TYPE.caption, { color: BRAND.inkSoft }]}>
+                  {unitLabel(type, unitSystem)}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </GlassSection>
     </View>
   );
 }

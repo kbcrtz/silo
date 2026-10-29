@@ -29,13 +29,15 @@ type Props = {
   measurements: Measurements;
   shopFor: ShopFor;
   item?: CatalogItem;
+  /** A whole fit, in place of `item`. */
+  items?: CatalogItem[];
   height: number;
 };
 
 /**
  * A front-view mannequin built from the user's measurements, wearing the
- * item in its cut and color, with plain pieces to complete the outfit.
- * With no item it is just the figure.
+ * item (or a fit's pieces) in its cut and color, with plain pieces to
+ * complete the outfit. With no item it is just the figure.
  */
 export function Mannequin(props: Props) {
   const t = useTheme();
@@ -51,15 +53,20 @@ export function MannequinFigure({
   measurements,
   shopFor,
   item,
+  items,
   height,
   colors,
 }: Props & { colors: Theme["colors"] }) {
+  const pieces = useMemo(() => items ?? (item ? [item] : []), [items, item]);
   const L = useMemo(
     () => landmarks(measurements, shopFor),
     [measurements, shopFor],
   );
   const body = useMemo(() => bodyOutlines(L), [L]);
-  const layers = useMemo(() => (item ? outfit(L, item) : []), [L, item]);
+  const layers = useMemo(
+    () => (pieces.length ? outfit(L, pieces) : []),
+    [L, pieces],
+  );
 
   // A little headroom above and floor below for the shadow.
   const scale = (height * 0.92) / L.H;
@@ -74,6 +81,7 @@ export function MannequinFigure({
       contours: body.contours.map((c) => smooth(c, scale, false)),
       layers: layers.map((layer) => ({
         role: layer.role,
+        piece: layer.piece,
         ...garmentPaths(layer.garment, scale),
       })),
     }),
@@ -107,8 +115,8 @@ export function MannequinFigure({
   const skin = mix(colors.surface, colors.border, 0.5);
   const skinDark = mix(colors.border, colors.textMuted, 0.5);
   // No known color: neutral, never the season accent, which would look like the item's color.
-  const itemColor =
-    item?.colors[0] ?? mix(colors.surface, colors.textMuted, 0.5);
+  const neutral = mix(colors.surface, colors.textMuted, 0.5);
+  const itemColor = pieces[0]?.colors[0] ?? neutral;
   // The plain pieces take whichever of a light or dark tone stands apart from the item.
   const apart = (light: string, dark: string) =>
     deltaE(itemColor, light) >= deltaE(itemColor, dark) ? light : dark;
@@ -161,18 +169,18 @@ export function MannequinFigure({
       </Path>
 
       {paths.layers.map((layer, li) => {
-        const fill =
-          layer.role === "item"
-            ? itemColor
-            : layer.role === "baseTop"
-              ? base.top
-              : base.bottom;
+        const own = layer.piece === undefined ? undefined : pieces[layer.piece];
+        const fill = own
+          ? (own.colors[0] ?? neutral)
+          : layer.role === "baseTop"
+            ? base.top
+            : base.bottom;
         return (
           <Fabric
             key={li}
             color={fill}
-            trim={layer.role === "item" ? item?.colors[1] : undefined}
-            pattern={layer.role === "item" ? item?.pattern : undefined}
+            trim={own?.colors[1]}
+            pattern={own?.pattern}
             paths={layer}
             cm={cm}
             shade={shade}

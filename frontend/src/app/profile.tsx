@@ -4,18 +4,14 @@ import { SymbolView } from "expo-symbols";
 import { useMemo } from "react";
 import {
   Alert,
-  ScrollView,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { removeAccount, signOut } from "@/api/auth";
 import { GlassRow, GlassSection, GlassSegmented } from "@/components/GlassList";
-import { Backdrop, useSeasonBackdrop } from "@/components/onboarding/Backdrop";
-import { Header } from "@/components/onboarding/Header";
-import { Headline } from "@/components/onboarding/Headline";
+import { GlassScreen } from "@/components/GlassScreen";
 import { GUTTER } from "@/components/onboarding/OnboardingScreen";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { usePassportData } from "@/components/passport/usePassportData";
@@ -212,9 +208,7 @@ function AccountSection() {
  * body behind the sizes, the account and the app.
  */
 export default function Profile() {
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const backdrop = useSeasonBackdrop();
   const profile = useProfile();
   const passport = usePassportData();
   const member = useAccount((s) => s.account.kind === "member");
@@ -250,132 +244,114 @@ export default function Profile() {
     );
 
   return (
-    <View style={{ flex: 1 }}>
-      <Backdrop id={backdrop} />
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingTop: insets.top + 8,
-          paddingHorizontal: GUTTER,
-          paddingBottom: insets.bottom + 32,
-          gap: 28,
-        }}
-      >
-        <View style={{ gap: 20 }}>
-          <Header badge="SILO ID" />
-          <Headline
-            size="medium"
-            eyebrow={
-              passport
-                ? `${passport.season.name} · Issued ${passport.issued}`
-                : "Your profile"
-            }
-            title={"Your\n*Silo.*"}
-          />
+    <GlassScreen
+      badge="SILO ID"
+      eyebrow={
+        passport
+          ? `${passport.season.name} · Issued ${passport.issued}`
+          : "Your profile"
+      }
+      title={"Your\n*Silo.*"}
+    >
+      {passport ? (
+        <View style={{ alignItems: "center", gap: 12 }}>
+          <PassportCard data={passport} width={cardWidth} />
+          <Text style={[TYPE.caption, { color: BRAND.inkSoft }]}>
+            Tilt to shimmer · Drag to turn · Tap to flip
+          </Text>
         </View>
-
-        {passport ? (
-          <View style={{ alignItems: "center", gap: 12 }}>
-            <PassportCard data={passport} width={cardWidth} />
-            <Text style={[TYPE.caption, { color: BRAND.inkSoft }]}>
-              Tilt to shimmer · Drag to turn · Tap to flip
-            </Text>
-          </View>
-        ) : (
-          <GlassSection>
-            <GlassRow
-              icon="person.text.rectangle"
-              label="Get your passport"
-              detail="Finish color analysis to have one issued."
-              onPress={redoOnboarding}
-            />
-          </GlassSection>
-        )}
-
-        <GlassSection title="On your passport">
+      ) : (
+        <GlassSection>
           <GlassRow
-            icon="signature"
-            label="Name"
-            trailing={
-              <TextInput
-                value={profile.displayName ?? ""}
-                onChangeText={(displayName) => profile.set({ displayName })}
-                placeholder="Add your name"
-                placeholderTextColor={BRAND.placeholder}
-                selectionColor={BRAND.ink}
-                autoCapitalize="words"
-                autoCorrect={false}
-                returnKeyType="done"
-                maxLength={24}
-                maxFontSizeMultiplier={1.3}
-                accessibilityLabel="Name on your passport"
-                style={[
-                  TYPE.control,
-                  { flex: 1, textAlign: "right", paddingVertical: 8 },
-                ]}
-              />
-            }
-          />
-          <GlassRow
-            leading={<PhotoThumb selfie={profile.selfiePhoto} />}
-            label="Photo"
-            value={profile.selfiePhoto ? "Change" : "Add"}
-            onPress={changePhoto}
-          />
-        </GlassSection>
-
-        <GlassSection
-          title="Your fit"
-          note="Sizes are recommended from your latest measurements and the fit you like."
-        >
-          <BodySummary />
-          <GlassRow
-            icon="ruler"
-            label="Measurements"
-            value="Edit & history"
-            chevron
-            onPress={() => router.push("/measurements")}
-          />
-          <View style={{ padding: PAD, gap: 12 }}>
-            <Text style={TYPE.control}>Fit preference</Text>
-            <GlassSegmented
-              options={FIT_OPTIONS}
-              value={profile.fitPreference}
-              onChange={(fitPreference) => profile.set({ fitPreference })}
-            />
-          </View>
-        </GlassSection>
-
-        <AccountSection />
-
-        <GlassSection title="Silo">
-          <GlassRow
-            icon="arrow.counterclockwise"
-            label="Redo onboarding"
+            icon="person.text.rectangle"
+            label="Get your passport"
+            detail="Finish color analysis to have one issued."
             onPress={redoOnboarding}
           />
-          {/* Signed in, a reset would back the empty phone up over the account. */}
-          {member ? null : (
-            <GlassRow
-              icon="xmark.circle"
-              label="Reset app"
-              destructive
-              onPress={resetApp}
-            />
-          )}
         </GlassSection>
+      )}
 
-        <Text
-          style={[
-            TYPE.wordmark,
-            { alignSelf: "center", color: BRAND.inkFaint, marginTop: -4 },
-          ]}
-        >
-          Silo
-        </Text>
-      </ScrollView>
-    </View>
+      <GlassSection title="On your passport">
+        <GlassRow
+          icon="signature"
+          label="Name"
+          trailing={
+            <TextInput
+              value={profile.displayName ?? ""}
+              onChangeText={(displayName) => profile.set({ displayName })}
+              placeholder="Add your name"
+              placeholderTextColor={BRAND.placeholder}
+              selectionColor={BRAND.ink}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="done"
+              maxLength={24}
+              maxFontSizeMultiplier={1.3}
+              accessibilityLabel="Name on your passport"
+              style={[
+                TYPE.control,
+                { flex: 1, textAlign: "right", paddingVertical: 8 },
+              ]}
+            />
+          }
+        />
+        <GlassRow
+          leading={<PhotoThumb selfie={profile.selfiePhoto} />}
+          label="Photo"
+          value={profile.selfiePhoto ? "Change" : "Add"}
+          onPress={changePhoto}
+        />
+      </GlassSection>
+
+      <GlassSection
+        title="Your fit"
+        note="Sizes are recommended from your latest measurements and the fit you like."
+      >
+        <BodySummary />
+        <GlassRow
+          icon="ruler"
+          label="Measurements"
+          value="Edit & history"
+          chevron
+          onPress={() => router.push("/measurements")}
+        />
+        <View style={{ padding: PAD, gap: 12 }}>
+          <Text style={TYPE.control}>Fit preference</Text>
+          <GlassSegmented
+            options={FIT_OPTIONS}
+            value={profile.fitPreference}
+            onChange={(fitPreference) => profile.set({ fitPreference })}
+          />
+        </View>
+      </GlassSection>
+
+      <AccountSection />
+
+      <GlassSection title="Silo">
+        <GlassRow
+          icon="arrow.counterclockwise"
+          label="Redo onboarding"
+          onPress={redoOnboarding}
+        />
+        {/* Signed in, a reset would back the empty phone up over the account. */}
+        {member ? null : (
+          <GlassRow
+            icon="xmark.circle"
+            label="Reset app"
+            destructive
+            onPress={resetApp}
+          />
+        )}
+      </GlassSection>
+
+      <Text
+        style={[
+          TYPE.wordmark,
+          { alignSelf: "center", color: BRAND.inkFaint, marginTop: -4 },
+        ]}
+      >
+        Silo
+      </Text>
+    </GlassScreen>
   );
 }

@@ -26,7 +26,6 @@ import { tryOnImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
 import { silhouetteMatch } from "@/lib/silhouette";
-import { useFit } from "@/store/fit";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
@@ -95,10 +94,6 @@ export default function ItemSheet() {
   const fitPreference = useProfile((s) => s.fitPreference);
   const saved = useSaved((s) => (item ? s.itemIds.includes(item.id) : false));
   const lists = useSaved((s) => s.lists);
-  const inFit = useFit((s) =>
-    item ? s.pieces[item.category]?.id === item.id : false,
-  );
-  const fitCount = useFit((s) => Object.keys(s.pieces).length);
   const [onYou, setOnYou] = useState(false);
   const backdrop = useSeasonBackdrop();
 
@@ -285,26 +280,6 @@ export default function ItemSheet() {
             )}
           </Glass>
         ) : null}
-
-        <View style={{ flexDirection: "row", gap: t.space(2) }}>
-          <Button
-            variant="secondary"
-            label={inFit ? "In your fit ✓" : "Add to fit"}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              if (inFit) useFit.getState().remove(item.category);
-              else useFit.getState().add(item);
-            }}
-            style={{ flex: 1 }}
-          />
-          {fitCount ? (
-            <Button
-              variant="ghost"
-              label={`See fit (${fitCount})`}
-              onPress={() => router.push("/fit")}
-            />
-          ) : null}
-        </View>
 
         {saved ? (
           <Animated.View entering={FadeIn}>

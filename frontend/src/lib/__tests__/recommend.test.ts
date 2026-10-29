@@ -135,11 +135,21 @@ describe("mannequin", () => {
 
   it("completes the outfit around the item", () => {
     const roles = (id: string) =>
-      outfit(L, findItem(id)!).map((layer) => layer.role);
+      outfit(L, [findItem(id)!]).map((layer) => layer.role);
     expect(roles("w-03")).toEqual(["item"]); // dress
     expect(roles("w-06")).toEqual(["baseTop", "item"]); // trousers
     expect(roles("w-01")).toEqual(["baseBottom", "item"]); // shirt
     expect(roles("w-09")).toEqual(["baseBottom", "baseTop", "item"]); // blazer
+  });
+
+  it("dresses a whole fit, each piece in place of its plain one", () => {
+    const pieces = ["w-09", "w-01", "w-06"].map((id) => findItem(id)!);
+    const layers = outfit(L, pieces);
+    // Trousers, the shirt over them, then the blazer.
+    expect(layers.map((l) => l.piece)).toEqual([2, 1, 0]);
+    expect(
+      outfit(L, [findItem("w-03")!, pieces[0]]).map((l) => l.piece),
+    ).toEqual([0, 1]);
   });
 
   it("without a height, leg length sets the figure's height", () => {
@@ -193,7 +203,7 @@ describe("mannequin", () => {
     );
   });
 
-    it("drops the hem lower for longer lengths", () => {
+  it("drops the hem lower for longer lengths", () => {
     expect(hemY(L, "waist")).toBeLessThan(hemY(L, "hip"));
     expect(hemY(L, "hip")).toBeLessThan(hemY(L, "knee"));
     expect(hemY(L, "knee")).toBeLessThan(hemY(L, "midi"));
