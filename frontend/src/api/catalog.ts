@@ -231,3 +231,34 @@ export function tryOnImageSource(
     headers: apiHeaders(),
   };
 }
+
+/**
+ * One AI try-on image of a whole fit (2-3 live pieces, in fitPieces order) on
+ * the user's body. Null in mock mode, with fewer than 2 pieces, or when any
+ * piece is a demo item.
+ *
+ * Backend contract: GET {API_URL}/catalog/tryon-image?shopFor&fit=<JSON [{id, category, selected?}]>&guide=<JSON>,
+ * Authorization: Bearer -> image/jpeg.
+ */
+export function fitImageSource(
+  items: CatalogItem[],
+  shopFor: ShopFor,
+  measurements: Measurements,
+): { uri: string; headers: Record<string, string> } | null {
+  if (USE_MOCKS || items.length < 2 || items.some((i) => !i.shopifyId))
+    return null;
+  const fit = items.map((i) => ({
+    id: i.shopifyId,
+    category: i.category,
+    ...(i.shopifyColor ? { selected: [i.shopifyColor] } : {}),
+  }));
+  const query = new URLSearchParams({
+    shopFor,
+    fit: JSON.stringify(fit),
+    guide: JSON.stringify(tryOnGuide(measurements, shopFor)),
+  });
+  return {
+    uri: `${API_URL}/catalog/tryon-image?${query}`,
+    headers: apiHeaders(),
+  };
+}

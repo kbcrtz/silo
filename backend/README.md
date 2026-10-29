@@ -47,7 +47,7 @@ The app already calls these, behind mocks, in `frontend/src/api/`. Match these s
 - `GET /try-on/:jobId` → `{ status: "queued" | "running" | "succeeded" | "failed", resultUrl?, error? }`. Not implemented yet.
 - `GET /catalog/discover` → `{ products: CatalogProduct[], cursor: string | null, source: "shopify" }`. **Implemented**; see [Catalog](#catalog).
 - `GET /catalog/product?id=<gid>&selected=<JSON>` → `{ product: CatalogProduct }` with images, description and variants. **Implemented.**
-- `GET /catalog/tryon-image?id=<gid>&shopFor=&category=&selected=<JSON>&guide=<JSON>` → `image/jpeg`: a full-body mannequin with the shopper's proportions wearing the product, in the variant's color. **Implemented**; see [AI try-on images](#ai-try-on-images).
+- `GET /catalog/tryon-image?id=<gid>&shopFor=&category=&selected=<JSON>&guide=<JSON>` → `image/jpeg`: a full-body mannequin with the shopper's proportions wearing the product, in the variant's color. With `fit=<JSON>` instead of `id`, one image of a whole fit (2–3 pieces). **Implemented**; see [AI try-on images](#ai-try-on-images).
 - `GET /me`, `PUT /me/profile`, `PUT /me/saved`, `POST /me/measurements`, `PUT`/`GET /me/photo`, `POST /events`, `POST /me/merge`, `DELETE /me`: the signed-in user's data, keyed by their Supabase user id. **Implemented**; see [User data](#user-data).
 
 Errors are `{ "error": "<code>" }` with a non-2xx status. The app treats any non-2xx as "couldn't analyze", offering retake or quiz-only.
@@ -136,6 +136,7 @@ Live listings from [Shopify Global Catalog](https://shopify.dev/docs/agents/cata
   - Gemini copies the shopper's widths and leg length from it. The garment's colors, cut and details come from the photo, which the prompt names by its listing title.
   - In testing on Lite, each change mattered. Outlines alone, or clothes drawn over the body, left plus-size bodies about 25% too slim. Clothes drawn in the diagram also got copied as flat shapes. With the filled body first and the build in words, the error was 2–10%.
   - Without a guide (older app builds), the listing reader's fit, length and sleeves go in the prompt and the body is generic.
+- **Full fit:** `fit=<JSON>` replaces `id`, `category` and `selected`: `[{"id":"<gid>","category":"top","selected":[...]}, ...]`, 2–3 pieces, one of each kind; a dress takes the place of the top and bottoms (top + bottom (+ outerwear), or dress + outerwear). `guide` is required. One Gemini call gets the body diagram first, then one store photo per piece, inner layers first; the prompt names each photo by its listing title (in testing, without the titles Lite took a color from the wrong photo) and puts a jacket on open over the top or dress. The image costs about the same as a one-item image, and counts once against the budget. It's saved under the pieces, their colors, the department, the guide and `FIT_VERSION`, so the same pieces in any order share one image.
 - If Gemini answers without an image, the request is retried once.
 - Gemini sometimes paints a light-gray backdrop; a flood fill from the border turns it pure white before saving.
 

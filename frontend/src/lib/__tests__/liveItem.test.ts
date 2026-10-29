@@ -1,4 +1,8 @@
-import { tryOnImageSource, type CatalogProduct } from "@/api/catalog";
+import {
+  fitImageSource,
+  tryOnImageSource,
+  type CatalogProduct,
+} from "@/api/catalog";
 import { findItem, rememberItems } from "@/data/catalog";
 import { SEASONS } from "@/data/seasons";
 import { inferCut, toCatalogItem } from "../liveItem";
@@ -234,5 +238,8 @@ describe("AI try-on image source", () => {
       tryOnImageSource(toCatalogItem(product(), "mens"), "mens", {}),
     ).toBeNull(); // tests run on mocks
     expect(tryOnImageSource(findItem("w-01")!, "womens", {})).toBeNull();
+    expect(
+      fitImageSource([findItem("w-01")!, findItem("w-02")!], "womens", {}),
+    ).toBeNull();
   });
 });

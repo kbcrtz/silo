@@ -8,7 +8,7 @@ import { createGate, type Gate } from "../src/guard.ts";
 import type { Enrich, Insight } from "../src/services/listingInsights.ts";
 import type { Catalog } from "../src/services/shopifyCatalog.ts";
 import sharp from "sharp";
-import { bodyWords, createTryOn, guideImage, memoryStore, photoUrlAllowed, tryOnPrompt, whiteBackground, type Guide, type TryOn } from "../src/services/tryOnImage.ts";
+import { bodyWords, createTryOn, fitPrompt, guideImage, memoryStore, photoUrlAllowed, tryOnPrompt, whiteBackground, type Guide, type TryOn } from "../src/services/tryOnImage.ts";
 import { productDetail } from "./fixtures/shopify.ts";
 import { ANON_TOKEN, TOKEN, verify } from "./fixtures/auth.ts";
 
@@ -40,18 +40,37 @@ test("with a body guide, the body comes from the diagram and the words, the garm
   assert.doesNotMatch(prompt, /fitted fit/, "the photo sets the cut, not the listing reader's guess");
 });
 
+test("a fit prompt names each photo by its listing title, after the body diagram, with the jacket worn over the rest", () => {
+  const prompt = fitPrompt({
+    pieces: [
+      { category: "top", title: "Striped Tee" },
+      { category: "bottom", title: 'Wide "Leg" Trouser' },
+      { category: "outerwear", title: "Denim Jacket" },
+    ],
+    department: "womens",
+    build: "an average body",
+  });
+  assert.match(prompt, /^Image 1 is a body diagram[\s\S]*an average body/);
+  assert.match(prompt, /image 2 is the top \("Striped Tee"\), image 3 is the bottoms \("Wide Leg Trouser"\), image 4 is the jacket or coat \("Denim Jacket"\)/);
+  assert.match(prompt, /the jacket or coat from image 4, worn open over the top/);
+  assert.match(prompt, /female dress-form/);
+  assert.match(prompt, /no shoes/);
+  assert.match(fitPrompt({ pieces: [{ category: "dress", title: "Midi" }, { category: "outerwear", title: "Coat" }], department: "womens", build: "x" }), /worn open over the dress/);
+  assert.doesNotMatch(fitPrompt({ pieces: [{ category: "bottom", title: "Chino" }, { category: "outerwear", title: "Coat" }], department: "mens", build: "x" }), /worn open/, "no top to wear it over");
+});
+
 test("an answer without an image is retried once, with the body diagram first", async () => {
   const jpeg = await sharp({ create: { width: 30, height: 40, channels: 3, background: "#eee" } }).jpeg().toBuffer();
   const answers = [{ candidates: [{ content: { parts: [] } }] }, { candidates: [{ content: { parts: [{ inlineData: { data: jpeg.toString("base64") } }] } }] }];
   const requests: any[] = [];
   const tryOn = createTryOn({ generateContent: async (r) => (requests.push(r), answers.shift() ?? answers[0]), model: "m", timeoutMs: 1000, fetch, store: memoryStore() });
   const photo = { data: Buffer.from("photo"), mimeType: "image/jpeg" };
-  const image = await tryOn.generate(photo, "prompt", Buffer.from("guide"));
+  const image = await tryOn.generate([photo], "prompt", Buffer.from("guide"));
   assert.equal((await sharp(image).metadata()).format, "jpeg");
   assert.equal(requests.length, 2);
   assert.deepEqual(requests[0].contents[0].parts.map((p: any) => p.inlineData?.mimeType ?? "text"), ["image/png", "image/jpeg", "text"]);
   const never = createTryOn({ generateContent: async () => ({ candidates: [] }), model: "m", timeoutMs: 1000, fetch, store: memoryStore() });
-  await assert.rejects(never.generate(photo, "prompt"), /gemini_invalid_output/);
+  await assert.rejects(never.generate([photo], "prompt"), /gemini_invalid_output/);
 });
 
 /** A body (head, then everything below it) in cm: `w` wide, `h` tall. */
@@ -109,7 +128,7 @@ const insight = (patch: Partial<Insight> = {}): Insight => ({
 });
 
 function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate; anonymousGate?: Gate } = {}) {
-  const generated: { prompt: string; photo: Buffer; guide?: Buffer }[] = [];
+  const generated: { prompt: string; photo: Buffer; photos: number; guide?: Buffer }[] = [];
   const saved = new Map<string, Buffer>();
   const fetched: string[] = [];
   const tryOn: TryOn = {
@@ -117,8 +136,8 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate;
       fetched.push(url);
       return { data: Buffer.from("photo"), mimeType: "image/jpeg" };
     },
-    async generate(photo, prompt, guide) {
-      generated.push({ prompt, photo: photo.data, guide });
+    async generate(photos, prompt, guide) {
+      generated.push({ prompt, photo: photos[0].data, photos: photos.length, guide });
       return Buffer.from("generated-jpeg");
     },
     store: {
@@ -226,6 +245,38 @@ test("unknown products, shoes and missing photos are explained, not generated", 
   const noPhoto = { ...productDetail, media: [] };
   assert.deepEqual((await setup({ product: noPhoto }).get(url())).json(), { error: "no_photo" });
   assert.equal((await setup().get("/catalog/tryon-image?id=nope")).statusCode, 400);
+});
+
+const fitUrl = (fit: unknown, guide: unknown = GUIDE) =>
+  `/catalog/tryon-image?shopFor=womens&fit=${encodeURIComponent(JSON.stringify(fit))}&guide=${encodeURIComponent(JSON.stringify(guide))}`;
+const TEE = { id: "gid://shopify/p/tee1", category: "top", selected: [{ name: "Color", label: "Navy" }, { name: "Size", label: "M" }] };
+const PANTS = { id: "gid://shopify/p/pants1", category: "bottom" };
+
+test("a fit is one image of every piece on the shopper's body, saved for the same pieces in any order", async () => {
+  const { get, generated, asked, fetched } = setup();
+  const res = await get(fitUrl([PANTS, TEE]));
+  assert.equal(res.statusCode, 200);
+  assert.equal(generated.length, 1);
+  assert.equal(generated[0].photos, 2);
+  assert.equal(fetched.length, 2);
+  assert.ok(generated[0].guide, "the body diagram goes first");
+  assert.match(generated[0].prompt, /image 2 is the top[\s\S]*image 3 is the bottoms/, "inner layers first, whatever order the app sent");
+  assert.deepEqual(asked, [[{ name: "Color", label: "Navy" }], undefined], "each piece's own color, no size");
+  await get(fitUrl([TEE, { ...PANTS }]));
+  assert.equal(generated.length, 1, "the same fit comes from storage");
+  await get(fitUrl([TEE, { ...PANTS, selected: [{ name: "Color", label: "Khaki" }] }]));
+  assert.equal(generated.length, 2, "another color of a piece is another fit");
+});
+
+test("a fit needs 2-3 different kinds of piece and the shopper's body", async () => {
+  const { get, generated } = setup();
+  const dress = { id: "gid://shopify/p/d1", category: "dress" };
+  const coat = { id: "gid://shopify/p/c1", category: "outerwear" };
+  assert.equal((await get(fitUrl([dress, coat]))).statusCode, 200);
+  for (const bad of [[TEE], [TEE, { ...TEE, id: "gid://shopify/p/tee2" }], [dress, TEE], [TEE, PANTS, coat, dress]]) assert.equal((await get(fitUrl(bad))).statusCode, 400, JSON.stringify(bad));
+  assert.equal((await get(fitUrl([TEE, PANTS]).replace(/&guide=[^&]*/, ""))).statusCode, 400, "no body, no fit");
+  assert.equal((await get(`${fitUrl([TEE, PANTS])}&id=${encodeURIComponent(productDetail.id)}`)).statusCode, 400, "a fit or one product, not both");
+  assert.equal(generated.length, 1);
 });
 
 test("the photo is the color the shopper saw: the variant's color goes to Shopify and into the saved key", async () => {

@@ -27,6 +27,7 @@ import { pickSelfie } from "@/lib/pickPhoto";
 import { formatMeasurement } from "@/lib/units";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
+import { useFit } from "@/store/fit";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 
@@ -69,6 +70,7 @@ export default function Profile() {
           onPress: () => {
             useMeasurements.getState().replaceAll([]);
             useSaved.getState().clear();
+            useFit.setState({ pieces: {} });
             profile.reset();
           },
         },

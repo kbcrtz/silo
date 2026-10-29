@@ -65,6 +65,8 @@ export default function RootLayout() {
           <Stack.Screen name="saved/index" options={pushed} />
           <Stack.Screen name="saved/[id]" options={pushed} />
           <Stack.Screen name="profile" options={pushed} />
+          {/* Opened from the item sheet: a modal, since a pushed screen there stacks a blank header over the sheet. */}
+          <Stack.Screen name="fit" options={{ presentation: "modal" }} />
           <Stack.Screen
             name="measurements"
             options={{ headerShown: true, title: "Measurements" }}
