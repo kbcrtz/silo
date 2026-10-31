@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
-import { useMembership } from "@/api/purchases";
+import { useMembership } from "@/store/membership";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
 import { Header } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";

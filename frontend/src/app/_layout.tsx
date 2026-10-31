@@ -4,7 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MISSING_SETTINGS, sleep, USE_MOCKS } from "@/api/config";
-import { useMembership } from "@/api/purchases";
+import { useMembership } from "@/store/membership";
 import { startSession } from "@/api/supabase";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";

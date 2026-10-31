@@ -12,6 +12,7 @@ import { tryOnImageRoute } from "./routes/tryOnImage.ts";
 import type { DeleteAccount } from "./services/account.ts";
 import type { RevokeApple } from "./services/appleRevoke.ts";
 import type { Enrich } from "./services/listingInsights.ts";
+import type { Membership } from "./services/membership.ts";
 import type { Catalog } from "./services/shopifyCatalog.ts";
 import type { Trends } from "./services/trends.ts";
 import type { TryOn } from "./services/tryOnImage.ts";
@@ -66,6 +67,8 @@ export function buildApp(deps: {
   anonymousTryOnGate?: Gate;
   /** Per-user budget for POST /events. */
   eventsGate?: Gate;
+  /** Who has a paid membership (RevenueCat); the catalog, feed and try-on images are for members. Everyone gets in without it. */
+  membership?: Membership;
   /** Proxy addresses (comma-separated IPs/CIDRs) whose X-Forwarded-For is believed, so req.ip is the client, not the proxy. */
   trustProxy?: string;
 }) {
@@ -104,6 +107,12 @@ export function buildApp(deps: {
     const user = token ? await deps.verify(token) : null;
     if (user && (!user.anonymous || deps.allowAnonymous)) [req.userId, req.anonymous] = [user.id, user.anonymous];
     if (!req.userId && !LOGGED_OUT_ROUTES.has(`${req.method} ${req.routeOptions.url}`)) return reply.code(401).send({ error: "unauthorized" });
+    // Sign-up, backups and selfie analysis come before the paywall; what costs us per request comes after it.
+    if (deps.membership && req.userId && req.routeOptions.url?.startsWith("/catalog/")) {
+      const member = await deps.membership(req.userId);
+      if (member === false) return reply.code(402).send({ error: "membership_required" });
+      if (member === null) req.log.warn("membership_unavailable"); // let them in: a store outage shouldn't lock payers out
+    }
   });
   app.addHook("onSend", async (req, reply) => {
     reply.header("x-request-id", req.id);

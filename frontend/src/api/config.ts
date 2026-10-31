@@ -1,3 +1,5 @@
+import { useMembership } from "@/store/membership";
+
 // Without a trailing slash, so `${API_URL}/path` never doubles it.
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(
   /\/+$/,
@@ -56,6 +58,8 @@ export function fileField(uri: string, name: string) {
 }
 
 export async function expectOk(res: Response): Promise<Response> {
+  // The server's membership check said no: the root layout sends them to the paywall.
+  if (res.status === 402) useMembership.setState({ active: false });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res;
 }

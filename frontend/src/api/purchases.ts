@@ -3,7 +3,6 @@ import Purchases, {
   type CustomerInfo,
   type PurchasesPackage,
 } from "react-native-purchases";
-import { create } from "zustand";
 import {
   formatPrice,
   perMonth,
@@ -11,6 +10,7 @@ import {
   yearCost,
   type PlanId,
 } from "@/lib/paywall";
+import { useMembership } from "@/store/membership";
 import { sleep, USE_MOCKS } from "./config";
 
 const API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
@@ -28,11 +28,6 @@ export type Offer = {
   perYear: number;
   pkg?: PurchasesPackage;
 };
-
-/** Whether the account has an active membership; null until the store answers (always, without a store). */
-export const useMembership = create<{ active: boolean | null }>(() => ({
-  active: null,
-}));
 
 const isActive = (info: CustomerInfo) =>
   info.entitlements.active[ENTITLEMENT] !== undefined;

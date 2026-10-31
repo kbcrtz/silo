@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, Text, View } from "react-native";
-import { useMembership } from "@/api/purchases";
+import { useMembership } from "@/store/membership";
 import { Header } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";

@@ -7,6 +7,7 @@ import { buildApp } from "../src/app.ts";
 import { HttpError } from "../src/errors.ts";
 import { createGate, type Gate } from "../src/guard.ts";
 import type { Enrich } from "../src/services/listingInsights.ts";
+import type { Membership } from "../src/services/membership.ts";
 import type { Catalog, SearchInput } from "../src/services/shopifyCatalog.ts";
 
 const SECRET = "test-secret-0123456789";
@@ -17,7 +18,7 @@ const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis
 const softAutumn = "palette=%23B07D62,%239CAF88,%23C9A66B,%237E8C6A&neutrals=%23EDE4D8,%235C5046";
 
 /** A catalog that answers every search with `products` and a cursor named after the query. */
-function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean; enrich?: Enrich; estimateGate?: Gate } = {}) {
+function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean; enrich?: Enrich; estimateGate?: Gate; membership?: Membership } = {}) {
   const searches: SearchInput[] = [];
   const lookups: { id: string; selected?: unknown }[] = [];
   const catalog: Catalog = {
@@ -50,6 +51,7 @@ function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown
     gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     enrich: opts.enrich,
     estimateGate: opts.estimateGate,
+    membership: opts.membership,
   });
   const get = (url: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${TOKEN}` } });
   return { get, searches, lookups, logs };
@@ -325,4 +327,18 @@ test("a seed also mixes the order within a page", async () => {
     (await setup({ products: [trouser, sweater] }).get(`/catalog/discover?category=tops&seed=${seed}`)).json().products.map((p: any) => p.id).join(",");
   assert.equal(await order(4), await order(4));
   assert.ok(new Set(await Promise.all(Array.from({ length: 12 }, (_, i) => order(i + 1)))).size > 1);
+});
+
+test("with memberships on, the catalog answers members only; a store outage doesn't lock members out", async () => {
+  const asked: string[] = [];
+  const answers: (boolean | null)[] = [false, true, null];
+  const { get, searches, logs } = setup({ membership: async (id) => (asked.push(id), answers.shift()!) });
+  const refused = await get("/catalog/discover?category=tops");
+  assert.equal(refused.statusCode, 402);
+  assert.deepEqual(refused.json(), { error: "membership_required" });
+  assert.equal(searches.length, 0);
+  assert.equal((await get("/catalog/discover?category=tops")).statusCode, 200);
+  assert.equal((await get("/catalog/discover?category=tops")).statusCode, 200);
+  assert.ok(logs.some((l) => l.msg === "membership_unavailable"));
+  assert.equal(asked.length, 3);
 });

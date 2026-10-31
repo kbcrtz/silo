@@ -8,6 +8,7 @@ import { supabaseVerifier } from "./auth.ts";
 import { createGate } from "./guard.ts";
 import { supabaseAccounts } from "./services/account.ts";
 import { appleRevoker } from "./services/appleRevoke.ts";
+import { revenueCatMembership } from "./services/membership.ts";
 import { locateRegions, type CreateInteraction } from "./services/colorVision.ts";
 import { createEnricher } from "./services/listingInsights.ts";
 import { createCatalog } from "./services/shopifyCatalog.ts";
@@ -48,6 +49,11 @@ const revokeApple =
         fetch,
       })
     : undefined;
+// Paid memberships: the catalog and try-on images answer RevenueCat members only. Off (everyone in) without the key.
+const membership = process.env.REVENUECAT_SECRET_KEY
+  ? revenueCatMembership({ secretKey: process.env.REVENUECAT_SECRET_KEY, fetch })
+  : undefined;
+if (!membership) console.warn("REVENUECAT_SECRET_KEY is not set; the catalog is open to every signed-in user.");
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -137,6 +143,7 @@ const app = buildApp({
   deleteAccount,
   allowAnonymous,
   revokeApple,
+  membership,
   gate,
   enrich,
   estimateGate,
