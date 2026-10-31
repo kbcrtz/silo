@@ -65,6 +65,8 @@ export function buildApp(deps: {
   tryOnGate?: Gate;
   /** Per-IP budget for those images across anonymous logins, since a new anonymous login is free. */
   anonymousTryOnGate?: Gate;
+  /** Per-user daily budget for those images, so one account can't run them all day. */
+  dailyTryOnGate?: Gate;
   /** Per-user budget for POST /events. */
   eventsGate?: Gate;
   /** Who has a paid membership (RevenueCat); the catalog, feed and try-on images are for members. Everyone gets in without it. */

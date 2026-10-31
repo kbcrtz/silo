@@ -35,22 +35,27 @@ const track = (info: CustomerInfo) =>
   useMembership.setState({ active: isActive(info) });
 
 let current: string | null = null;
+/** The current user's membership lookup, so a second caller waits for the same answer. */
+let known: Promise<void> = Promise.resolve();
 
 /**
  * Ties purchases to the Supabase user, so a membership follows the account to
  * any phone. Called on every session change; linking Apple/Google keeps the id.
+ * Resolves once the user's membership is known.
  */
 export async function identify(userId: string): Promise<void> {
-  if (!STORE_ON || userId === current) return;
-  if (current === null) {
-    Purchases.configure({ apiKey: API_KEY!, appUserID: userId });
-    Purchases.addCustomerInfoUpdateListener(track);
-    current = userId;
-    track(await Purchases.getCustomerInfo());
-  } else {
-    current = userId;
-    track((await Purchases.logIn(userId)).customerInfo);
+  if (STORE_ON && userId !== current) {
+    if (current === null) {
+      Purchases.configure({ apiKey: API_KEY!, appUserID: userId });
+      Purchases.addCustomerInfoUpdateListener(track);
+      current = userId;
+      known = Purchases.getCustomerInfo().then(track);
+    } else {
+      current = userId;
+      known = Purchases.logIn(userId).then((r) => track(r.customerInfo));
+    }
   }
+  return known;
 }
 
 const TYPES: Record<PlanId, PACKAGE_TYPE> = {
@@ -97,7 +102,12 @@ export async function buy(offer: Offer): Promise<boolean> {
   try {
     const { customerInfo } = await Purchases.purchasePackage(offer.pkg);
     track(customerInfo);
-    return isActive(customerInfo);
+    // Charged but not unlocked (entitlement misconfigured or slow): say so rather than doing nothing.
+    if (!isActive(customerInfo))
+      throw new Error(
+        "Your purchase went through, but the membership isn't active yet. Try Restore purchases in a moment.",
+      );
+    return true;
   } catch (e) {
     if ((e as { userCancelled?: boolean | null }).userCancelled) return false;
     throw e;

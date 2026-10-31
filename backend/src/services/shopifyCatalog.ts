@@ -28,13 +28,13 @@ export type CatalogConfig = {
   /** Ships-to and pricing country, ISO 3166-1 alpha-2. */
   country: string;
   timeoutMs: number;
+  /** Calls open at once; anonymous access shares low rate limits. Default 2. */
+  maxInFlight?: number;
   sleep?: (ms: number) => Promise<void>;
 };
 
 /** Shopify Standard Product Taxonomy "Apparel & Accessories > Clothing"; checked against the live API. */
 const CLOTHING = "aa-1";
-/** Anonymous access shares low rate limits, so this server never has more than two calls open. */
-const MAX_IN_FLIGHT = 2;
 /** One retry, and only if Shopify asks us to wait no longer than this. */
 const MAX_RETRY_AFTER_MS = 3000;
 const BACKOFF_MS = 500;
@@ -89,7 +89,7 @@ function retryAfter(res: Response): number | undefined {
 
 export function createCatalog(cfg: CatalogConfig): Catalog {
   const sleep = cfg.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const gate = limiter(MAX_IN_FLIGHT);
+  const gate = limiter(cfg.maxInFlight ?? 2);
 
   async function attempt(body: string, timeout: AbortSignal, signal?: AbortSignal): Promise<Record<string, unknown>> {
     let res: Response;

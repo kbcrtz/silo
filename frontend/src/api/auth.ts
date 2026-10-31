@@ -14,8 +14,10 @@ import {
   joinBackup,
   restorePhoto,
 } from "@/store/backup";
+import { useMembership } from "@/store/membership";
 import { useProfile } from "@/store/profile";
 import { USE_MOCKS, sleep } from "./config";
+import { identify } from "./purchases";
 import { supabase } from "./supabase";
 import { deleteAccount, fetchBackup, mergeAnonymous } from "./userData";
 
@@ -140,6 +142,9 @@ export function signIn(provider: Provider): Promise<boolean> {
     const id = await (provider === "apple" ? appleToken() : googleToken());
     if (!id) return false;
     await connect(provider, id.token);
+    // The sign-in step decides paywall or not from the membership, so wait for it.
+    const { data } = await supabase!.auth.getSession();
+    if (data.session) await identify(data.session.user.id).catch(() => {});
     const profile = useProfile.getState();
     if (!profile.displayName && id.givenName)
       profile.set({ displayName: id.givenName });
@@ -158,6 +163,8 @@ async function startOver() {
     await supabase.auth.signOut().catch(() => {});
   }
   useAccount.setState({ account: { kind: "none" } });
+  // The last account's membership mustn't let the next one past the paywall.
+  useMembership.setState({ active: null });
 }
 
 /** The account's data stays on the server for the next sign-in. */

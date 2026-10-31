@@ -22,7 +22,12 @@ import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { FAMILIES, familyOf, type Family } from "@/data/families";
 import { LOOKS, type Look } from "@/data/looks";
-import { paletteRuns, pickLooks, type PlanId } from "@/lib/paywall";
+import {
+  paletteRuns,
+  pickLooks,
+  savingsPercent,
+  type PlanId,
+} from "@/lib/paywall";
 import { photoUri } from "@/lib/photos";
 import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
@@ -349,9 +354,7 @@ export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
   const annual = offer("annual");
   const monthly = offer("monthly");
   const save =
-    annual && monthly && monthly.perYear
-      ? Math.max(0, Math.floor((1 - annual.perYear / monthly.perYear) * 100))
-      : 0;
+    annual && monthly ? savingsPercent(annual.perYear, monthly.perYear) : 0;
 
   const subscribe = async () => {
     if (!plan) return;

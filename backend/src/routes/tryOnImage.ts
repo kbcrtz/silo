@@ -49,7 +49,8 @@ export async function tryOnImageRoute(
     tryOn,
     tryOnGate,
     anonymousTryOnGate,
-  }: { catalog: Catalog; enrich?: Enrich; tryOn?: TryOn; tryOnGate?: Gate; anonymousTryOnGate?: Gate },
+    dailyTryOnGate,
+  }: { catalog: Catalog; enrich?: Enrich; tryOn?: TryOn; tryOnGate?: Gate; anonymousTryOnGate?: Gate; dailyTryOnGate?: Gate },
 ) {
   // Images being made right now, so a double tap (or two screens) waits for the same one instead of paying twice.
   const making = new Map<string, Promise<Buffer>>();
@@ -85,8 +86,12 @@ export async function tryOnImageRoute(
       const ready = saved ?? (pending && (await pending));
       if (ready) return reply.header("content-type", "image/jpeg").header("cache-control", "private, max-age=86400").send(ready);
 
-      // Generation is billed: a budget per signed-in user, and per IP across anonymous logins.
-      const gates: [Gate | undefined, string][] = [[tryOnGate, req.userId ?? req.ip], [req.anonymous ? anonymousTryOnGate : undefined, req.ip]];
+      // Generation is billed: budgets per signed-in user (10 minutes and a day), and per IP across anonymous logins.
+      const gates: [Gate | undefined, string][] = [
+        [tryOnGate, req.userId ?? req.ip],
+        [dailyTryOnGate, req.userId ?? req.ip],
+        [req.anonymous ? anonymousTryOnGate : undefined, req.ip],
+      ];
       for (const [gate, key] of gates) {
         if (!gate) continue;
         const slot = gate.tryEnter(key);
@@ -131,10 +136,14 @@ export async function tryOnImageRoute(
         return tryOn.generate(photos, prompt, guide && (await guideImage(guide)));
       })();
       making.set(key, work);
-      const image = await work.finally(() => making.delete(key));
-      diag.generated = true;
       // Saved after answering, so the shopper doesn't wait on the database; a failed save means the next view generates again.
-      void tryOn.store.put(key, image, "gemini").catch(() => {});
+      // Shared until saved, so a request in between doesn't generate it again.
+      void work
+        .then((image) => tryOn.store.put(key, image, "gemini"))
+        .catch(() => {})
+        .finally(() => making.delete(key));
+      const image = await work;
+      diag.generated = true;
       return reply.header("content-type", "image/jpeg").header("cache-control", "private, max-age=86400").send(image);
     } catch (e) {
       const known = e instanceof HttpError ? e : null;

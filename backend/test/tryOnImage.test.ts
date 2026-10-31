@@ -127,7 +127,7 @@ const insight = (patch: Partial<Insight> = {}): Insight => ({
   ...patch,
 });
 
-function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate; anonymousGate?: Gate } = {}) {
+function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate; anonymousGate?: Gate; dailyGate?: Gate } = {}) {
   const generated: { prompt: string; photo: Buffer; photos: number; guide?: Buffer }[] = [];
   const saved = new Map<string, Buffer>();
   const fetched: string[] = [];
@@ -183,6 +183,7 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate;
     tryOn,
     tryOnGate: opts.gate ?? createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
     anonymousTryOnGate: opts.anonymousGate,
+    dailyTryOnGate: opts.dailyGate,
   });
   // `forwardedFor` arrives the way Railway's proxy (a 100.64.0.0/10 address) sends it: the client's address appended last.
   const get = (url: string, token = TOKEN, forwardedFor = "203.0.113.1") =>
@@ -222,6 +223,15 @@ test("each department gets its own image", async () => {
   await get(url("womens"));
   assert.equal(generated.length, 2);
   assert.match(generated[1].prompt, /female dress-form/);
+});
+
+test("past the daily budget, no image is generated even inside the 10-minute one", async () => {
+  const { get, generated } = setup({ dailyGate: createGate({ windowMs: 86_400_000, max: 1, concurrency: 100 }) });
+  await get(url("mens"));
+  const res = await get(url("womens"));
+  assert.equal(res.statusCode, 429);
+  assert.equal(generated.length, 1);
+  assert.equal((await get(url("mens"))).statusCode, 200, "saved images don't count");
 });
 
 test("past the per-user budget, no image is generated; other users keep theirs", async () => {

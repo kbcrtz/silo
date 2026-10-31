@@ -22,9 +22,12 @@ describe("paywall prices", () => {
 
   it("compares a year of each plan", () => {
     expect(yearCost(PLANS.weekly)).toBe(10348);
-    expect(savingsPercent(PLANS.annual, PLANS.monthly)).toBe(30);
-    expect(savingsPercent(PLANS.annual, PLANS.weekly)).toBe(51);
-    expect(savingsPercent(PLANS.monthly, PLANS.monthly)).toBe(0);
+    const year = (id: keyof typeof PLANS) => yearCost(PLANS[id]);
+    expect(savingsPercent(year("annual"), year("monthly"))).toBe(30);
+    expect(savingsPercent(year("annual"), year("weekly"))).toBe(51);
+    expect(savingsPercent(year("monthly"), year("monthly"))).toBe(0);
+    // The store hasn't priced the plan to compare with.
+    expect(savingsPercent(4999, 0)).toBe(0);
   });
 });
 

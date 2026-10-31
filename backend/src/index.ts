@@ -78,6 +78,11 @@ if (!(catalogTimeoutMs > 0)) {
   console.error("CATALOG_TIMEOUT_MS must be a positive number of milliseconds.");
   process.exit(1);
 }
+const shopifyInFlight = Number(process.env.SHOPIFY_MAX_IN_FLIGHT ?? 2);
+if (!(Number.isInteger(shopifyInFlight) && shopifyInFlight > 0)) {
+  console.error("SHOPIFY_MAX_IN_FLIGHT must be a positive whole number.");
+  process.exit(1);
+}
 const catalog = createCatalog({
   fetch,
   endpoint: process.env.SHOPIFY_CATALOG_URL ?? "https://catalog.shopify.com/api/ucp/mcp",
@@ -85,6 +90,8 @@ const catalog = createCatalog({
   profile: process.env.SHOPIFY_AGENT_PROFILE ?? "https://shopify.dev/ucp/agent-profiles/examples/2026-08-25/valid-with-capabilities.json",
   country: process.env.CATALOG_COUNTRY ?? "US",
   timeoutMs: catalogTimeoutMs,
+  // Every feed page, product and try-on waits for one of these; raise it to what our own profile's rate limit allows.
+  maxInFlight: shopifyInFlight,
 });
 
 // One Gemini call per feed page reads the listings' text for color and cut. CATALOG_AI=off skips it.
@@ -96,8 +103,8 @@ if (!(enrichTimeoutMs > 0)) {
 // Flash-Lite: on a 20-listing page it took ~1.5 s against ~4 s for Flash, agreeing on category and cut (2026-10-18).
 const enrichModel = process.env.CATALOG_AI_MODEL ?? "gemini-3.5-flash-lite";
 const enrich = process.env.CATALOG_AI === "off" ? undefined : createEnricher({ create, model: enrichModel, timeoutMs: enrichTimeoutMs });
-// 30 AI-read pages per user per 10 minutes (up to 120 Gemini calls), 8 at once; past that, pages skip the estimates.
-const estimateGate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 8 });
+// 30 AI-read pages per user per 10 minutes (up to 120 Gemini calls), 24 at once across all users; past that, pages skip the estimates.
+const estimateGate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 24 });
 
 // Supabase Postgres holds signed-in users' data; tables come from supabase/migrations.
 // Without DATABASE_URL, /me answers 503 and everything else works. SSL comes from the URL (?sslmode=require).
@@ -123,8 +130,9 @@ const tryOn = createTryOn({
   fetch,
   store: tryOnStore,
 });
-// 20 new images per user per 10 minutes, 8 at once; saved images don't count.
-const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 8 });
+// 20 new images per user per 10 minutes and 150 a day, 24 at once across all users; saved images don't count.
+const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 24 });
+const dailyTryOnGate = createGate({ windowMs: 24 * 60 * 60_000, max: 150, concurrency: Infinity });
 // Anonymous logins are free to make, so together they get 60 per IP per 10 minutes: room for a few people on one Wi-Fi.
 const anonymousTryOnGate = createGate({ windowMs: 10 * 60_000, max: 60, concurrency: 3 });
 // The app sends a batch at most every 3 s of tapping; this is far above that and stops a flood of rows.
@@ -152,9 +160,17 @@ const app = buildApp({
   tryOn,
   tryOnGate,
   anonymousTryOnGate,
+  dailyTryOnGate,
   eventsGate,
   // Railway's proxy connects from 100.64.0.0/10 and appends the client's address to X-Forwarded-For.
   trustProxy: process.env.TRUST_PROXY ?? "100.64.0.0/10",
   locate: (jpeg) => locateRegions(jpeg, { create, model, timeoutMs }),
 });
 await app.listen({ port: Number(process.env.PORT ?? 8080), host: "0.0.0.0" });
+// Railway sends SIGTERM on every deploy: finish the requests in flight (a try-on image takes seconds) before exiting.
+process.once("SIGTERM", () => {
+  app.close().then(
+    () => process.exit(0),
+    () => process.exit(1),
+  );
+});

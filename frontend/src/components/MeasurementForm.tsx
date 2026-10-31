@@ -67,6 +67,8 @@ export function MeasurementForm({
   const switchUnits = (system: UnitSystem) => {
     if (system === unitSystem) return;
     setText(toTexts(values, system));
+    // Out-of-range text isn't carried over, so nothing is left to fix.
+    onChange(values, false);
     onUnitSystemChange(system);
   };
 

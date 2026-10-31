@@ -36,9 +36,9 @@ export default function FitScreen() {
       ),
     [ids],
   );
-  const key = pieces.map((i) => i.id).join(",");
+  // By the ids asked for, so an outfit with a piece that can't be found still counts as saved.
   const outfit = useSaved((s) =>
-    s.outfits.find((o) => o.itemIds.join(",") === key),
+    s.outfits.find((o) => o.itemIds.join(",") === ids),
   );
   const shopFor = useProfile((s) => s.shopFor);
   const latest = useLatestMeasurements();
