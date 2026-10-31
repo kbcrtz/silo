@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { SymbolView } from "expo-symbols";
+import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import Animated, {
@@ -13,7 +14,7 @@ import Animated, {
   withDelay,
   withSpring,
 } from "react-native-reanimated";
-import { sleep } from "@/api/config";
+import { buy, loadOffers, restore, type Offer } from "@/api/purchases";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
 import { Glass } from "@/components/onboarding/Glass";
 import { Header } from "@/components/onboarding/Header";
@@ -21,15 +22,7 @@ import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { FAMILIES, familyOf, type Family } from "@/data/families";
 import { LOOKS, type Look } from "@/data/looks";
-import {
-  formatPrice,
-  paletteRuns,
-  perMonth,
-  pickLooks,
-  PLANS,
-  savingsPercent,
-  type PlanId,
-} from "@/lib/paywall";
+import { paletteRuns, pickLooks, type PlanId } from "@/lib/paywall";
 import { photoUri } from "@/lib/photos";
 import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
@@ -323,11 +316,20 @@ function PlanRow({
   );
 }
 
+/** Apple's standard licence, which App Review accepts as the terms of a subscription. */
+const TERMS_URL =
+  "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+const PER: Record<PlanId, string> = {
+  annual: "year",
+  monthly: "month",
+  weekly: "week",
+};
+
 /**
  * Silo membership, the last step of onboarding: Silo is paid only, so a
  * plan is the only way in. The fan opens, then the title, the list and the
- * plans follow it in. Front end only: there is no store yet, so Continue
- * just finishes onboarding and Restore finds nothing.
+ * plans follow it in. Plans and purchases come from the App Store through
+ * RevenueCat (src/api/purchases.ts); mock mode fakes the purchase.
  */
 export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
   const seasonId = useProfile((s) => s.colorProfile?.seasonId);
@@ -335,32 +337,65 @@ export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
   const shopFor = useProfile((s) => s.shopFor);
   const family = FAMILIES[seasonId ? familyOf(seasonId) : "warm-spring"];
   const looks = pickLooks(LOOKS[family.id], shopFor, FAN.length);
+  const [offers, setOffers] = useState<Offer[] | null>(null);
   const [planId, setPlanId] = useState<PlanId>("annual");
   const [busy, setBusy] = useState(false);
-  const plan = PLANS[planId];
-  const save = savingsPercent(PLANS.annual, PLANS.monthly);
+
+  useEffect(() => {
+    loadOffers().then(setOffers, () => setOffers([]));
+  }, []);
+  const offer = (id: PlanId) => offers?.find((o) => o.id === id);
+  const plan = offer(planId) ?? offers?.[0];
+  const annual = offer("annual");
+  const monthly = offer("monthly");
+  const save =
+    annual && monthly && monthly.perYear
+      ? Math.max(0, Math.floor((1 - annual.perYear / monthly.perYear) * 100))
+      : 0;
 
   const subscribe = async () => {
+    if (!plan) return;
     setBusy(true);
-    // shortcut: stands in for the store's purchase sheet.
-    await sleep(700);
-    setBusy(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubscribed();
+    try {
+      if (!(await buy(plan))) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSubscribed();
+    } catch (e) {
+      Alert.alert(
+        "Couldn't complete the purchase",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const restore = () =>
-    Alert.alert(
-      "Nothing to restore",
-      "No Silo membership was found for this Apple ID.",
-    );
+  const restorePurchases = async () => {
+    setBusy(true);
+    try {
+      if (await restore()) return onSubscribed();
+      Alert.alert(
+        "Nothing to restore",
+        "No Silo membership was found for this Apple ID.",
+      );
+    } catch {
+      Alert.alert("Couldn't restore", "Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const footer = (
     <Animated.View
       entering={FadeIn.delay(900).duration(400)}
       style={{ gap: 12 }}
     >
-      <PrimaryButton label="Continue" onPress={subscribe} loading={busy} />
+      <PrimaryButton
+        label={offers && !offers.length ? "Plans unavailable" : "Continue"}
+        onPress={subscribe}
+        loading={busy || !offers}
+        disabled={!plan}
+      />
       <View
         style={{
           flexDirection: "row",
@@ -376,24 +411,37 @@ export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
           style={{ width: 13, height: 13 }}
         />
         <Text style={[TYPE.caption, { color: BRAND.inkSoft }]}>
-          {`${formatPrice(plan.cents)} a ${plan.period}. Cancel anytime in Settings.`}
+          {plan
+            ? `${plan.price} a ${PER[plan.id]}. Renews automatically; cancel anytime in Settings.`
+            : "Loading plans…"}
         </Text>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={restore}
-        hitSlop={8}
-        style={{ alignSelf: "center" }}
-      >
-        <Text
-          style={[
-            TYPE.caption,
-            { color: BRAND.inkMuted, textDecorationLine: "underline" },
-          ]}
-        >
-          Restore purchases
-        </Text>
-      </Pressable>
+      <View style={{ flexDirection: "row", justifyContent: "center", gap: 18 }}>
+        {[
+          { label: "Restore purchases", onPress: restorePurchases },
+          {
+            label: "Terms of Use",
+            onPress: () => WebBrowser.openBrowserAsync(TERMS_URL),
+          },
+        ].map((link) => (
+          <Pressable
+            key={link.label}
+            accessibilityRole="button"
+            onPress={link.onPress}
+            disabled={busy}
+            hitSlop={12}
+          >
+            <Text
+              style={[
+                TYPE.caption,
+                { color: BRAND.inkSoft, textDecorationLine: "underline" },
+              ]}
+            >
+              {link.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
     </Animated.View>
   );
 
@@ -438,31 +486,37 @@ export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
         style={{ gap: 10 }}
         accessibilityRole="radiogroup"
       >
-        <PlanRow
-          title="Yearly"
-          badge={`SAVE ${save}%`}
-          detail={`${formatPrice(perMonth(PLANS.annual))} a month`}
-          price={formatPrice(PLANS.annual.cents)}
-          per="per year"
-          selected={planId === "annual"}
-          onPress={() => setPlanId("annual")}
-        />
-        <PlanRow
-          title="Monthly"
-          detail="Billed every month"
-          price={formatPrice(PLANS.monthly.cents)}
-          per="per month"
-          selected={planId === "monthly"}
-          onPress={() => setPlanId("monthly")}
-        />
-        <PlanRow
-          title="Weekly"
-          detail="Billed every week"
-          price={formatPrice(PLANS.weekly.cents)}
-          per="per week"
-          selected={planId === "weekly"}
-          onPress={() => setPlanId("weekly")}
-        />
+        {annual ? (
+          <PlanRow
+            title="Yearly"
+            badge={save ? `SAVE ${save}%` : undefined}
+            detail={`${annual.perMonth} a month`}
+            price={annual.price}
+            per="per year"
+            selected={plan?.id === "annual"}
+            onPress={() => setPlanId("annual")}
+          />
+        ) : null}
+        {monthly ? (
+          <PlanRow
+            title="Monthly"
+            detail="Billed every month"
+            price={monthly.price}
+            per="per month"
+            selected={plan?.id === "monthly"}
+            onPress={() => setPlanId("monthly")}
+          />
+        ) : null}
+        {offer("weekly") ? (
+          <PlanRow
+            title="Weekly"
+            detail="Billed every week"
+            price={offer("weekly")!.price}
+            per="per week"
+            selected={plan?.id === "weekly"}
+            onPress={() => setPlanId("weekly")}
+          />
+        ) : null}
       </Animated.View>
     </OnboardingScreen>
   );

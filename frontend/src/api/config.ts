@@ -1,5 +1,8 @@
 // Without a trailing slash, so `${API_URL}/path` never doubles it.
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(
+  /\/+$/,
+  "",
+);
 
 let accessToken: string | null = null;
 
@@ -21,6 +24,29 @@ export function apiHeaders(): Record<string, string> {
 /** Mocks stay on until the backend exists, or when no API URL is set. */
 export const USE_MOCKS =
   process.env.EXPO_PUBLIC_USE_MOCKS !== "false" || !API_URL;
+
+/**
+ * Settings a release build can't do without: missing, it would quietly run on
+ * demo data, without sign-in or without purchases. The app lists them instead.
+ * Each is read by name so Expo inlines it.
+ */
+export const MISSING_SETTINGS = __DEV__
+  ? []
+  : Object.entries({
+      EXPO_PUBLIC_API_URL: API_URL,
+      EXPO_PUBLIC_USE_MOCKS: process.env.EXPO_PUBLIC_USE_MOCKS === "false",
+      EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+        process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID:
+        process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID:
+        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      EXPO_PUBLIC_REVENUECAT_IOS_KEY:
+        process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
+    })
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

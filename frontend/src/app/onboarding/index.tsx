@@ -4,6 +4,7 @@ import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Backdrop } from "@/components/onboarding/Backdrop";
 import { loadDemoProfile } from "@/data/demo";
+import { useAccount } from "@/store/account";
 import { useProfile } from "@/store/profile";
 import { TYPE } from "@/theme/brand";
 
@@ -17,6 +18,7 @@ const HOLD_MS = 2200;
  */
 export default function Opening() {
   const onboarded = useProfile((s) => s.onboarded);
+  const member = useAccount((s) => s.account.kind === "member");
   const advanced = useRef(false);
   const next = useCallback(() => {
     if (advanced.current || useProfile.getState().onboarded) return;
@@ -37,7 +39,11 @@ export default function Opening() {
   );
 
   // Onboarded without an account (from before sign-in was required): sign in.
-  if (onboarded) return <Redirect href="/onboarding/account" />;
+  // Signed in, it's a lapsed membership: back to the plans.
+  if (onboarded)
+    return (
+      <Redirect href={member ? "/onboarding/paywall" : "/onboarding/account"} />
+    );
 
   return (
     <Pressable style={{ flex: 1 }} onPress={next} accessibilityLabel="Continue">

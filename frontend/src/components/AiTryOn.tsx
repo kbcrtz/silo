@@ -54,6 +54,8 @@ export function AiTryOn({
         style={{ flex: 1, borderRadius: t.radius.md }}
         contentFit="contain"
         transition={250}
+        // Kept on the phone: the server holds its copy for only 7 days.
+        cachePolicy="disk"
         accessibilityLabel="AI preview of the item on a mannequin"
         onLoad={() => {
           if (!slow) return setState("ready");

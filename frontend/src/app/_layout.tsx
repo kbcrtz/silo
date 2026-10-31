@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { sleep, USE_MOCKS } from "@/api/config";
+import { MISSING_SETTINGS, sleep, USE_MOCKS } from "@/api/config";
+import { useMembership } from "@/api/purchases";
 import { startSession } from "@/api/supabase";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
@@ -11,7 +13,7 @@ import { useHydrated } from "@/store/storage";
 import { useCloudSync } from "@/hooks/useCloudSync";
 import { useAccount } from "@/store/account";
 import { useTheme } from "@/theme";
-import { BRAND, useBrandFonts } from "@/theme/brand";
+import { BRAND, TYPE, useBrandFonts } from "@/theme/brand";
 
 export default function RootLayout() {
   const hydrated = useHydrated([useProfile, useMeasurements, useSaved]);
@@ -25,10 +27,23 @@ export default function RootLayout() {
   useCloudSync(hydrated && sessionReady);
   const onboarded = useProfile((s) => s.onboarded);
   const member = useAccount((s) => s.account.kind === "member");
-  // Everyone signs in; mock mode has no accounts to sign in to.
-  const inApp = onboarded && (member || USE_MOCKS);
+  const lapsed = useMembership((s) => s.active === false);
+  // Everyone signs in (mock mode has no accounts) and keeps a membership;
+  // a lapsed one goes back to the paywall.
+  const inApp = onboarded && (member || USE_MOCKS) && !lapsed;
   const fontsLoaded = useBrandFonts();
   const t = useTheme();
+
+  if (MISSING_SETTINGS.length)
+    return (
+      <View style={{ flex: 1, justifyContent: "center", padding: 32, gap: 12 }}>
+        <Text style={TYPE.control}>This build is missing its settings</Text>
+        <Text style={[TYPE.bodySmall, { color: BRAND.inkSoft }]}>
+          Set these as EAS environment variables and build again:{"\n"}
+          {MISSING_SETTINGS.join("\n")}
+        </Text>
+      </View>
+    );
 
   // Rendering before hydration would flash onboarding for returning users.
   if (!hydrated || !fontsLoaded || !sessionReady) return null;

@@ -82,3 +82,17 @@ export function entriesFromBackup(
     measuredAt,
   }));
 }
+
+/** Two measurement histories as one, like the server's merge: each reading (type and time) once, oldest first. */
+export function joinEntries(
+  a: MeasurementEntry[],
+  b: MeasurementEntry[],
+): MeasurementEntry[] {
+  const seen = new Set<string>();
+  return [...a, ...b]
+    .filter((e) => {
+      const key = `${e.type}|${e.measuredAt}`;
+      return !seen.has(key) && seen.add(key);
+    })
+    .sort((x, y) => x.measuredAt.localeCompare(y.measuredAt));
+}

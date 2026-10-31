@@ -11,6 +11,7 @@ import {
   applyBackup,
   clearLocalData,
   installIsEmpty,
+  joinBackup,
   restorePhoto,
 } from "@/store/backup";
 import { useProfile } from "@/store/profile";
@@ -98,12 +99,18 @@ async function connect(provider: Provider, token: string) {
   // Linking failed, normally because the identity already has an account.
   const signedIn = await supabase.auth.signInWithIdToken({ provider, token });
   if (signedIn.error) throw signedIn.error;
-  const empty = installIsEmpty();
-  const backup =
-    anonymous && !empty ? await mergeAnonymous(anonymous) : await fetchBackup();
-  if (backup) applyBackup(backup);
-  // An empty phone has no selfie yet; the account's passport photo is it.
-  if (empty) await restorePhoto();
+  if (installIsEmpty()) {
+    const backup = await fetchBackup();
+    if (backup) applyBackup(backup);
+    // An empty phone has no selfie yet; the account's passport photo is it.
+    return restorePhoto();
+  }
+  // Backups wait for sign-in, so the phone holds the newer onboarding; the
+  // merge only moves what older builds uploaded for the anonymous user.
+  const backup = anonymous
+    ? await mergeAnonymous(anonymous)
+    : await fetchBackup();
+  if (backup) joinBackup(backup);
 }
 
 /** Runs `job` with the backups stopped, so they restart for the right user. */

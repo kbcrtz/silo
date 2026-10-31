@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
+import { useMembership } from "@/api/purchases";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
 import { Header } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
@@ -47,9 +48,13 @@ export default function PassportStep() {
     };
   }, []);
 
-  // Sign-up comes next unless already signed in; the paywall ends onboarding.
-  const finish = () =>
+  // Sign-up comes next unless already signed in; the paywall ends onboarding,
+  // and a member redoing onboarding with a membership skips it.
+  const finish = () => {
+    if (member && useMembership.getState().active)
+      return useProfile.getState().set({ onboarded: true });
     router.push(member ? "/onboarding/paywall" : "/onboarding/account");
+  };
 
   return (
     <OnboardingScreen

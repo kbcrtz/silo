@@ -45,14 +45,18 @@ async function restore() {
  * then backs everything up now and after every change (profile, the selfie
  * as the passport photo, saved items, measurements). Restoring first keeps
  * an empty phone from overwriting the server copy. Starts over when the
- * signed-in user changes, and stops while sign-in has it paused.
+ * signed-in user changes, and stops while sign-in has it paused or before
+ * there is an account.
  */
 export function useCloudSync(ready: boolean) {
   const userId = useAccount((s) =>
     s.account.kind === "none" ? undefined : s.account.userId,
   );
   const paused = useAccount((s) => s.syncPaused);
-  const on = ready && !paused;
+  // Members only: until sign-up everything (the selfie too) stays on the phone,
+  // and linking Apple/Google (same user id) starts the first upload.
+  const member = useAccount((s) => s.account.kind === "member");
+  const on = ready && !paused && member;
   useEffect(() => {
     if (!on) return;
     let stopped = false;

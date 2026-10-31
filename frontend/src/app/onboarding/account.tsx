@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, Text, View } from "react-native";
+import { useMembership } from "@/api/purchases";
 import { Header } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
@@ -24,6 +25,9 @@ export default function AccountStep() {
   // Onboarded (restored, or from before sign-in was required): the root stack moves home itself.
   const done = () => {
     if (useProfile.getState().onboarded) return;
+    // A returning shopper already paying goes straight in.
+    if (useMembership.getState().active)
+      return useProfile.getState().set({ onboarded: true });
     if (returning) router.back();
     else router.push("/onboarding/paywall");
   };

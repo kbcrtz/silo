@@ -4,6 +4,7 @@ import { AppState } from "react-native";
 import { accountFrom } from "@/lib/account";
 import { useAccount } from "@/store/account";
 import { USE_MOCKS, setAccessToken } from "./config";
+import { identify } from "./purchases";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
@@ -31,6 +32,7 @@ export async function startSession(): Promise<void> {
   supabase.auth.onAuthStateChange((_event, session) => {
     setAccessToken(session?.access_token ?? null);
     useAccount.setState({ account: accountFrom(session) });
+    if (session) identify(session.user.id).catch(() => {});
   });
   // Timers pause in the background; refresh the token when the app comes back.
   AppState.addEventListener("change", (state) =>
