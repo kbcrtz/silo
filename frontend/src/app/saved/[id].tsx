@@ -146,7 +146,9 @@ export default function SavedList() {
           footer={(item) =>
             picking ? null : (
               <Pressable
-                hitSlop={6}
+                accessibilityRole="link"
+                accessibilityLabel={`Shop ${item.name}`}
+                hitSlop={14}
                 onPress={() => {
                   track("shop", item, t.season?.id);
                   openProduct(shopUrl(item), t.colors.accentText);

@@ -73,11 +73,10 @@ export default function Questions() {
   const analyze = async () => {
     if (!selfie) return router.back();
     setBusy(true);
-    try {
-      const photo = await analyzeSelfieOnce(photoUri(selfie));
+    const finish = (photo?: Awaited<ReturnType<typeof analyzeSelfieOnce>>) => {
       const traits = combineTraits(
         selfReportedTraits(context),
-        adjustForContext(photo, context.selfie),
+        photo ? adjustForContext(photo, context.selfie) : null,
       );
       const ranked = rankSeasons(traits);
       set({
@@ -90,9 +89,16 @@ export default function Questions() {
         },
       });
       router.push("/onboarding/results");
+    };
+    try {
+      finish(await analyzeSelfieOnce(photoUri(selfie)));
     } catch (e) {
       const { title, body } = analysisErrorMessage(e);
-      Alert.alert(title, body);
+      // A failing photo (outage, spend cap, no face found) must never block sign-up.
+      Alert.alert(title, body, [
+        { text: "Try again", style: "cancel" },
+        { text: "Continue without photo", onPress: () => finish() },
+      ]);
     } finally {
       setBusy(false);
     }

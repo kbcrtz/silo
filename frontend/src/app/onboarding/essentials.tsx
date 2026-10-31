@@ -9,6 +9,7 @@ import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { useAccount } from "@/store/account";
 import { shopForGender, useProfile, type Gender } from "@/store/profile";
+import { useTheme } from "@/theme";
 import { BRAND, TYPE } from "@/theme/brand";
 
 const GENDERS: { id: Gender; label: string }[] = [
@@ -29,6 +30,8 @@ export default function Essentials() {
   const [name, setName] = useState(profile.displayName ?? "");
   const [age, setAge] = useState(profile.age ? String(profile.age) : "");
   const [gender, setGender] = useState<Gender | undefined>(profile.gender);
+  const [tried, setTried] = useState(false);
+  const t = useTheme();
   const nameRef = useRef<TextInput>(null);
   const ageRef = useRef<TextInput>(null);
   const ageNumber = parseInt(age, 10);
@@ -36,6 +39,7 @@ export default function Essentials() {
   // The button stays live, as in the design; it points at what's missing.
   const next = () => {
     if (!name.trim() || !gender) {
+      setTried(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       if (!name.trim()) nameRef.current?.focus();
       return;
@@ -98,6 +102,13 @@ export default function Essentials() {
             />
           ))}
         </View>
+        {tried && !gender ? (
+          <Text
+            style={[TYPE.bodySmall, { color: t.colors.danger, marginTop: 8 }]}
+          >
+            Pick one so your feed shows the right cuts.
+          </Text>
+        ) : null}
       </View>
 
       <PrimaryButton

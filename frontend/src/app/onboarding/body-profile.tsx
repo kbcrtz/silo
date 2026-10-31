@@ -24,6 +24,7 @@ import {
 } from "@/lib/units";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
+import { useTheme } from "@/theme";
 import { BRAND, TYPE } from "@/theme/brand";
 
 const FIELDS: { type: MeasurementType; label: string; hint: string }[] = [
@@ -105,14 +106,17 @@ function MeasureCard({
   unit,
   value,
   onChange,
+  invalid,
 }: {
   label: string;
   hint: string;
+  invalid?: boolean;
   unit: string;
   value: string;
   onChange: (v: string) => void;
 }) {
   const input = useRef<TextInput>(null);
+  const t = useTheme();
   return (
     <Pressable
       onPress={() => input.current?.focus()}
@@ -124,7 +128,15 @@ function MeasureCard({
         style={{ minHeight: 96, paddingHorizontal: 13, paddingTop: 15 }}
       >
         <Text style={TYPE.fieldLabel}>{label}</Text>
-        <Text style={[TYPE.fieldHint, { color: BRAND.inkMuted, marginTop: 5 }]}>
+        <Text
+          style={[
+            TYPE.fieldHint,
+            invalid
+              ? { color: t.colors.danger, fontSize: 11, lineHeight: 14 }
+              : { color: BRAND.inkMuted },
+            { marginTop: 5 },
+          ]}
+        >
           {hint}
         </Text>
         <View
@@ -242,6 +254,7 @@ export default function BodyProfile() {
           <MeasureCard
             key={f.type}
             label={f.label}
+            invalid={!!text[f.type] && values[f.type] === undefined}
             hint={
               text[f.type] && values[f.type] === undefined
                 ? rangeHint(f.type, unitSystem)

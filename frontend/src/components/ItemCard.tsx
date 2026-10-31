@@ -173,9 +173,18 @@ export function ProductImage({ item }: { item: CatalogItem }) {
 
 /** Stand-in until catalog items have photos. */
 export function ColorBlock({ item }: { item: CatalogItem }) {
-  const fg = readableOn(item.colors[0]);
+  // Live listings can have no photo and no known color.
+  const bg = item.colors[0];
+  const fg = bg ? readableOn(bg) : BRAND.inkSoft;
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: bg,
+      }}
+    >
       {item.colors[1] ? (
         <View
           style={{

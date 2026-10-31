@@ -208,6 +208,14 @@ test("generates from the store photo with the template, then serves the saved im
   assert.equal(generated.length, 1, "the second view comes from storage");
 });
 
+test("a double tap shares one generation instead of paying for two", async () => {
+  const { get, generated } = setup();
+  const [a, b] = await Promise.all([get(url()), get(url())]);
+  assert.deepEqual([a.statusCode, b.statusCode], [200, 200]);
+  assert.equal(b.rawPayload.toString(), "generated-jpeg");
+  assert.equal(generated.length, 1);
+});
+
 test("each department gets its own image", async () => {
   const { get, generated } = setup();
   await get(url("mens"));

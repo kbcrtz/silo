@@ -23,6 +23,7 @@ export default function MeasurementsScreen() {
   const unitSystem = useProfile((s) => s.unitSystem);
   const setProfile = useProfile((s) => s.set);
   const [draft, setDraft] = useState<Measurements>(latest);
+  const [invalid, setInvalid] = useState(false);
 
   const save = () => {
     useMeasurements.getState().record(draft, latest);
@@ -34,13 +35,23 @@ export default function MeasurementsScreen() {
       badge="YOUR FIT"
       eyebrow="Sizes are picked from these"
       title={"Your\n*measurements.*"}
-      footer={<PrimaryButton label="Save" arrow={false} onPress={save} />}
+      footer={
+        <PrimaryButton
+          label={invalid ? "Fix the red number to save" : "Save"}
+          arrow={false}
+          disabled={invalid}
+          onPress={save}
+        />
+      }
     >
       <MeasurementForm
         initial={latest}
         unitSystem={unitSystem}
         onUnitSystemChange={(u) => setProfile({ unitSystem: u })}
-        onChange={setDraft}
+        onChange={(values, bad) => {
+          setDraft(values);
+          setInvalid(bad);
+        }}
       />
 
       {MEASUREMENT_TYPES.map((type) => {

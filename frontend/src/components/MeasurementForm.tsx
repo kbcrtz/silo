@@ -22,8 +22,8 @@ type Props = {
   initial: Measurements;
   unitSystem: UnitSystem;
   onUnitSystemChange: (system: UnitSystem) => void;
-  /** Called on every edit with values in cm / kg. */
-  onChange: (values: Measurements) => void;
+  /** Called on every edit with values in cm / kg, and whether any typed number is out of range. */
+  onChange: (values: Measurements, invalid: boolean) => void;
 };
 
 const UNITS: { id: UnitSystem; label: string }[] = [
@@ -48,7 +48,8 @@ export function MeasurementForm({
   const inputs = useRef<Partial<Record<MeasurementType, TextInput | null>>>({});
 
   const edit = (type: MeasurementType, raw: string) => {
-    setText((prev) => ({ ...prev, [type]: raw }));
+    const texts = { ...text, [type]: raw };
+    setText(texts);
     const n = parseFloat(raw.replace(",", "."));
     const next = { ...values };
     const cm =
@@ -57,7 +58,10 @@ export function MeasurementForm({
     if (isPlausible(type, cm)) next[type] = cm;
     else delete next[type];
     setValues(next);
-    onChange(next);
+    onChange(
+      next,
+      MEASUREMENT_TYPES.some((m) => !!texts[m] && next[m] === undefined),
+    );
   };
 
   const switchUnits = (system: UnitSystem) => {

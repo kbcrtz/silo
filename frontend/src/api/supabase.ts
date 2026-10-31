@@ -38,8 +38,11 @@ export async function startSession(): Promise<void> {
       ? supabase.auth.startAutoRefresh()
       : supabase.auth.stopAutoRefresh(),
   );
-  const { data } = await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
   if (data.session) return setAccessToken(data.session.access_token);
+  // A saved session whose refresh failed (offline, auth hiccup) stays saved and
+  // auto-refresh retries it; a new anonymous user here would sign the member out.
+  if (error) return;
   await signInAnonymously();
 }
 

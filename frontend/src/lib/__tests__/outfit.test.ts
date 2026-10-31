@@ -6,6 +6,7 @@ import {
   fitFromItems,
   fitIds,
   fitPieces,
+  outfitName,
   toggleInFit,
 } from "../outfit";
 
@@ -89,4 +90,29 @@ describe("canMakeFit", () => {
     expect(canMakeFit([of("dress"), of("outerwear")])).toBe(true);
     expect(canMakeFit([top, of("outerwear")])).toBe(true);
   });
+});
+
+describe("outfitName", () => {
+  it("names a fit after its pieces, inner layers first", () => {
+    const named = (name: string, category: Category) => ({
+      ...of(category),
+      name,
+    });
+    expect(
+      outfitName([
+        named("Boxy Short Sleeve Tee", "top"),
+        named("Everyday Relaxed Trouser (Olive)", "bottom"),
+        named("Tailored Wool Blazer", "outerwear"),
+      ]),
+    ).toBe("Tee + Trouser + Blazer");
+  });
+});
+
+it("capitalizes a fit name made from lowercase item names", () => {
+  expect(
+    outfitName([
+      { ...of("bottom"), name: "Charcoal straight jean" },
+      { ...of("outerwear"), name: "Olive field jacket" },
+    ]),
+  ).toBe("Jean + Jacket");
 });

@@ -90,8 +90,8 @@ if (!(enrichTimeoutMs > 0)) {
 // Flash-Lite: on a 20-listing page it took ~1.5 s against ~4 s for Flash, agreeing on category and cut (2026-10-18).
 const enrichModel = process.env.CATALOG_AI_MODEL ?? "gemini-3.5-flash-lite";
 const enrich = process.env.CATALOG_AI === "off" ? undefined : createEnricher({ create, model: enrichModel, timeoutMs: enrichTimeoutMs });
-// 30 AI-read pages per user per 10 minutes (up to 120 Gemini calls), 4 at once; past that, pages skip the estimates.
-const estimateGate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 4 });
+// 30 AI-read pages per user per 10 minutes (up to 120 Gemini calls), 8 at once; past that, pages skip the estimates.
+const estimateGate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 8 });
 
 // Supabase Postgres holds signed-in users' data; tables come from supabase/migrations.
 // Without DATABASE_URL, /me answers 503 and everything else works. SSL comes from the URL (?sslmode=require).
@@ -117,15 +117,16 @@ const tryOn = createTryOn({
   fetch,
   store: tryOnStore,
 });
-// 20 new images per user per 10 minutes, 3 at once; saved images don't count.
-const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 3 });
+// 20 new images per user per 10 minutes, 8 at once; saved images don't count.
+const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 8 });
 // Anonymous logins are free to make, so together they get 60 per IP per 10 minutes: room for a few people on one Wi-Fi.
 const anonymousTryOnGate = createGate({ windowMs: 10 * 60_000, max: 60, concurrency: 3 });
 // The app sends a batch at most every 3 s of tapping; this is far above that and stops a flood of rows.
 const eventsGate = createGate({ windowMs: 10 * 60_000, max: 100, concurrency: 1 });
 
-// One person retaking a selfie stays under this. A loop does not, and only two Gemini calls run at once.
-const gate = createGate({ windowMs: 10 * 60_000, max: 8, concurrency: 2 });
+// Per IP, since onboarding runs before sign-in and anonymous logins are free: room for a few people on one Wi-Fi
+// retaking selfies, not for a loop. Six Gemini calls run at once.
+const gate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 6 });
 const app = buildApp({
   rules,
   model,

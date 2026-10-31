@@ -44,7 +44,11 @@ export default function Opening() {
       <Backdrop id="neutral" />
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <Animated.View entering={FadeInDown.duration(600)}>
-          <Pressable onLongPress={loadDemoProfile} delayLongPress={900}>
+          <Pressable
+            // Dev only: a fake profile in a real account would overwrite it on merge.
+            onLongPress={__DEV__ ? loadDemoProfile : undefined}
+            delayLongPress={900}
+          >
             {/* The tight tracking pushes the S and o past the text box, so
                 padding keeps them from being clipped. */}
             <Text style={[TYPE.wordmarkLarge, { paddingHorizontal: 16 }]}>

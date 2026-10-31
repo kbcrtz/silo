@@ -93,15 +93,21 @@ function CategoryChip({
     >
       <Glass
         radius={22}
-        fill={selected ? "rgba(255,255,255,0.62)" : "rgba(255,255,255,0.38)"}
+        fill={selected ? BRAND.ink : "rgba(255,255,255,0.38)"}
         edge="rgba(255,255,255,0.75)"
+        // Glass only tints a fill, so the picked category could wash out; ink as in Chip.
+        solid={selected}
         interactive
         style={{ height: 44, paddingHorizontal: 17, justifyContent: "center" }}
       >
         <Text
+          maxFontSizeMultiplier={1.3}
           style={[
             TYPE.control,
-            { fontSize: 15.5, color: "rgba(23,19,17,0.72)" },
+            {
+              fontSize: 15.5,
+              color: selected ? BRAND.white : "rgba(23,19,17,0.72)",
+            },
           ]}
         >
           {label}

@@ -137,10 +137,11 @@ function AccountSection() {
           text: "Delete",
           style: "destructive",
           onPress: () =>
-            removeAccount().catch((e) =>
+            // The raw error is a status line like `502 {"error":...}`, not for people.
+            removeAccount().catch(() =>
               Alert.alert(
                 "Couldn't delete your account",
-                e instanceof Error ? e.message : "Please try again.",
+                "Check your connection and try again.",
               ),
             ),
         },

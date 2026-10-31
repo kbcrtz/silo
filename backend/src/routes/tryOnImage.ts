@@ -51,6 +51,8 @@ export async function tryOnImageRoute(
     anonymousTryOnGate,
   }: { catalog: Catalog; enrich?: Enrich; tryOn?: TryOn; tryOnGate?: Gate; anonymousTryOnGate?: Gate },
 ) {
+  // Images being made right now, so a double tap (or two screens) waits for the same one instead of paying twice.
+  const making = new Map<string, Promise<Buffer>>();
   app.get("/catalog/tryon-image", async (req, reply) => {
     const started = performance.now();
     // Counts only: no product photos or prompts.
@@ -78,7 +80,10 @@ export async function tryOnImageRoute(
       const saved = await tryOn.store.get(key).catch(() => null);
       diag.saved = Boolean(saved);
       if (fit) diag.pieces = pieces.length;
-      if (saved) return reply.header("content-type", "image/jpeg").header("cache-control", "private, max-age=86400").send(saved);
+      const pending = saved ? null : making.get(key);
+      diag.joined = Boolean(pending);
+      const ready = saved ?? (pending && (await pending));
+      if (ready) return reply.header("content-type", "image/jpeg").header("cache-control", "private, max-age=86400").send(ready);
 
       // Generation is billed: a budget per signed-in user, and per IP across anonymous logins.
       const gates: [Gate | undefined, string][] = [[tryOnGate, req.userId ?? req.ip], [req.anonymous ? anonymousTryOnGate : undefined, req.ip]];
@@ -89,40 +94,44 @@ export async function tryOnImageRoute(
         entered.push(gate);
       }
 
-      const found = await Promise.all(
-        pieces.map(async (p, i) => {
-          const raw = await catalog.getProduct(p.id, colors[i].length ? colors[i] : undefined);
-          const product = raw ? normalizeProduct(raw, undefined, { detail: true }) : null;
-          if (!raw || !product) throw new HttpError("product_not_found", 404);
-          const photoUrl = product.images?.[0]?.url ?? product.image?.url;
-          if (!photoUrl) throw new HttpError("no_photo", 422);
-          return { raw, product, photoUrl };
-        }),
-      );
-      // The app sends the category the feed's listing reader already found; only older builds need the reader here (about 1 s).
-      const { category } = query.data;
-      const [photos, insight] = await Promise.all([
-        Promise.all(found.map((f) => tryOn.fetchPhoto(f.photoUrl))),
-        fit || category || !enrich ? null : enrich([listingFacts(found[0].raw)!]).then(([i]) => i, () => null),
-      ]);
-      if (insight?.clothing === false) throw new HttpError("not_clothing", 422);
-      const cut = insight?.cut;
-      const prompt = fit
-        ? fitPrompt({
-            pieces: pieces.map((p, i) => ({ category: p.category!, title: found[i].product.title })),
-            department: shopFor,
-            build: bodyWords(guide!),
-          })
-        : tryOnPrompt({
-            category: category ?? cut?.category ?? "top",
-            department: shopFor,
-            cut: cut && [`${cut.silhouette} fit`, `${cut.length} length`, cut.sleeve && `${cut.sleeve} sleeves`].filter(Boolean).join(", "),
-            title: found[0].product.title,
-            build: guide && bodyWords(guide),
-          });
+      const work = (async () => {
+        const found = await Promise.all(
+          pieces.map(async (p, i) => {
+            const raw = await catalog.getProduct(p.id, colors[i].length ? colors[i] : undefined);
+            const product = raw ? normalizeProduct(raw, undefined, { detail: true }) : null;
+            if (!raw || !product) throw new HttpError("product_not_found", 404);
+            const photoUrl = product.images?.[0]?.url ?? product.image?.url;
+            if (!photoUrl) throw new HttpError("no_photo", 422);
+            return { raw, product, photoUrl };
+          }),
+        );
+        // The app sends the category the feed's listing reader already found; only older builds need the reader here (about 1 s).
+        const { category } = query.data;
+        const [photos, insight] = await Promise.all([
+          Promise.all(found.map((f) => tryOn.fetchPhoto(f.photoUrl))),
+          fit || category || !enrich ? null : enrich([listingFacts(found[0].raw)!]).then(([i]) => i, () => null),
+        ]);
+        if (insight?.clothing === false) throw new HttpError("not_clothing", 422);
+        const cut = insight?.cut;
+        const prompt = fit
+          ? fitPrompt({
+              pieces: pieces.map((p, i) => ({ category: p.category!, title: found[i].product.title })),
+              department: shopFor,
+              build: bodyWords(guide!),
+            })
+          : tryOnPrompt({
+              category: category ?? cut?.category ?? "top",
+              department: shopFor,
+              cut: cut && [`${cut.silhouette} fit`, `${cut.length} length`, cut.sleeve && `${cut.sleeve} sleeves`].filter(Boolean).join(", "),
+              title: found[0].product.title,
+              build: guide && bodyWords(guide),
+            });
 
-      diag.prepMs = Math.round(performance.now() - started); // Shopify and photos, before Gemini
-      const image = await tryOn.generate(photos, prompt, guide && (await guideImage(guide)));
+        diag.prepMs = Math.round(performance.now() - started); // Shopify and photos, before Gemini
+        return tryOn.generate(photos, prompt, guide && (await guideImage(guide)));
+      })();
+      making.set(key, work);
+      const image = await work.finally(() => making.delete(key));
       diag.generated = true;
       // Saved after answering, so the shopper doesn't wait on the database; a failed save means the next view generates again.
       void tryOn.store.put(key, image, "gemini").catch(() => {});
