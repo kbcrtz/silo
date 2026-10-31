@@ -10,9 +10,9 @@ import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
 
 /**
- * Sign-up, between the passport and the paywall: links Apple or Google to
- * the phone's anonymous user so the profile, measurements and saved pieces
- * come back on a new phone. Everyone signs in; there is no skipping it. With
+ * Sign-up, between the passport and the paywall: creates the account with
+ * Apple or Google, and the phone's profile, measurements and saved pieces go
+ * up to it so they come back on a new phone. Everyone signs in; there is no skipping it. With
  * `?returning=1` (from the first step) it signs a returning shopper in
  * instead. Onboarded users without an account land here from the opening.
  * Either way, once signed in and onboarded the root stack moves home itself.

@@ -1,9 +1,9 @@
 export type Provider = "apple" | "google";
 
 /**
- * Who the app is signed in as. "anonymous" is the silent sign-in every
- * install starts with; "member" has Apple or Google linked, so its data
- * comes back on a new phone.
+ * Who the app is signed in as: nobody until Apple/Google sign-in, then a
+ * "member", whose data comes back on a new phone. "anonymous" is the silent
+ * sign-in older builds started with, still on some phones until they sign up.
  */
 export type Account =
   | { kind: "none" }

@@ -16,7 +16,7 @@ import {
 } from "@/store/backup";
 import { useProfile } from "@/store/profile";
 import { USE_MOCKS, sleep } from "./config";
-import { signInAnonymously, supabase } from "./supabase";
+import { supabase } from "./supabase";
 import { deleteAccount, fetchBackup, mergeAnonymous } from "./userData";
 
 type IdToken = { token: string; givenName?: string };
@@ -80,11 +80,11 @@ async function googleToken(): Promise<IdToken | null> {
 }
 
 /**
- * Signs the phone's user in to the Apple/Google identity. The anonymous user
- * becomes that account when the identity is new (same id, data already
- * there). When the identity already has an account, the app signs in to it:
- * a phone with data merges its anonymous user in (POST /me/merge); an empty
- * phone just downloads the account, so its blank profile can't win the merge.
+ * Signs in with the Apple/Google identity, creating the account the first
+ * time. An empty phone then downloads the account; a phone with data keeps its
+ * profile and joins the account's. Phones still holding an anonymous user from
+ * older builds link it instead (same id), or merge it in (POST /me/merge) when
+ * the identity already has an account.
  */
 async function connect(provider: Provider, token: string) {
   if (!supabase) throw new Error("Sign-in isn't set up in this build.");
@@ -147,7 +147,7 @@ export function signIn(provider: Provider): Promise<boolean> {
   });
 }
 
-/** Leaves the account: empties the phone and starts over as a new anonymous user. */
+/** Leaves the account: empties the phone and starts over, logged out. */
 async function startOver() {
   // Emptied first, so the app goes back to the opening rather than to the
   // sign-in that onboarded users without an account are sent to.
@@ -158,7 +158,6 @@ async function startOver() {
     await supabase.auth.signOut().catch(() => {});
   }
   useAccount.setState({ account: { kind: "none" } });
-  if (!USE_MOCKS) await signInAnonymously().catch(() => {});
 }
 
 /** The account's data stays on the server for the next sign-in. */

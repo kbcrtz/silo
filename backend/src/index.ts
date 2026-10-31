@@ -35,7 +35,7 @@ const verify = supabaseVerifier({
 // Account deletion needs the secret key; without it DELETE /me answers 503.
 const secretKey = process.env.SUPABASE_SECRET_KEY;
 const deleteAccount = secretKey ? supabaseAccounts({ url: supabaseUrl, secretKey, fetch }) : undefined;
-// The app's silent anonymous sign-in counts as signed in until Apple/Google ships; set ALLOW_ANONYMOUS=false then.
+// Older app builds signed in anonymously; set ALLOW_ANONYMOUS=false once testers have a build without it.
 const allowAnonymous = process.env.ALLOW_ANONYMOUS !== "false";
 // Sign in with Apple token revocation on account deletion; needs a Sign in with Apple key from the Apple Developer account.
 const { APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY } = process.env;

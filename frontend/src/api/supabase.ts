@@ -23,9 +23,9 @@ export const supabase =
     : null;
 
 /**
- * Signs in before the app talks to the server: the saved session, else a new
- * anonymous Supabase user, which Apple/Google sign-in later links to
- * (src/api/auth.ts). Keeps the API's token and useAccount current.
+ * Picks up the saved session, if any; until Apple/Google sign-in
+ * (src/api/auth.ts) there is none, and only selfie analysis talks to the
+ * server. Keeps the API's token and useAccount current.
  */
 export async function startSession(): Promise<void> {
   if (!supabase || USE_MOCKS) return;
@@ -40,18 +40,8 @@ export async function startSession(): Promise<void> {
       ? supabase.auth.startAutoRefresh()
       : supabase.auth.stopAutoRefresh(),
   );
-  const { data, error } = await supabase.auth.getSession();
-  if (data.session) return setAccessToken(data.session.access_token);
-  // A saved session whose refresh failed (offline, auth hiccup) stays saved and
-  // auto-refresh retries it; a new anonymous user here would sign the member out.
-  if (error) return;
-  await signInAnonymously();
-}
-
-/** A fresh anonymous user: at first launch, and after signing out. */
-export async function signInAnonymously(): Promise<void> {
-  if (!supabase) return;
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-  setAccessToken(data.session?.access_token ?? null);
+  // A saved session whose refresh failed (offline, auth hiccup) stays saved,
+  // and auto-refresh retries it.
+  const { data } = await supabase.auth.getSession();
+  if (data.session) setAccessToken(data.session.access_token);
 }
