@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { discover } from "../catalog/discover.ts";
 import { normalizeProduct } from "../catalog/normalize.ts";
-import { CATEGORIES, STYLES } from "../catalog/query.ts";
+import { BODY, CATEGORIES, STYLES } from "../catalog/query.ts";
 import { HttpError } from "../errors.ts";
 import type { Gate } from "../guard.ts";
 import type { Enrich } from "../services/listingInsights.ts";
@@ -29,6 +29,13 @@ const DiscoverQuery = z.strictObject({
   neutrals: hexList.default([]),
   priceMin: dollars,
   priceMax: dollars,
+  /** `petite,fuller`: what stands out about the shopper's frame; steers the style words. */
+  body: z
+    .string()
+    .max(60)
+    .transform((s) => s.split(",").filter(Boolean))
+    .pipe(z.array(z.enum(BODY)).max(BODY.length))
+    .default([]),
   /** A new random number per feed open or refresh; varies the searches. Later pages use the cursor's. */
   seed: z.coerce.number().int().min(0).max(2 ** 31 - 1).optional(),
   // Room for the HMAC suffix on the opaque cursor.

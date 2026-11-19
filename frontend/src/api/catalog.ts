@@ -1,5 +1,6 @@
 import { CATALOG, shopUrl, type CatalogItem } from "@/data/catalog";
 import type { Season } from "@/data/seasons";
+import type { BodyTraits } from "@/lib/bodyFit";
 import { bodyOutlines, landmarks, type Outline } from "@/lib/mannequin";
 import type { Measurements } from "@/lib/measurements";
 import type { ShopFor } from "@/store/profile";
@@ -89,14 +90,24 @@ export type DiscoverParams = {
   cursor?: string;
   /** A new random number per feed open or refresh, so the feed differs each time; later pages follow the cursor's. */
   seed?: number;
+  /** What stands out about the shopper's frame; steers the searches' style words. */
+  body?: BodyTraits;
 };
+
+/** `petite,fuller,short-legs`: the coarse traits only, never measurements. */
+function bodyParam(t: BodyTraits): string {
+  return [t.height, t.build, t.legs === "short" && "short-legs"]
+    .filter(Boolean)
+    .join(",");
+}
 
 /**
  * One page of the Discover feed. Only fashion attributes leave the phone:
- * category, search text, department, style and the season's palette colors.
+ * category, search text, department, style, the season's palette colors and
+ * coarse body traits (petite, fuller…), never measurements.
  *
  * Backend contract: GET {API_URL}/catalog/discover, Authorization: Bearer, ?category&q&shopFor&style
- * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&seed&cursor
+ * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&seed&body=petite,fuller&cursor
  * -> { products, cursor, source }
  */
 export async function discoverProducts(
@@ -120,6 +131,8 @@ export async function discoverProducts(
   if (params.priceMax !== undefined)
     query.set("priceMax", String(params.priceMax));
   if (params.seed !== undefined) query.set("seed", String(params.seed));
+  const body = params.body ? bodyParam(params.body) : "";
+  if (body) query.set("body", body);
   if (params.cursor) query.set("cursor", params.cursor);
   const res = await fetch(`${API_URL}/catalog/discover?${query}`, {
     headers: apiHeaders(),

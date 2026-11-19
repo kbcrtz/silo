@@ -6,6 +6,9 @@ export type Category = (typeof CATEGORIES)[number];
 export const STYLES = ["minimal", "colorful", "dark", "none"] as const;
 export type Style = (typeof STYLES)[number];
 export type ShopFor = "womens" | "mens" | "both";
+/** What the app's measurements say stands out about the shopper's frame (the app's lib/bodyFit). */
+export const BODY = ["petite", "tall", "fuller", "slender", "short-legs"] as const;
+export type BodyTrait = (typeof BODY)[number];
 
 export type DiscoverParams = {
   category: Category;
@@ -17,6 +20,8 @@ export type DiscoverParams = {
   neutrals: string[];
   /** Varies the feed (which searches, their order and style words) so every open and refresh differs. Absent: the fixed plan. */
   seed?: number;
+  /** Steers the style words toward cuts that suit the frame. */
+  body?: BodyTrait[];
 };
 /** `color` is the Shopify color family a For You search filters on. */
 export type QueryStep = { query: string; category: Category; color?: Family };
@@ -60,6 +65,29 @@ const VARIETY: Record<Exclude<Category, "for-you">, string[]> = {
   outerwear: ["", "wool", "cropped", "oversized", "quilted", "denim", "lightweight", "tailored"],
 };
 const CATEGORY_STEPS = 4;
+
+/**
+ * Style words a frame does better without, and ones that suit it (listed
+ * again, so a seed picks them more often). A fuller build skips cropped and
+ * clingy cuts; petite skips oversized and favors cropped tops and high-rise,
+ * full-length bottoms; tall and slender frames carry volume. Avoiding wins
+ * over favoring: a petite, fuller shopper gets no cropped tops.
+ */
+const BODY_WORDS: Record<BodyTrait, { avoid: string[]; favor: string[] }> = {
+  petite: { avoid: ["oversized"], favor: ["cropped", "high-rise", "fitted", "tailored"] },
+  tall: { avoid: [], favor: ["oversized", "wide-leg", "wool"] },
+  fuller: { avoid: ["cropped", "fitted", "slim", "ribbed", "slip", "satin"], favor: ["relaxed", "straight", "tailored", "wrap", "high-rise"] },
+  slender: { avoid: [], favor: ["oversized", "relaxed", "knit", "quilted"] },
+  "short-legs": { avoid: [], favor: ["high-rise", "cropped"] },
+};
+
+/** A category's style words for this body. */
+export function styleWords(category: Exclude<Category, "for-you">, body: BodyTrait[] = []): string[] {
+  const words = VARIETY[category];
+  const avoid = new Set(body.flatMap((b) => BODY_WORDS[b].avoid));
+  const favor = body.flatMap((b) => BODY_WORDS[b].favor).filter((w) => words.includes(w));
+  return [...words, ...favor].filter((w) => !avoid.has(w));
+}
 
 /** A small seeded random generator (mulberry32): the same seed gives the same sequence. */
 export function seededRandom(seed: number): () => number {
@@ -121,24 +149,30 @@ export function buildQueryPlan(params: DiscoverParams): QueryStep[] {
   if (category === "dresses" && shopFor === "mens") return [];
   const random = params.seed === undefined ? null : seededRandom(params.seed);
   if (category !== "for-you" && (q || !random)) return [{ query: join(dept, q, q && category === "all" ? undefined : TERMS[category]), category }];
-  if (category !== "for-you") {
-    return shuffle(VARIETY[category], random!)
-      .slice(0, CATEGORY_STEPS)
-      .map((variety) => ({ query: join(dept, variety, TERMS[category]), category }));
-  }
-  if (q) return [{ query: join(dept, q), category }];
+  if (q && category === "for-you") return [{ query: join(dept, q), category }];
 
   const ordered = [...new Set(orderedColors(params).map(nameForHex))];
   // A seed keeps the style's color order but starts at a random one, and shuffles the garments.
   const start = random && ordered.length ? Math.floor(random() * ordered.length) : 0;
   const names = [...ordered.slice(start), ...ordered.slice(0, start)];
+
+  if (category !== "for-you") {
+    // A category in the shopper's colors too: each search gets the next palette color and its filter.
+    const steps = [...new Set(shuffle(styleWords(category, params.body), random!))]
+      .slice(0, CATEGORY_STEPS)
+      .map((variety, i) => {
+        const name = names[i % names.length];
+        return { query: join(dept, name, variety, TERMS[category]), category, ...(name && { color: familyFor(name) }) };
+      });
+    return steps.filter((step, i) => steps.findIndex((s) => s.query === step.query) === i);
+  }
   const word = STYLE_WORD[params.style][names.length ? "withPalette" : "alone"];
   const garments = random ? shuffle(GARMENTS[shopFor], random) : GARMENTS[shopFor];
   const size = names.length ? PLAN_SIZE : garments.length;
   const plan = Array.from({ length: size }, (_, i) => {
     const [garment, garmentCategory] = garments[i % garments.length];
     const name = names[i % names.length];
-    const words = VARIETY[garmentCategory];
+    const words = styleWords(garmentCategory, params.body);
     const variety = random ? words[Math.floor(random() * words.length)] : undefined;
     return { query: join(dept, name, word, variety, garment), category: garmentCategory, ...(name && { color: familyFor(name) }) };
   });

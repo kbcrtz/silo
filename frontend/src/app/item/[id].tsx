@@ -19,12 +19,12 @@ import { Text } from "@/components/Text";
 import { findItem, shopUrl, SILHOUETTE_LABELS } from "@/data/catalog";
 import { SIZE_CHARTS } from "@/data/sizeCharts";
 import { useLatestMeasurements } from "@/hooks/useRecommendations";
+import { bodyFit, bodyTraits, hasTraits } from "@/lib/bodyFit";
 import { bodyShape } from "@/lib/bodyShape";
 import { recommendSize } from "@/lib/fit";
 import { tryOnImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
-import { silhouetteMatch } from "@/lib/silhouette";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
@@ -90,6 +90,7 @@ export default function ItemSheet() {
   const latest = useLatestMeasurements();
   const shape = useMemo(() => bodyShape(latest), [latest]);
   const shopFor = useProfile((s) => s.shopFor);
+  const body = useMemo(() => bodyTraits(latest, shopFor), [latest, shopFor]);
   const fitPreference = useProfile((s) => s.fitPreference);
   const saved = useSaved((s) => (item ? s.itemIds.includes(item.id) : false));
   const lists = useSaved((s) => s.lists);
@@ -111,7 +112,7 @@ export default function ItemSheet() {
 
   // Live listings: the cut is estimated from the title.
   const estimated = item.source ? "≈ " : "";
-  const fit = shape ? silhouetteMatch(item.silhouette, shape.shape) : null;
+  const fit = hasTraits(body) ? bodyFit(item, body) : null;
   const chart = SIZE_CHARTS[item.sizeChartId];
   const size = chart ? recommendSize(latest, chart, fitPreference) : null;
   const measured = latest.chest && latest.waist && latest.hips;
@@ -232,14 +233,17 @@ export default function ItemSheet() {
         <View
           style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space(2) }}
         >
-          {fit && shape ? (
-            <Pill label={`${fit.label} · ${shape.name}`} />
-          ) : null}
           <Pill label={SILHOUETTE_LABELS[item.silhouette]} />
           {item.popular && t.season ? (
             <Pill label={`Popular with ${t.season.name}s this week`} />
           ) : null}
         </View>
+        {fit?.reason ? (
+          <Text tone="muted">
+            {fit.reason}
+            {item.source ? " (cut estimated from the listing)." : "."}
+          </Text>
+        ) : null}
         {item.evidence ? (
           <Text variant="caption" tone="muted">
             From the listing: {item.evidence}

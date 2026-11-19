@@ -16,6 +16,7 @@ import { MasonryGrid } from "@/components/MasonryGrid";
 import { Backdrop, useSeasonBackdrop } from "@/components/onboarding/Backdrop";
 import { Glass } from "@/components/onboarding/Glass";
 import { useDiscover } from "@/hooks/useDiscover";
+import { describeBody } from "@/lib/bodyFit";
 import { BRAND, FONTS, TYPE } from "@/theme/brand";
 
 const CATEGORIES: [FeedCategory, string][] = [
@@ -116,7 +117,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState<FeedCategory>("for-you");
   const feed = useDiscover(category);
-  const { shape, season } = feed;
+  const { body, season } = feed;
   const backdrop = useSeasonBackdrop();
 
   const entries = useMemo(
@@ -125,12 +126,15 @@ export default function Home() {
   );
   const loading = feed.status === "loading";
 
-  const pickedFor = [
-    season ? `your ${season.name} palette` : null,
-    shape ? `${shape.name.toLowerCase()} shape` : null,
-  ]
-    .filter(Boolean)
-    .join(" and ");
+  const cutFor = describeBody(body);
+  const pickedFor =
+    season && cutFor
+      ? `In your ${season.name} colors, cut for your ${cutFor}.`
+      : season
+        ? `In your ${season.name} colors. Add measurements for cuts that suit you.`
+        : cutFor
+          ? `Cut for your ${cutFor}.`
+          : "Finish color analysis to personalize this feed.";
 
   return (
     <View style={{ flex: 1 }}>
@@ -189,9 +193,7 @@ export default function Home() {
               },
             ]}
           >
-            {pickedFor
-              ? `Picked for ${pickedFor}.`
-              : "Finish color analysis to personalize this feed."}
+            {pickedFor}
             {feed.source === "demo" ? " Demo catalog." : ""}
           </Text>
         </View>

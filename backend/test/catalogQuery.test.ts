@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { colorFromName, familyFor, nameForHex } from "../src/catalog/colors.ts";
-import { buildQueryPlan, type DiscoverParams } from "../src/catalog/query.ts";
+import { buildQueryPlan, styleWords, type DiscoverParams } from "../src/catalog/query.ts";
 
 // Soft Autumn from frontend/src/data/seasons.ts, as the app sends it.
 const softAutumn = {
@@ -109,4 +109,33 @@ test("a seed turns a category tab into several varied searches of that category"
 
 test("typed search text is never changed by the seed", () => {
   assert.deepEqual(buildQueryPlan({ ...base, category: "tops", q: "linen", seed: 9 }), buildQueryPlan({ ...base, category: "tops", q: "linen" }));
+});
+
+test("a category tab searches in the shopper's palette, each step on its color's filter", () => {
+  const tops = buildQueryPlan({ ...base, ...softAutumn, category: "tops", seed: 7 });
+  assert.ok(tops.length >= 3);
+  for (const step of tops) {
+    assert.match(step.query, /^women's .*tops$/);
+    assert.equal(step.color, familyFor(colorFromName(step.query)!.name), step.query);
+  }
+  assert.ok(new Set(tops.map((s) => s.color)).size >= 2, "the steps walk through the palette");
+});
+
+test("the body steers style words: a fuller build skips cropped and clingy, avoiding beats favoring", () => {
+  const fuller = styleWords("tops", ["fuller"]);
+  for (const word of ["cropped", "fitted", "ribbed", "silk"].slice(0, 3)) assert.ok(!fuller.includes(word), word);
+  assert.ok(fuller.filter((w) => w === "relaxed").length === 2, "favored words are listed twice");
+  assert.ok(!styleWords("tops", ["petite", "fuller"]).includes("cropped"));
+  assert.ok(styleWords("tops", ["petite"]).filter((w) => w === "cropped").length === 2);
+  assert.ok(!styleWords("outerwear", ["petite"]).includes("oversized"));
+  assert.deepEqual(styleWords("jeans"), styleWords("jeans", []));
+});
+
+test("For You and category plans never use a word the body avoids", () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    for (const category of ["for-you", "tops", "outerwear"] as const) {
+      const plan = buildQueryPlan({ ...base, ...softAutumn, category, seed, body: ["fuller"] });
+      for (const step of plan) assert.ok(!/\b(cropped|fitted|slim|ribbed|slip|satin)\b/.test(step.query), step.query);
+    }
+  }
 });
