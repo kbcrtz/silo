@@ -69,6 +69,7 @@ export default function RootLayout() {
           <Stack.Screen name="fit" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="measurements" />
+          <Stack.Screen name="style" />
         </Stack.Protected>
       </Stack>
     </GestureHandlerRootView>

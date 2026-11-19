@@ -1,4 +1,5 @@
 import { CATALOG, shopUrl, type CatalogItem } from "@/data/catalog";
+import type { Aesthetic } from "@/data/aesthetics";
 import type { Season } from "@/data/seasons";
 import type { BodyTraits } from "@/lib/bodyFit";
 import { bodyOutlines, landmarks, type Outline } from "@/lib/mannequin";
@@ -92,6 +93,9 @@ export type DiscoverParams = {
   seed?: number;
   /** What stands out about the shopper's frame; steers the searches' style words. */
   body?: BodyTraits;
+  /** The shopper's looks, most liked first (up to 3), and looks they turned down (up to 4). First page only. */
+  aesthetic?: Aesthetic[];
+  avoid?: Aesthetic[];
 };
 
 /** `petite,fuller,short-legs`: the coarse traits only, never measurements. */
@@ -103,11 +107,13 @@ function bodyParam(t: BodyTraits): string {
 
 /**
  * One page of the Discover feed. Only fashion attributes leave the phone:
- * category, search text, department, style, the season's palette colors and
- * coarse body traits (petite, fuller…), never measurements.
+ * category, search text, department, style, the season's palette colors,
+ * the looks the shopper picked and coarse body traits (petite, fuller…),
+ * never measurements. The mock ignores the looks and the body.
  *
  * Backend contract: GET {API_URL}/catalog/discover, Authorization: Bearer, ?category&q&shopFor&style
- * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&seed&body=petite,fuller&cursor
+ * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&seed&body=petite,fuller&aesthetic=streetwear,minimal
+ * &avoid=romantic&cursor
  * -> { products, cursor, source }
  */
 export async function discoverProducts(
@@ -133,6 +139,11 @@ export async function discoverProducts(
   if (params.seed !== undefined) query.set("seed", String(params.seed));
   const body = params.body ? bodyParam(params.body) : "";
   if (body) query.set("body", body);
+  // Later pages follow the looks in the cursor.
+  if (!params.cursor && params.aesthetic?.length)
+    query.set("aesthetic", params.aesthetic.join(","));
+  if (!params.cursor && params.avoid?.length)
+    query.set("avoid", params.avoid.join(","));
   if (params.cursor) query.set("cursor", params.cursor);
   const res = await fetch(`${API_URL}/catalog/discover?${query}`, {
     headers: apiHeaders(),

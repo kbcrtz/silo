@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { colorFromName, familyFor, nameForHex } from "../src/catalog/colors.ts";
-import { buildQueryPlan, styleWords, type DiscoverParams } from "../src/catalog/query.ts";
+import { AESTHETICS, BANNED_WORDS, phrasesFor, RECIPES } from "../src/catalog/aesthetics.ts";
+import { BODY, buildQueryPlan, styleWords, type DiscoverParams } from "../src/catalog/query.ts";
 
 // Soft Autumn from frontend/src/data/seasons.ts, as the app sends it.
 const softAutumn = {
@@ -137,5 +138,103 @@ test("For You and category plans never use a word the body avoids", () => {
       const plan = buildQueryPlan({ ...base, ...softAutumn, category, seed, body: ["fuller"] });
       for (const step of plan) assert.ok(!/\b(cropped|fitted|slim|ribbed|slip|satin)\b/.test(step.query), step.query);
     }
+  }
+});
+
+const looks = (extra: Partial<DiscoverParams> = {}) => buildQueryPlan({ ...base, ...softAutumn, seed: 5, ...extra });
+
+test("without looks, or with only looks that have no searches, the plan is the plain one", () => {
+  for (let seed = 1; seed <= 10; seed++) {
+    const plain = buildQueryPlan({ ...base, ...softAutumn, seed });
+    assert.deepEqual(buildQueryPlan({ ...base, ...softAutumn, seed, aesthetic: [] }), plain);
+    assert.deepEqual(buildQueryPlan({ ...base, ...softAutumn, seed, aesthetic: ["casual"] }), plain);
+    // Men's has no boho searches.
+    assert.deepEqual(buildQueryPlan({ ...base, ...softAutumn, seed, shopFor: "mens", aesthetic: ["boho"] }), buildQueryPlan({ ...base, ...softAutumn, seed, shopFor: "mens" }));
+  }
+});
+
+test("with looks, For You is 5 look searches, 1 exploring another look and 2 plain, in the plain plan's colors", () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const plan = looks({ seed, aesthetic: ["streetwear", "minimal"], avoid: ["romantic", "boho"] });
+    const plain = buildQueryPlan({ ...base, ...softAutumn, seed });
+    assert.equal(plan.length, 8);
+    const sent = plan.filter((s) => s.aesthetic === "streetwear" || s.aesthetic === "minimal");
+    const explored = plan.filter((s) => s.aesthetic && s.aesthetic !== "streetwear" && s.aesthetic !== "minimal");
+    assert.equal(sent.length, 5, JSON.stringify(plan));
+    assert.equal(explored.length, 1);
+    assert.ok(!["romantic", "boho", "casual"].includes(explored[0].aesthetic!), String(explored[0].aesthetic));
+    plan.forEach((step, i) => {
+      if (!step.aesthetic) assert.deepEqual(step, plain[i], "plain steps match the plan without looks");
+      else assert.equal(step.color, plain[i].color, "a look step keeps that step's palette color");
+      assert.match(step.query, /^women's /);
+    });
+  }
+});
+
+test("looks are deterministic per seed and vary between seeds", () => {
+  const params = { aesthetic: ["preppy" as const] };
+  assert.deepEqual(looks({ ...params, seed: 3 }), looks({ ...params, seed: 3 }));
+  const firsts = new Set([1, 2, 3, 4, 5, 6].map((seed) => looks({ ...params, seed })[0].query));
+  assert.ok(firsts.size >= 3);
+});
+
+test("with looks, For You drops the minimalist style word; the style still orders the colors", () => {
+  for (const step of looks({ style: "minimal", aesthetic: ["classic"] })) assert.doesNotMatch(step.query, /minimalist/);
+});
+
+test("with a style, a seeded feed rotates through only its 5 leading colors", () => {
+  for (const style of ["dark", "colorful", "minimal"] as const) {
+    const colors = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) for (const step of buildQueryPlan({ ...base, ...softAutumn, style, seed })) colors.add(colorFromName(step.query)!.name);
+    assert.ok(colors.size <= 5, `${style}: ${[...colors].join(", ")}`);
+  }
+  // The plain feed still walks the whole palette.
+  const all = new Set<string>();
+  for (let seed = 1; seed <= 30; seed++) for (const step of buildQueryPlan({ ...base, ...softAutumn, seed })) all.add(colorFromName(step.query)!.name);
+  assert.ok(all.size > 5);
+});
+
+test("a category tab takes 2 of its 4 searches from the looks' phrases in that category", () => {
+  const tops = looks({ category: "tops", shopFor: "mens", aesthetic: ["retro", "classic"] });
+  assert.equal(tops.filter((s) => s.aesthetic).length, 2);
+  for (const step of tops) assert.equal(step.category, "tops");
+  // Jeans has no look phrases, so the tab is unchanged.
+  assert.deepEqual(looks({ category: "jeans", aesthetic: ["streetwear"] }), looks({ category: "jeans" }));
+  // Typed search text is never changed by looks.
+  assert.deepEqual(looks({ q: "linen", aesthetic: ["streetwear"] }), looks({ q: "linen" }));
+});
+
+test("a shopper on both departments gets each look's women's and men's searches in turn", () => {
+  const depts = looks({ shopFor: "both", aesthetic: ["preppy", "sporty"] })
+    .filter((s) => s.aesthetic === "preppy" || s.aesthetic === "sporty")
+    .map((s) => s.query.split(" ")[0]);
+  assert.ok(depts.includes("women's") && depts.includes("men's"), depts.join());
+  // Workwear is men's only.
+  for (const step of looks({ shopFor: "both", aesthetic: ["workwear"] }).filter((s) => s.aesthetic === "workwear")) assert.match(step.query, /^men's /);
+});
+
+test("look searches never use a word the body avoids", () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    for (const step of looks({ seed, body: ["petite"], aesthetic: ["streetwear"] })) assert.doesNotMatch(step.query, /oversized/, step.query);
+    for (const step of looks({ seed, body: ["fuller"], aesthetic: ["romantic"] })) assert.doesNotMatch(step.query, /\bsatin\b/, step.query);
+  }
+});
+
+test("every look keeps at least 3 searches whatever one body trait avoids", () => {
+  const avoids: Record<string, string[]> = { petite: ["oversized"], tall: [], fuller: ["cropped", "fitted", "slim", "ribbed", "slip", "satin"], slender: [], "short-legs": [] };
+  assert.deepEqual(Object.keys(avoids).sort(), [...BODY].sort(), "this table follows BODY_WORDS");
+  for (const dept of ["womens", "mens"] as const) {
+    for (const look of AESTHETICS) {
+      if (!RECIPES[dept][look]) continue;
+      assert.ok(phrasesFor(look, dept).length >= 5, `${dept} ${look} has 5 phrases`);
+      for (const [trait, words] of Object.entries(avoids)) assert.ok(phrasesFor(look, dept, new Set(words)).length >= 3, `${dept} ${look} with ${trait}`);
+    }
+  }
+});
+
+test("recipes never search a banned word or a look's own name (boho and workwear are the tested exceptions)", () => {
+  const banned = new RegExp(`\\b(${[...BANNED_WORDS, ...AESTHETICS.filter((a) => a !== "boho" && a !== "workwear")].join("|")})\\b`, "i");
+  for (const dept of ["womens", "mens"] as const) {
+    for (const [phrase] of Object.values(RECIPES[dept]).flat()) assert.doesNotMatch(phrase, banned, phrase);
   }
 });

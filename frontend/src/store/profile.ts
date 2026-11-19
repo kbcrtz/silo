@@ -4,6 +4,7 @@ import type { ColorTraits, SeasonId } from "@/data/seasons";
 import type { PhotoTraits, QuizAnswers } from "@/lib/colorAnalysis";
 import type { FitPreference } from "@/lib/fit";
 import type { PhotoContext } from "@/lib/photoContext";
+import type { StatedTaste } from "@/lib/taste";
 import type { UnitSystem } from "@/lib/units";
 import { storage } from "./storage";
 
@@ -41,6 +42,16 @@ type ProfileState = {
   colorProfile?: ColorProfile;
   unitSystem: UnitSystem;
   fitPreference: FitPreference;
+  /**
+   * The shopper's style: the looks they picked and how they wear color.
+   * Backed up with the profile, so a new phone keeps it; "Redo onboarding"
+   * keeps it too, and the style step starts from it.
+   */
+  taste?: {
+    stated?: StatedTaste;
+    /** When the feed's "Tell us your style" card was dismissed. */
+    promptDismissedAt?: string;
+  };
 
   set: (patch: Partial<Omit<ProfileState, "set" | "answer" | "reset">>) => void;
   answer: (questionId: string, optionId: string) => void;
@@ -75,6 +86,7 @@ export const useProfile = create<ProfileState>()(
           photoSynced: undefined,
           photoTraits: undefined,
           colorProfile: undefined,
+          taste: undefined,
         }),
     }),
     { name: "silo.profile", storage },

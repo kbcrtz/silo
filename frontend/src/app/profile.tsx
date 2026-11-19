@@ -25,6 +25,7 @@ import {
 } from "@/lib/measurements";
 import { deletePhoto, persistPhoto, photoUri } from "@/lib/photos";
 import { pickSelfie } from "@/lib/pickPhoto";
+import { describeTaste } from "@/lib/taste";
 import { formatMeasurement } from "@/lib/units";
 import { useAccount } from "@/store/account";
 import { useMeasurements } from "@/store/measurements";
@@ -274,6 +275,19 @@ export default function Profile() {
           label="Photo"
           value={profile.selfiePhoto ? "Change" : "Add"}
           onPress={changePhoto}
+        />
+      </GlassSection>
+
+      <GlassSection
+        title="Your style"
+        note="Your feed searches for these looks, in your palette."
+      >
+        <GlassRow
+          icon="sparkles"
+          label="Looks and color"
+          value={describeTaste(profile.taste?.stated) ?? "Pick"}
+          chevron
+          onPress={() => router.push("/style")}
         />
       </GlassSection>
 

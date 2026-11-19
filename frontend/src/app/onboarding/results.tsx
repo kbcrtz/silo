@@ -204,7 +204,7 @@ export default function Results() {
             <PrimaryButton
               label="Build my wardrobe"
               arrow={false}
-              onPress={() => router.push("/onboarding/body-profile")}
+              onPress={() => router.push("/onboarding/style")}
               style={{ flex: 1 }}
             />
           </Animated.View>

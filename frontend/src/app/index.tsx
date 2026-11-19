@@ -15,6 +15,7 @@ import type { FeedCategory } from "@/api/catalog";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import { Backdrop, useSeasonBackdrop } from "@/components/onboarding/Backdrop";
 import { Glass } from "@/components/onboarding/Glass";
+import { StylePrompt } from "@/components/StylePrompt";
 import { useDiscover } from "@/hooks/useDiscover";
 import { describeBody } from "@/lib/bodyFit";
 import { BRAND, FONTS, TYPE } from "@/theme/brand";
@@ -196,6 +197,7 @@ export default function Home() {
             {pickedFor}
             {feed.source === "demo" ? " Demo catalog." : ""}
           </Text>
+          <StylePrompt />
         </View>
 
         <ScrollView

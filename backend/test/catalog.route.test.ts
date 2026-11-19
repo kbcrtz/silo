@@ -326,3 +326,48 @@ test("a seed also mixes the order within a page", async () => {
   assert.equal(await order(4), await order(4));
   assert.ok(new Set(await Promise.all(Array.from({ length: 12 }, (_, i) => order(i + 1)))).size > 1);
 });
+
+test("looks steer the searches, tag what they returned, and ride in the cursor", async () => {
+  const { get, searches } = setup();
+  const first = await get(`/catalog/discover?shopFor=womens&${softAutumn}&seed=2&aesthetic=streetwear,minimal&avoid=romantic`);
+  assert.equal(first.statusCode, 200);
+  const body = first.json();
+  // Page 1 is plan steps 0 (a look) and 1 (plain); both fixtures came back from each.
+  assert.ok(body.products.some((p: any) => p.aesthetic === "streetwear"), JSON.stringify(body.products.map((p: any) => p.aesthetic)));
+  assert.equal(searches.length, 2);
+
+  // Page 2 follows the looks in the cursor, whatever the app sends with it.
+  const secondPage = async (looks: string) => {
+    const s = setup();
+    const { cursor } = (await s.get(`/catalog/discover?shopFor=womens&${softAutumn}&seed=2&aesthetic=streetwear,minimal`)).json();
+    await s.get(`/catalog/discover?shopFor=womens&${softAutumn}&seed=2${looks}&cursor=${encodeURIComponent(cursor)}`);
+    return s.searches.slice(2).map((x) => x.query);
+  };
+  assert.deepEqual(await secondPage("&aesthetic=boho"), await secondPage(""));
+});
+
+test("unknown or too many looks are a 400 that never reaches Shopify", async () => {
+  const { get, searches } = setup();
+  for (const q of ["aesthetic=grunge", "aesthetic=minimal,classic,boho,edgy", "avoid=a,b", "avoid=minimal,classic,boho,edgy,retro"]) {
+    assert.equal((await get(`/catalog/discover?${q}`)).statusCode, 400, q);
+  }
+  assert.equal(searches.length, 0);
+  // Repeats are folded, not counted twice.
+  assert.equal((await get("/catalog/discover?aesthetic=minimal,minimal,minimal,classic")).statusCode, 200);
+});
+
+test("logs never carry the shopper's looks", async () => {
+  const { get, logs } = setup();
+  await get(`/catalog/discover?shopFor=mens&${softAutumn}&seed=1&aesthetic=workwear&avoid=preppy`);
+  const all = JSON.stringify(logs);
+  assert.ok(!all.includes("workwear") && !all.includes("preppy") && !all.includes("chore"), "log leaked looks or queries");
+});
+
+test("counterfeit, resale and stuffed listings never reach the feed", async () => {
+  const listing = (title: string, id: string) => ({ ...trouser, id: `gid://shopify/p/${id}`, title });
+  const { get } = setup({
+    products: [trouser, listing("SP5DER Web Hoodie 1:1 Reps", "R1"), listing("Nautica Striped Sweater NWT", "R2"), listing("Women's Tops S-XXL Casual Loose Shirt", "R3")],
+  });
+  const { products } = (await get("/catalog/discover?category=tops")).json();
+  assert.deepEqual(products.map((p: any) => p.id), [trouser.id]);
+});

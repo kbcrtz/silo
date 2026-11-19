@@ -4,6 +4,7 @@ import { rememberItems } from "@/data/catalog";
 import { bodyTraits, hasTraits, sinkPoorFits } from "@/lib/bodyFit";
 import { toCatalogItem } from "@/lib/liveItem";
 import { recommend, type Recommendation } from "@/lib/recommend";
+import { searchAesthetics } from "@/lib/taste";
 import { useProfile } from "@/store/profile";
 import { useTheme } from "@/theme";
 import { useLatestMeasurements } from "./useRecommendations";
@@ -36,6 +37,13 @@ export function useDiscover(category: FeedCategory) {
   const shopFor = useProfile((s) => s.shopFor);
   const latest = useLatestMeasurements();
   const body = useMemo(() => bodyTraits(latest, shopFor), [latest, shopFor]);
+  // Editing the style restarts the feed; it changes which searches run.
+  const stated = useProfile((s) => s.taste?.stated);
+  const looks = useMemo(
+    () => searchAesthetics(stated, shopFor),
+    [stated, shopFor],
+  );
+  const style = stated?.colorStyle ?? "none";
   const [feed, setFeed] = useState<Feed>(START);
   const request = useRef<AbortController | null>(null);
 
@@ -50,13 +58,13 @@ export function useDiscover(category: FeedCategory) {
           {
             category,
             shopFor,
-            // No style preference in the profile yet.
-            style: "none",
+            style,
             season: t.season,
             cursor,
             // Later pages follow the seed inside the cursor.
             seed: cursor ? undefined : Math.floor(Math.random() * 2 ** 31),
             body,
+            ...looks,
           },
           controller.signal,
         );
@@ -90,7 +98,7 @@ export function useDiscover(category: FeedCategory) {
           setFeed((f) => ({ ...f, status: "error" }));
       }
     },
-    [category, shopFor, t.season, body],
+    [category, shopFor, t.season, body, looks, style],
   );
 
   useEffect(() => {

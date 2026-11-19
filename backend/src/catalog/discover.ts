@@ -3,6 +3,8 @@ import { z } from "zod";
 import { HttpError } from "../errors.ts";
 import type { Enrich } from "../services/listingInsights.ts";
 import type { Catalog } from "../services/shopifyCatalog.ts";
+import { AESTHETICS } from "./aesthetics.ts";
+import { junkReason } from "./hygiene.ts";
 import { listingFacts, normalizeProduct, type CatalogProduct } from "./normalize.ts";
 import { buildQueryPlan, seededRandom, shuffle, type DiscoverParams } from "./query.ts";
 
@@ -15,12 +17,15 @@ const PER_PAGE = 2;
 /**
  * Where a feed is up to, handed to the app as an opaque cursor. `p` is the
  * position in the query plan (wrapping), `c` each query's own Shopify cursor:
- * null once that query has no more pages, `s` the seed the plan was built with.
+ * null once that query has no more pages, `s` the seed the plan was built with,
+ * `a` and `v` the looks and avoided looks it was built with.
  */
 const Cursor = z.object({
   p: z.int().min(0).max(10_000),
   c: z.record(z.string(), z.string().max(2000).nullable()),
   s: z.int().min(0).max(2 ** 31 - 1).optional(),
+  a: z.array(z.enum(AESTHETICS)).max(3).optional(),
+  v: z.array(z.enum(AESTHETICS)).max(4).optional(),
 });
 type Cursor = z.infer<typeof Cursor>;
 
@@ -77,9 +82,10 @@ export async function discover(
   signal?: AbortSignal,
   enrich?: Enrich,
 ): Promise<DiscoverPage> {
-  const state: Cursor = rawCursor ? decode(rawCursor, secret) : { p: 0, c: {}, s: params.seed };
-  // Later pages follow the plan the first page was built with, whatever seed comes with them.
-  const plan = buildQueryPlan({ ...params, seed: state.s });
+  const looks = { ...(params.aesthetic?.length && { a: params.aesthetic }), ...(params.avoid?.length && { v: params.avoid }) };
+  const state: Cursor = rawCursor ? decode(rawCursor, secret) : { p: 0, c: {}, s: params.seed, ...looks };
+  // Later pages follow the plan the first page was built with, whatever seed or looks come with them.
+  const plan = buildQueryPlan({ ...params, seed: state.s, aesthetic: state.a, avoid: state.v });
   const perQuery = plan.length > 1 ? PAGE_SIZE / PER_PAGE : PAGE_SIZE;
   const want = plan.length > 1 ? PER_PAGE : 1;
 
@@ -107,7 +113,7 @@ export async function discover(
     ),
   );
 
-  const next: Cursor = { p: pos, c: { ...state.c }, ...(state.s !== undefined && { s: state.s }) };
+  const next: Cursor = { p: pos, c: { ...state.c }, ...(state.s !== undefined && { s: state.s }), ...(state.a && { a: state.a }), ...(state.v && { v: state.v }) };
   picks.forEach((i, k) => (next.c[i] = results[k].cursor));
   const more = pos < plan.length || plan.some((_, i) => typeof next.c[i] === "string");
 
@@ -122,8 +128,10 @@ export async function discover(
   for (let row = 0; row < longest; row++) {
     results.forEach((r, k) => {
       if (row >= r.products.length) return;
-      const product = normalizeProduct(r.products[row], plan[picks[k]].category);
-      if (!product || (other && titleDepartment(product.title) === other)) return void dropped++;
+      const step = plan[picks[k]];
+      const product = normalizeProduct(r.products[row], step.category);
+      if (!product || (other && titleDepartment(product.title) === other) || junkReason(product, catalog.country)) return void dropped++;
+      if (step.aesthetic) product.aesthetic = step.aesthetic;
       const shown = perMerchant.get(product.merchant.name) ?? 0;
       if (seen.has(product.id) || shown >= PER_MERCHANT) return;
       seen.add(product.id);

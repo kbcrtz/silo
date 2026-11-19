@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Insight } from "../services/listingInsights.ts";
+import type { Aesthetic } from "./aesthetics.ts";
 import { colorFromName } from "./colors.ts";
 import type { Category } from "./query.ts";
 
@@ -63,6 +64,8 @@ export type CatalogProduct = {
   estimate?: Insight & { source: "ai" };
   /** Popular with the shopper's season this week (services/trends.ts). */
   popular?: true;
+  /** The look whose recipe search returned it (catalog/aesthetics.ts); absent on plain searches. */
+  aesthetic?: Aesthetic;
   // Detail only:
   images?: { url: string; alt: string }[];
   description?: string;
