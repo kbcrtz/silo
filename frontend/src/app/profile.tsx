@@ -285,7 +285,9 @@ export default function Profile() {
         <GlassRow
           icon="sparkles"
           label="Looks and color"
-          value={describeTaste(profile.taste?.stated) ?? "Pick"}
+          // Three looks and a color run long, so they go under the label.
+          detail={describeTaste(profile.taste?.stated) ?? "Not picked yet"}
+          value={profile.taste?.stated ? "Edit" : "Pick"}
           chevron
           onPress={() => router.push("/style")}
         />
