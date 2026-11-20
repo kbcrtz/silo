@@ -42,8 +42,8 @@ Docs: https://docs.expo.dev/eas/index.md
 
 ## Silo specifics
 
-- iOS only (`platforms: ["ios"]` in app.json). Dev client builds, never Expo Go. Hackathon project: not shipping to the App Store.
-- Keep it minimal: no HealthKit, no chart libraries, no privacy/App Review flows.
+- iOS only (`platforms: ["ios"]` in app.json). Dev client builds, never Expo Go. In TestFlight beta, heading for the App Store: changes must hold up to App Review and the App Privacy form.
+- Keep it minimal: no HealthKit, no chart libraries.
 - Colors always come from `useTheme()` (`src/theme`). The theme is rebuilt from the user's season, so never hardcode UI colors.
 - Logic that can be pure lives in `src/lib/` with tests in `src/lib/__tests__/`. Screens stay thin.
 - Measurements are stored in cm/kg as a history (`src/store/measurements.ts`); convert only for display (`src/lib/units.ts`).

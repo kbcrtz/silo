@@ -1,4 +1,5 @@
 import { rgbToLab } from "../analysis/color.ts";
+import { AESTHETICS, hasRecipe, phrasesFor, type Aesthetic } from "./aesthetics.ts";
 import { familyFor, hexToRgb, nameForHex, type Family } from "./colors.ts";
 
 export const CATEGORIES = ["for-you", "all", "tops", "bottoms", "jeans", "shorts", "sweats", "dresses", "outerwear"] as const;
@@ -6,6 +7,9 @@ export type Category = (typeof CATEGORIES)[number];
 export const STYLES = ["minimal", "colorful", "dark", "none"] as const;
 export type Style = (typeof STYLES)[number];
 export type ShopFor = "womens" | "mens" | "both";
+/** What the app's measurements say stands out about the shopper's frame (the app's lib/bodyFit). */
+export const BODY = ["petite", "tall", "fuller", "slender", "short-legs"] as const;
+export type BodyTrait = (typeof BODY)[number];
 
 export type DiscoverParams = {
   category: Category;
@@ -17,9 +21,15 @@ export type DiscoverParams = {
   neutrals: string[];
   /** Varies the feed (which searches, their order and style words) so every open and refresh differs. Absent: the fixed plan. */
   seed?: number;
+  /** Steers the style words toward cuts that suit the frame. */
+  body?: BodyTrait[];
+  /** The shopper's looks, most liked first: most For You searches, and some of a category tab's, come from their recipes. */
+  aesthetic?: Aesthetic[];
+  /** Looks the shopper turned down; exploring never picks them. */
+  avoid?: Aesthetic[];
 };
-/** `color` is the Shopify color family a For You search filters on. */
-export type QueryStep = { query: string; category: Category; color?: Family };
+/** `color` is the Shopify color family a For You search filters on; `aesthetic` the look whose recipe made the search. */
+export type QueryStep = { query: string; category: Category; color?: Family; aesthetic?: Aesthetic };
 
 // Shopify search is natural language and products carry no reliable category,
 // so a category is a phrase in the query, plus the clothing taxonomy filter.
@@ -61,6 +71,34 @@ const VARIETY: Record<Exclude<Category, "for-you">, string[]> = {
 };
 const CATEGORY_STEPS = 4;
 
+/**
+ * Style words a frame does better without, and ones that suit it (listed
+ * again, so a seed picks them more often). A fuller build skips cropped and
+ * clingy cuts; petite skips oversized and favors cropped tops and high-rise,
+ * full-length bottoms; tall and slender frames carry volume. Avoiding wins
+ * over favoring: a petite, fuller shopper gets no cropped tops.
+ */
+const BODY_WORDS: Record<BodyTrait, { avoid: string[]; favor: string[] }> = {
+  petite: { avoid: ["oversized"], favor: ["cropped", "high-rise", "fitted", "tailored"] },
+  tall: { avoid: [], favor: ["oversized", "wide-leg", "wool"] },
+  fuller: { avoid: ["cropped", "fitted", "slim", "ribbed", "slip", "satin"], favor: ["relaxed", "straight", "tailored", "wrap", "high-rise"] },
+  slender: { avoid: [], favor: ["oversized", "relaxed", "knit", "quilted"] },
+  "short-legs": { avoid: [], favor: ["high-rise", "cropped"] },
+};
+
+/** Every word the body avoids, for filtering look phrases. */
+function avoidedWords(body: BodyTrait[] = []): Set<string> {
+  return new Set(body.flatMap((b) => BODY_WORDS[b].avoid));
+}
+
+/** A category's style words for this body. */
+export function styleWords(category: Exclude<Category, "for-you">, body: BodyTrait[] = []): string[] {
+  const words = VARIETY[category];
+  const avoid = new Set(body.flatMap((b) => BODY_WORDS[b].avoid));
+  const favor = body.flatMap((b) => BODY_WORDS[b].favor).filter((w) => words.includes(w));
+  return [...words, ...favor].filter((w) => !avoid.has(w));
+}
+
 /** A small seeded random generator (mulberry32): the same seed gives the same sequence. */
 export function seededRandom(seed: number): () => number {
   // Scramble first: mulberry32's first output barely moves between neighboring seeds (seed, seed + page).
@@ -94,6 +132,19 @@ const STYLE_WORD: Record<Style, { withPalette: string; alone: string }> = {
 };
 
 const PLAN_SIZE = 8;
+/** With a style, a seeded feed rotates through only this many of its leading colors, so the style shows. */
+const COLOR_POOL = 5;
+
+/**
+ * Which For You steps come from the shopper's looks (L), explore a look
+ * they haven't picked (E) or stay plain (P), by how many looks they sent.
+ * L steps cycle the looks a b a c b. Plain steps keep the body-steered
+ * style words; exploring keeps the feed from narrowing to one look.
+ */
+const LOOK_STEPS: Record<1 | 2 | 3, string> = { 1: "LPLELPEL", 2: "LPLELPLL", 3: "LPLELPLL" };
+const LOOK_CYCLE = [0, 1, 0, 2, 1];
+/** Category tab steps that come from the looks' phrases in that category. */
+const TAB_LOOK_STEPS = new Set([0, 2]);
 
 const lab = (hex: string) => rgbToLab(hexToRgb(hex));
 const chroma = (hex: string) => Math.hypot(lab(hex).a, lab(hex).b);
@@ -121,27 +172,92 @@ export function buildQueryPlan(params: DiscoverParams): QueryStep[] {
   if (category === "dresses" && shopFor === "mens") return [];
   const random = params.seed === undefined ? null : seededRandom(params.seed);
   if (category !== "for-you" && (q || !random)) return [{ query: join(dept, q, q && category === "all" ? undefined : TERMS[category]), category }];
-  if (category !== "for-you") {
-    return shuffle(VARIETY[category], random!)
-      .slice(0, CATEGORY_STEPS)
-      .map((variety) => ({ query: join(dept, variety, TERMS[category]), category }));
-  }
-  if (q) return [{ query: join(dept, q), category }];
+  if (q && category === "for-you") return [{ query: join(dept, q), category }];
 
   const ordered = [...new Set(orderedColors(params).map(nameForHex))];
   // A seed keeps the style's color order but starts at a random one, and shuffles the garments.
-  const start = random && ordered.length ? Math.floor(random() * ordered.length) : 0;
-  const names = [...ordered.slice(start), ...ordered.slice(0, start)];
-  const word = STYLE_WORD[params.style][names.length ? "withPalette" : "alone"];
+  // With a style, only its leading colors rotate, or a random start would hide the style.
+  const pool = random && params.style !== "none" ? ordered.slice(0, COLOR_POOL) : ordered;
+  const start = random && pool.length ? Math.floor(random() * pool.length) : 0;
+  const names = [...pool.slice(start), ...pool.slice(0, start)];
+  const looks = lookPlanner(params);
+
+  if (category !== "for-you") {
+    // A category in the shopper's colors too: each search gets the next palette color and its filter.
+    const steps = [...new Set(shuffle(styleWords(category, params.body), random!))]
+      .slice(0, CATEGORY_STEPS)
+      .map((variety, i) => {
+        const name = names[i % names.length];
+        const plain = { query: join(dept, name, variety, TERMS[category]), category, ...(name && { color: familyFor(name) }) };
+        return (TAB_LOOK_STEPS.has(i) && looks?.step("L", name, category)) || plain;
+      });
+    return steps.filter((step, i) => steps.findIndex((s) => s.query === step.query) === i);
+  }
+  // With looks, the recipes carry the style; "minimalist" would collide with them.
+  const word = looks ? "" : STYLE_WORD[params.style][names.length ? "withPalette" : "alone"];
   const garments = random ? shuffle(GARMENTS[shopFor], random) : GARMENTS[shopFor];
   const size = names.length ? PLAN_SIZE : garments.length;
   const plan = Array.from({ length: size }, (_, i) => {
     const [garment, garmentCategory] = garments[i % garments.length];
     const name = names[i % names.length];
-    const words = VARIETY[garmentCategory];
+    const words = styleWords(garmentCategory, params.body);
     const variety = random ? words[Math.floor(random() * words.length)] : undefined;
-    return { query: join(dept, name, word, variety, garment), category: garmentCategory, ...(name && { color: familyFor(name) }) };
+    const plain = { query: join(dept, name, word, variety, garment), category: garmentCategory, ...(name && { color: familyFor(name) }) };
+    const kind = looks?.pattern[i] ?? "P";
+    return (kind !== "P" && looks?.step(kind, name)) || plain;
   });
   // Few distinct colors repeat (color, garment) pairs; repeated searches return the same products.
   return plan.filter((step, i) => plan.findIndex((s) => s.query === step.query) === i);
+}
+
+type Dept = "womens" | "mens";
+
+/**
+ * Builds the look steps of a plan, or null when no sent look has searches
+ * in this department (casual, or a men's look in a women's feed), in which
+ * case the plan is the same as without looks. It draws from its own seeded
+ * stream, so the plain steps match a plan without looks step for step.
+ */
+function lookPlanner(params: DiscoverParams) {
+  const { shopFor } = params;
+  const sent = [...new Set(params.aesthetic ?? [])].filter((a) => hasRecipe(a, shopFor)).slice(0, 3);
+  if (!sent.length) return null;
+  const random = seededRandom(((params.seed ?? 0) + 0x9e37) % 2 ** 31);
+  const avoid = avoidedWords(params.body);
+  const skip = new Set([...sent, ...(params.avoid ?? [])]);
+  const explore = AESTHETICS.filter((a) => !skip.has(a) && hasRecipe(a, shopFor));
+  const used = new Set<string>();
+  let lookSteps = 0;
+  let deptTurn = 0;
+  let lastCategory: Category | undefined;
+
+  /** "both" alternates the women's and men's recipes; a look only one department has uses that one. */
+  const deptFor = (look: Aesthetic): Dept[] => {
+    if (shopFor !== "both") return [shopFor];
+    const both: Dept[] = deptTurn++ % 2 ? ["mens", "womens"] : ["womens", "mens"];
+    return both.filter((d) => phrasesFor(look, d, avoid).length);
+  };
+
+  return {
+    pattern: LOOK_STEPS[sent.length as 1 | 2 | 3],
+    /** One search from a look's recipe in this color, or null to keep the plain step. */
+    step(kind: string, name: string | undefined, category?: Category): QueryStep | null {
+      const look = kind === "E" ? explore[Math.floor(random() * explore.length)] : sent[LOOK_CYCLE[lookSteps++ % LOOK_CYCLE.length] % sent.length];
+      if (!look) return null;
+      for (const dept of deptFor(look)) {
+        const phrases = phrasesFor(look, dept, avoid).filter(([, c]) => !category || c === category);
+        const fresh = phrases.filter(([p]) => !used.has(`${dept}|${p}`));
+        // Unused phrases first, then a different kind of garment from the last look step, so a page isn't all tops.
+        const unused = fresh.length ? fresh : phrases;
+        const varied = unused.filter(([, c]) => c !== lastCategory);
+        const choices = category || !varied.length ? unused : varied;
+        if (!choices.length) continue;
+        const [phrase, phraseCategory] = choices[Math.floor(random() * choices.length)];
+        used.add(`${dept}|${phrase}`);
+        lastCategory = phraseCategory;
+        return { query: join(DEPARTMENT[dept], name, phrase), category: category ?? phraseCategory, ...(name && { color: familyFor(name) }), aesthetic: look };
+      }
+      return null;
+    },
+  };
 }

@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { Link } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -15,7 +15,12 @@ import type { FeedCategory } from "@/api/catalog";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import { Backdrop, useSeasonBackdrop } from "@/components/onboarding/Backdrop";
 import { Glass } from "@/components/onboarding/Glass";
+import { StylePrompt } from "@/components/StylePrompt";
+import { findItem, type CatalogItem } from "@/data/catalog";
+import { backfillFromSaved, notForMe } from "@/store/taste";
+import { useSaved } from "@/store/saved";
 import { useDiscover } from "@/hooks/useDiscover";
+import { describeBody } from "@/lib/bodyFit";
 import { BRAND, FONTS, TYPE } from "@/theme/brand";
 
 const CATEGORIES: [FeedCategory, string][] = [
@@ -122,7 +127,17 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState<FeedCategory>("for-you");
   const feed = useDiscover(category);
-  const { shape, season } = feed;
+
+  // Once: what's already saved seeds the taste learning.
+  useEffect(() => {
+    const { itemIds, items } = useSaved.getState();
+    backfillFromSaved(
+      itemIds
+        .map((id) => items[id] ?? findItem(id))
+        .filter((i): i is CatalogItem => Boolean(i)),
+    );
+  }, []);
+  const { body, season } = feed;
   const backdrop = useSeasonBackdrop();
 
   const entries = useMemo(
@@ -131,12 +146,15 @@ export default function Home() {
   );
   const loading = feed.status === "loading";
 
-  const pickedFor = [
-    season ? `your ${season.name} palette` : null,
-    shape ? `${shape.name.toLowerCase()} shape` : null,
-  ]
-    .filter(Boolean)
-    .join(" and ");
+  const cutFor = describeBody(body);
+  const pickedFor =
+    season && cutFor
+      ? `In your ${season.name} colors, cut for your ${cutFor}.`
+      : season
+        ? `In your ${season.name} colors. Add measurements for cuts that suit you.`
+        : cutFor
+          ? `Cut for your ${cutFor}.`
+          : "Finish color analysis to personalize this feed.";
 
   return (
     <View style={{ flex: 1 }}>
@@ -195,11 +213,10 @@ export default function Home() {
               },
             ]}
           >
-            {pickedFor
-              ? `Picked for ${pickedFor}.`
-              : "Finish color analysis to personalize this feed."}
+            {pickedFor}
             {feed.source === "demo" ? " Demo catalog." : ""}
           </Text>
+          <StylePrompt />
         </View>
 
         <ScrollView
@@ -219,7 +236,9 @@ export default function Home() {
         </ScrollView>
 
         <View style={{ paddingHorizontal: GUTTER, marginTop: 24 }}>
-          {entries.length ? <MasonryGrid entries={entries} /> : null}
+          {entries.length ? (
+            <MasonryGrid entries={entries} onNotForMe={notForMe} />
+          ) : null}
           {feed.status === "error" ? (
             <View style={{ alignItems: "center", gap: 12, marginTop: 12 }}>
               <Text

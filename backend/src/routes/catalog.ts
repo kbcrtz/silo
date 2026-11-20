@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { discover } from "../catalog/discover.ts";
 import { normalizeProduct } from "../catalog/normalize.ts";
-import { CATEGORIES, STYLES } from "../catalog/query.ts";
+import { AESTHETICS } from "../catalog/aesthetics.ts";
+import { BODY, CATEGORIES, STYLES } from "../catalog/query.ts";
 import { HttpError } from "../errors.ts";
 import type { Gate } from "../guard.ts";
 import type { Enrich } from "../services/listingInsights.ts";
@@ -15,6 +16,15 @@ const hexList = z
   .transform((s) => s.split(",").filter(Boolean))
   .pipe(z.array(z.string().regex(/^#[0-9a-f]{6}$/i)).max(16));
 const dollars = z.coerce.number().int().min(0).max(100_000).optional();
+
+/** A comma-separated list of look ids (catalog/aesthetics.ts); an unknown id is a 400. */
+const lookList = (max: number) =>
+  z
+    .string()
+    .max(200)
+    .transform((s) => [...new Set(s.split(",").filter(Boolean))])
+    .pipe(z.array(z.enum(AESTHETICS)).max(max))
+    .default([]);
 
 const DiscoverQuery = z.strictObject({
   category: z.enum(CATEGORIES).default("for-you"),
@@ -29,6 +39,17 @@ const DiscoverQuery = z.strictObject({
   neutrals: hexList.default([]),
   priceMin: dollars,
   priceMax: dollars,
+  /** `petite,fuller`: what stands out about the shopper's frame; steers the style words. */
+  body: z
+    .string()
+    .max(60)
+    .transform((s) => s.split(",").filter(Boolean))
+    .pipe(z.array(z.enum(BODY)).max(BODY.length))
+    .default([]),
+  /** `streetwear,minimal`: the shopper's looks, most liked first. First page only; later pages use the cursor's. */
+  aesthetic: lookList(3),
+  /** Looks the shopper turned down, so exploring skips them. */
+  avoid: lookList(4),
   /** A new random number per feed open or refresh; varies the searches. Later pages use the cursor's. */
   seed: z.coerce.number().int().min(0).max(2 ** 31 - 1).optional(),
   // Room for the HMAC suffix on the opaque cursor.

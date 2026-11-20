@@ -18,6 +18,8 @@ export type Catalog = {
   search(input: SearchInput, signal?: AbortSignal): Promise<{ products: unknown[]; cursor: string | null }>;
   /** Null when the id doesn't resolve. */
   getProduct(id: string, selected?: Choice[], signal?: AbortSignal): Promise<unknown | null>;
+  /** The ships-to country, so the feed can drop listings priced in another currency. */
+  country?: string;
 };
 
 export type CatalogConfig = {
@@ -147,6 +149,7 @@ export function createCatalog(cfg: CatalogConfig): Catalog {
 
   const context = { address_country: cfg.country };
   return {
+    country: cfg.country,
     async search({ query, limit, cursor, priceMin, priceMax, colors }, signal) {
       const price = priceMin !== undefined || priceMax !== undefined ? { price: { min: priceMin, max: priceMax } } : {};
       const color = colors?.length ? { attributes: [{ name: "Color", values: colors }] } : {};
@@ -154,7 +157,8 @@ export function createCatalog(cfg: CatalogConfig): Catalog {
         "search_catalog",
         {
           query,
-          filters: { available: true, ships_to: { country: cfg.country }, categories: [CLOTHING], ...price, ...color },
+          // New items only: resale and single-size second-hand listings made the feed look like a thrift app.
+          filters: { available: true, condition: ["new"], ships_to: { country: cfg.country }, categories: [CLOTHING], ...price, ...color },
           context,
           pagination: { limit, ...(cursor && { cursor }) },
         },

@@ -6,6 +6,7 @@ import { Pressable, View } from "react-native";
 import type { CatalogItem } from "@/data/catalog";
 import { readableOn } from "@/lib/color";
 import { useSaved } from "@/store/saved";
+import { confirmToggleSave } from "@/store/taste";
 import { useTheme } from "@/theme";
 import { BRAND } from "@/theme/brand";
 import { GlassPill } from "./GlassPill";
@@ -19,90 +20,144 @@ export function ItemCard({
   width,
   footer,
   pick,
+  onNotForMe,
 }: {
   item: CatalogItem;
   width: number;
   /** Below the caption, e.g. a Shop link on saved items. */
   footer?: ReactNode;
   pick?: Pick;
+  /** Gives the card the native long-press menu (Save, Not for me), as on the feed. */
+  onNotForMe?: () => void;
 }) {
   const t = useTheme();
   const saved = useSaved((s) => s.itemIds.includes(item.id));
   const height = width * item.aspect;
+  const photo = (
+    <>
+      <ProductImage item={item} />
+      {item.popular ? (
+        <View
+          style={{
+            position: "absolute",
+            top: t.space(2),
+            left: t.space(2),
+          }}
+        >
+          <GlassPill
+            height={24}
+            shadow={false}
+            style={{ paddingHorizontal: t.space(2) }}
+          >
+            <Text variant="caption" style={{ color: BRAND.ink }}>
+              Popular
+            </Text>
+          </GlassPill>
+        </View>
+      ) : null}
+      {pick ? (
+        <PickMark picked={pick.picked} />
+      ) : saved ? (
+        // On a dark disc: most product photos are white behind the item.
+        <View
+          style={{
+            position: "absolute",
+            top: t.space(2),
+            right: t.space(2),
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(23,19,17,0.45)",
+          }}
+        >
+          <SymbolView
+            name="heart.fill"
+            size={14}
+            tintColor={BRAND.white}
+            style={{ width: 15, height: 15 }}
+          />
+        </View>
+      ) : null}
+    </>
+  );
+  const photoStyle = {
+    height,
+    borderRadius: t.radius.md,
+    overflow: "hidden",
+    backgroundColor: item.colors[0],
+  } as const;
+  const price = item.priceLabel ?? `$${item.price}`;
+  const caption = (
+    <View style={{ paddingHorizontal: t.space(1) }}>
+      <Text variant="caption" numberOfLines={2}>
+        {item.name}
+      </Text>
+      <Text variant="caption" tone="muted">
+        {item.brand} · {price}
+      </Text>
+      {footer}
+    </View>
+  );
+  const href = { pathname: "/item/[id]", params: { id: item.id } } as const;
+
+  if (onNotForMe && !pick) {
+    // iOS's own context menu (Liquid Glass on iOS 26). Only the photo is the
+    // trigger, so holding a card lifts the photo alone, not its caption.
+    return (
+      <View style={{ width, gap: t.space(2) }}>
+        <Link href={href} asChild>
+          <Link.Trigger>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`${item.name}, ${item.brand}, ${price}`}
+              accessibilityHint="Hold for Save and Not for me"
+              style={photoStyle}
+            >
+              {photo}
+            </Pressable>
+          </Link.Trigger>
+          <Link.Menu>
+            <Link.MenuAction
+              title={saved ? "Remove from saved" : "Save"}
+              icon={saved ? "heart.slash" : "heart"}
+              onPress={() => confirmToggleSave(item, t.season?.id)}
+            />
+            <Link.MenuAction
+              title="Not for me"
+              icon="hand.thumbsdown"
+              destructive
+              onPress={onNotForMe}
+            />
+          </Link.Menu>
+        </Link>
+        {/* The caption opens the item too; VoiceOver already has it on the photo. */}
+        <Link href={href} asChild>
+          <Pressable
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            {caption}
+          </Pressable>
+        </Link>
+      </View>
+    );
+  }
+
   const card = (
     <Pressable
       accessibilityState={pick ? { selected: pick.picked } : undefined}
       onPress={pick?.onPress}
       style={{ width, gap: t.space(2) }}
     >
-      <View
-        style={{
-          height,
-          borderRadius: t.radius.md,
-          overflow: "hidden",
-          backgroundColor: item.colors[0],
-        }}
-      >
-        <ProductImage item={item} />
-        {item.popular ? (
-          <View
-            style={{
-              position: "absolute",
-              top: t.space(2),
-              left: t.space(2),
-            }}
-          >
-            <GlassPill
-              height={24}
-              shadow={false}
-              style={{ paddingHorizontal: t.space(2) }}
-            >
-              <Text variant="caption" style={{ color: BRAND.ink }}>
-                Popular
-              </Text>
-            </GlassPill>
-          </View>
-        ) : null}
-        {pick ? (
-          <PickMark picked={pick.picked} />
-        ) : saved ? (
-          // On a dark disc: most product photos are white behind the item.
-          <View
-            style={{
-              position: "absolute",
-              top: t.space(2),
-              right: t.space(2),
-              width: 28,
-              height: 28,
-              borderRadius: 14,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(23,19,17,0.45)",
-            }}
-          >
-            <SymbolView
-              name="heart.fill"
-              size={14}
-              tintColor={BRAND.white}
-              style={{ width: 15, height: 15 }}
-            />
-          </View>
-        ) : null}
-      </View>
-      <View style={{ paddingHorizontal: t.space(1) }}>
-        <Text variant="caption" numberOfLines={2}>
-          {item.name}
-        </Text>
-        <Text variant="caption" tone="muted">
-          {item.brand} · {item.priceLabel ?? `$${item.price}`}
-        </Text>
-        {footer}
-      </View>
+      <View style={photoStyle}>{photo}</View>
+      {caption}
     </Pressable>
   );
   if (pick) return card;
   return (
-    <Link href={{ pathname: "/item/[id]", params: { id: item.id } }} asChild>
+    <Link href={href} asChild>
       {card}
     </Link>
   );

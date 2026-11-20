@@ -1,13 +1,12 @@
 import type { CatalogItem } from "@/data/catalog";
 import type { Season } from "@/data/seasons";
-import type { BodyShape } from "./bodyShape";
+import { bodyFit, hasTraits, type BodyFit, type BodyTraits } from "./bodyFit";
 import { paletteMatch, type PaletteMatch } from "./paletteMatch";
-import { silhouetteMatch, type SilhouetteMatch } from "./silhouette";
 
 export type Recommendation = {
   item: CatalogItem;
   color?: PaletteMatch;
-  silhouette?: SilhouetteMatch;
+  fit?: BodyFit;
   /** 0-100, what the feed sorts by. */
   score: number;
 };
@@ -16,14 +15,17 @@ export type Recommendation = {
 const COLOR_WEIGHT = 0.6;
 
 /**
- * Scores every item by palette and by cut, then sorts best first. Either half
- * can be missing (no color analysis yet, or no chest/waist/hips), in which
- * case the other decides alone; with neither, catalog order is kept.
+ * Scores every item by palette and by how its cut and length suit the body,
+ * then sorts best first. Either half can be missing (no color analysis yet,
+ * or no measurements), in which case the other decides alone; with neither,
+ * catalog order is kept.
  */
 export function recommend(
   items: CatalogItem[],
   season: Season | null,
-  shape: BodyShape | null,
+  body: BodyTraits | null,
+  /** Body rules the shopper has waived (lib/tasteLearn). */
+  waived?: ReadonlySet<string>,
 ): Recommendation[] {
   return items
     .map((item) => {
@@ -32,17 +34,14 @@ export function recommend(
         season && item.colors.length
           ? paletteMatch(item.colors, season)
           : undefined;
-      const silhouette = shape
-        ? silhouetteMatch(item.silhouette, shape)
-        : undefined;
+      const fit = body && hasTraits(body) ? bodyFit(item, body, waived) : undefined;
       const score =
-        color && silhouette
+        color && fit
           ? Math.round(
-              COLOR_WEIGHT * color.score +
-                (1 - COLOR_WEIGHT) * silhouette.score,
+              COLOR_WEIGHT * color.score + (1 - COLOR_WEIGHT) * fit.score,
             )
-          : (color?.score ?? silhouette?.score ?? 0);
-      return { item, color, silhouette, score };
+          : (color?.score ?? fit?.score ?? 0);
+      return { item, color, fit, score };
     })
     .sort((a, b) => b.score - a.score);
 }

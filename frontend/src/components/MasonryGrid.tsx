@@ -15,11 +15,14 @@ export function MasonryGrid({
   entries,
   footer,
   pick,
+  onNotForMe,
 }: {
   entries: Entry[];
   footer?: (item: CatalogItem) => ReactNode;
   /** Turns the grid into a picker; cards stop opening their item. */
   pick?: (item: CatalogItem) => Pick;
+  /** Gives cards the long-press menu; the feed's "Not for me". */
+  onNotForMe?: (item: CatalogItem) => void;
 }) {
   const t = useTheme();
   const gap = t.space(3);
@@ -49,6 +52,7 @@ export function MasonryGrid({
                 width={columnWidth}
                 footer={footer?.(item)}
                 pick={pick?.(item)}
+                onNotForMe={onNotForMe && (() => onNotForMe(item))}
               />
             ))}
           </View>

@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { Pressable, Text, View, type TextInput } from "react-native";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
-import { Field, OptionButton } from "@/components/onboarding/Controls";
+import { Field, OptionButton, TWO_UP } from "@/components/onboarding/Controls";
 import { Header, stepBadge } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
@@ -91,7 +91,11 @@ export default function Essentials() {
       </View>
       <View style={{ marginTop: 17 }}>
         <Label>GENDER</Label>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9 }}>
+        <View
+          // Two 48.7% cells with a fixed 9 pt gap overflow a phone under 394 pt
+          // wide and drop to one column; spacing them apart always fits.
+          style={TWO_UP}
+        >
           {GENDERS.map((g) => (
             <OptionButton
               key={g.id}

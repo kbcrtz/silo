@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 import { HttpError } from "../src/errors.ts";
 import { createCatalog, type CatalogConfig } from "../src/services/shopifyCatalog.ts";
 import { notFoundResult, productDetail, productResult, rpcError, searchResult, trouser } from "./fixtures/shopify.ts";
+
+// AbortSignal.timeout's timer doesn't hold the process open, so a test waiting
+// only on it let the event loop drain and cancelled the rest of this file.
+let keepAlive: ReturnType<typeof setInterval>;
+before(() => (keepAlive = setInterval(() => {}, 1000)));
+after(() => clearInterval(keepAlive));
 
 type Call = { url: string; init: RequestInit; body: any };
 
@@ -60,7 +66,7 @@ test("search sends one JSON-RPC search_catalog call with the agent profile and c
   assert.equal(args.meta["ucp-agent"].profile, "https://profile.test/agent.json");
   assert.deepEqual(args.catalog, {
     query: "women's olive trousers",
-    filters: { available: true, ships_to: { country: "US" }, categories: ["aa-1"], price: { min: 2000, max: 9000 } },
+    filters: { available: true, condition: ["new"], ships_to: { country: "US" }, categories: ["aa-1"], price: { min: 2000, max: 9000 } },
     context: { address_country: "US" },
     pagination: { limit: 20, cursor: "abc" },
   });

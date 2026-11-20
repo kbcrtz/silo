@@ -13,7 +13,6 @@ import {
   Text,
   useImage,
   vec,
-  type SkTypefaceFontProvider,
 } from "@shopify/react-native-skia";
 import { useMemo } from "react";
 import { mix } from "@/lib/color";
@@ -25,7 +24,7 @@ import {
   rosettePath,
   type HoloUniforms,
 } from "./CardSurface";
-import { sansFont, serifFont } from "./fonts";
+import { sansFont, serifFont, type PassportFonts } from "./fonts";
 import type { PassportData } from "./usePassportData";
 
 const GRAYSCALE = [
@@ -51,7 +50,7 @@ type Props = {
   width: number;
   height: number;
   data: PassportData;
-  fontMgr: SkTypefaceFontProvider;
+  fontMgr: PassportFonts;
   /** Thin lines: no glitter, which would read as gaps at this width. */
   uniforms: HoloUniforms;
   /** Filled areas: with glitter. */

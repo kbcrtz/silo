@@ -1,5 +1,7 @@
 import { CATALOG, shopUrl, type CatalogItem } from "@/data/catalog";
+import type { Aesthetic } from "@/data/aesthetics";
 import type { Season } from "@/data/seasons";
+import type { BodyTraits } from "@/lib/bodyFit";
 import { bodyOutlines, landmarks, type Outline } from "@/lib/mannequin";
 import type { Measurements } from "@/lib/measurements";
 import type { ShopFor } from "@/store/profile";
@@ -45,6 +47,8 @@ export type CatalogProduct = {
   rating?: { value: number; max: number; count: number };
   /** Popular with the shopper's season this week. */
   popular?: true;
+  /** The look whose search returned it (backend catalog/aesthetics.ts); absent on plain searches. */
+  aesthetic?: Aesthetic;
   /** The backend's AI reading of the listing text (never images): estimated color and cut, with the words it used. */
   estimate?: {
     hex: string | null;
@@ -89,14 +93,29 @@ export type DiscoverParams = {
   cursor?: string;
   /** A new random number per feed open or refresh, so the feed differs each time; later pages follow the cursor's. */
   seed?: number;
+  /** What stands out about the shopper's frame; steers the searches' style words. */
+  body?: BodyTraits;
+  /** The shopper's looks, most liked first (up to 3), and looks they turned down (up to 4). First page only. */
+  aesthetic?: Aesthetic[];
+  avoid?: Aesthetic[];
 };
+
+/** `petite,fuller,short-legs`: the coarse traits only, never measurements. */
+function bodyParam(t: BodyTraits): string {
+  return [t.height, t.build, t.legs === "short" && "short-legs"]
+    .filter(Boolean)
+    .join(",");
+}
 
 /**
  * One page of the Discover feed. Only fashion attributes leave the phone:
- * category, search text, department, style and the season's palette colors.
+ * category, search text, department, style, the season's palette colors,
+ * the looks the shopper picked and coarse body traits (petite, fuller…),
+ * never measurements. The mock ignores the looks and the body.
  *
  * Backend contract: GET {API_URL}/catalog/discover, Authorization: Bearer, ?category&q&shopFor&style
- * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&seed&cursor
+ * &palette=#hex,…&neutrals=#hex,…&priceMin&priceMax&seed&body=petite,fuller&aesthetic=streetwear,minimal
+ * &avoid=romantic&cursor
  * -> { products, cursor, source }
  */
 export async function discoverProducts(
@@ -120,6 +139,13 @@ export async function discoverProducts(
   if (params.priceMax !== undefined)
     query.set("priceMax", String(params.priceMax));
   if (params.seed !== undefined) query.set("seed", String(params.seed));
+  const body = params.body ? bodyParam(params.body) : "";
+  if (body) query.set("body", body);
+  // Later pages follow the looks in the cursor.
+  if (!params.cursor && params.aesthetic?.length)
+    query.set("aesthetic", params.aesthetic.join(","));
+  if (!params.cursor && params.avoid?.length)
+    query.set("avoid", params.avoid.join(","));
   if (params.cursor) query.set("cursor", params.cursor);
   const res = await fetch(`${API_URL}/catalog/discover?${query}`, {
     headers: apiHeaders(),

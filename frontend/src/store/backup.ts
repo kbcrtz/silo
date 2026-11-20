@@ -4,6 +4,7 @@ import { entriesFromBackup, isEmptyInstall, joinEntries } from "@/lib/cloud";
 import { useMeasurements } from "./measurements";
 import { useProfile } from "./profile";
 import { useSaved } from "./saved";
+import { useTasteLocal } from "./taste";
 
 export const installIsEmpty = () =>
   isEmptyInstall(
@@ -49,8 +50,9 @@ export async function restorePhoto() {
   if (photo) useProfile.setState({ selfiePhoto: photo, photoSynced: photo });
 }
 
-/** Empties the phone: profile, measurements and saved items. */
+/** Empties the phone: profile, measurements, saved items and taste bookkeeping. */
 export function clearLocalData() {
+  useTasteLocal.getState().clear();
   useMeasurements.getState().replaceAll([]);
   useSaved.getState().clear();
   useProfile.getState().reset();

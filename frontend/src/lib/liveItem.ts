@@ -1,3 +1,4 @@
+import { garmentFromTitle } from "./tags";
 import type { CatalogProduct, FeedCategory } from "@/api/catalog";
 import {
   findItem,
@@ -7,6 +8,7 @@ import {
   type Silhouette,
   type Sleeve,
 } from "@/data/catalog";
+import { isAesthetic } from "@/data/aesthetics";
 import type { ShopFor } from "@/store/profile";
 
 export type EstimatedCut = Pick<
@@ -168,6 +170,11 @@ export function toCatalogItem(
     shopifyColor: product.selected.find((o) => /colou?r/i.test(o.name)),
     ...(product.estimate && { evidence: product.estimate.evidence }),
     ...(product.popular && { popular: true }),
+    // A look the server knows and this app version doesn't is dropped.
+    ...(isAesthetic(product.aesthetic) && { aesthetics: [product.aesthetic] }),
+    ...(garmentFromTitle(product.title) && {
+      garment: garmentFromTitle(product.title),
+    }),
     ...(product.estimate?.pattern &&
       product.estimate.pattern !== "solid" && {
         pattern: product.estimate.pattern,

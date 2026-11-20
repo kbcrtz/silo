@@ -19,14 +19,17 @@ import { Text } from "@/components/Text";
 import { findItem, shopUrl, SILHOUETTE_LABELS } from "@/data/catalog";
 import { SIZE_CHARTS } from "@/data/sizeCharts";
 import { useLatestMeasurements } from "@/hooks/useRecommendations";
+import { bodyFit, bodyTraits, hasTraits } from "@/lib/bodyFit";
 import { bodyShape } from "@/lib/bodyShape";
 import { recommendSize } from "@/lib/fit";
 import { tryOnImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
-import { silhouetteMatch } from "@/lib/silhouette";
+import { tagsOf } from "@/lib/tags";
+import { tasteModel, tasteReason } from "@/lib/tasteLearn";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
+import { confirmToggleSave, notForMe, recordSignal } from "@/store/taste";
 import { useTheme } from "@/theme";
 import { BRAND } from "@/theme/brand";
 
@@ -82,6 +85,9 @@ function IconButton({
   );
 }
 
+/** How long the sheet must stay up for an open to count toward taste. */
+const OPEN_DWELL_MS = 3000;
+
 /**
  * The item sheet over the feed: photo or the item on the user's mannequin,
  * why it was picked, their size, and Save / Shop.
@@ -93,16 +99,31 @@ export default function ItemSheet() {
   const latest = useLatestMeasurements();
   const shape = useMemo(() => bodyShape(latest), [latest]);
   const shopFor = useProfile((s) => s.shopFor);
+  const body = useMemo(() => bodyTraits(latest, shopFor), [latest, shopFor]);
   const fitPreference = useProfile((s) => s.fitPreference);
   const saved = useSaved((s) => (item ? s.itemIds.includes(item.id) : false));
   const lists = useSaved((s) => s.lists);
   const [onYou, setOnYou] = useState(false);
+  const [triedOn, setTriedOn] = useState(false);
   const [failedUri, setFailedUri] = useState<string>();
   const backdrop = useSeasonBackdrop();
+  const taste = useProfile((s) => s.taste);
+  const waived = useMemo(
+    () => new Set(taste?.waivers?.waived ?? []),
+    [taste?.waivers],
+  );
 
   // Counted once per sheet open, for "popular with your season".
   useEffect(() => {
     if (item) track("open", item, t.season?.id);
+  }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // An open counts toward taste after 3 s on the sheet; a quick bounce says
+  // nothing, and an item already saved has said its piece.
+  useEffect(() => {
+    if (!item || useSaved.getState().itemIds.includes(item.id)) return;
+    const timer = setTimeout(() => recordSignal(item, "open"), OPEN_DWELL_MS);
+    return () => clearTimeout(timer);
   }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!item) {
@@ -115,7 +136,11 @@ export default function ItemSheet() {
 
   // Live listings: the cut is estimated from the title.
   const estimated = item.source ? "≈ " : "";
-  const fit = shape ? silhouetteMatch(item.silhouette, shape.shape) : null;
+  const fit = hasTraits(body) ? bodyFit(item, body, waived) : null;
+  const tasteLine = tasteReason(
+    tagsOf(item),
+    tasteModel(taste?.stated, taste?.learned),
+  );
   const chart = SIZE_CHARTS[item.sizeChartId];
   const size = chart ? recommendSize(latest, chart, fitPreference) : null;
   const measured = latest.chest && latest.waist && latest.hips;
@@ -133,21 +158,9 @@ export default function ItemSheet() {
   );
 
   const toggleSave = () => {
-    const inLists = lists.filter((l) => l.itemIds.includes(item.id)).length;
-    const unsave = () => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (!saved) track("save", item, t.season?.id);
-      useSaved.getState().toggle(item.id);
-    };
-    // Unsaving also empties it out of every list, so ask first.
-    if (!saved || !inLists) return unsave();
-    Alert.alert(
-      "Remove from Saved?",
-      `It also comes out of ${inLists === 1 ? "1 list" : `${inLists} lists`}.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: unsave },
-      ],
+    // Unsaving an item in lists asks first: it comes out of them too.
+    confirmToggleSave(item, t.season?.id, () =>
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
     );
   };
 
@@ -251,19 +264,44 @@ export default function ItemSheet() {
         <View
           style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space(2) }}
         >
-          {fit && shape ? (
-            <Pill label={`${fit.label} · ${shape.name}`} />
-          ) : null}
           <Pill label={SILHOUETTE_LABELS[item.silhouette]} />
           {item.popular && t.season ? (
             <Pill label={`Popular with ${t.season.name}s this week`} />
           ) : null}
         </View>
+        {fit?.reason ? (
+          <Text tone="muted">
+            {fit.reason}
+            {item.source ? " (cut estimated from the listing)." : "."}
+          </Text>
+        ) : null}
+        {tasteLine ? <Text tone="muted">{tasteLine}.</Text> : null}
         {item.evidence ? (
           <Text variant="caption" tone="muted">
             From the listing: {item.evidence}
           </Text>
         ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint="Hides it and shows fewer like it"
+          hitSlop={8}
+          onPress={() => {
+            Haptics.selectionAsync();
+            notForMe(item);
+            router.back();
+          }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+        >
+          <SymbolView
+            name="hand.thumbsdown"
+            size={14}
+            tintColor={t.colors.textMuted}
+            style={{ width: 16, height: 16 }}
+          />
+          <Text variant="caption" tone="muted">
+            Not for me
+          </Text>
+        </Pressable>
 
         {size ? (
           <Glass
@@ -338,7 +376,14 @@ export default function ItemSheet() {
       >
         <Button
           label={onYou ? "See photo" : "Try it on"}
-          onPress={() => setOnYou((v) => !v)}
+          onPress={() => {
+            // The first try-on counts toward taste; flipping back and forth doesn't add more.
+            if (!onYou && !triedOn) {
+              setTriedOn(true);
+              recordSignal(item, "tryon");
+            }
+            setOnYou((v) => !v);
+          }}
           style={{ flex: 1 }}
         />
         <IconButton
@@ -352,6 +397,7 @@ export default function ItemSheet() {
           label="Shop"
           onPress={() => {
             track("shop", item, t.season?.id);
+            recordSignal(item, "shop");
             openProduct(shopUrl(item), t.colors.accentText);
           }}
         />

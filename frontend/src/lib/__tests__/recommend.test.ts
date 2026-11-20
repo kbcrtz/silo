@@ -32,29 +32,27 @@ describe("recommend", () => {
   const season = SEASONS["soft-autumn"];
 
   it("sorts best first and blends both scores", () => {
-    const ranked = recommend(CATALOG, season, "pear");
+    const ranked = recommend(CATALOG, season, { shape: "pear" });
     for (let i = 1; i < ranked.length; i++)
       expect(ranked[i - 1].score).toBeGreaterThanOrEqual(ranked[i].score);
     const r = ranked[0];
-    expect(r.score).toBe(
-      Math.round(0.6 * r.color!.score + 0.4 * r.silhouette!.score),
-    );
+    expect(r.score).toBe(Math.round(0.6 * r.color!.score + 0.4 * r.fit!.score));
   });
 
   it("uses whichever half exists", () => {
     const colorOnly = recommend(CATALOG, season, null);
-    expect(colorOnly[0].silhouette).toBeUndefined();
+    expect(colorOnly[0].fit).toBeUndefined();
     expect(colorOnly[0].score).toBe(colorOnly[0].color!.score);
 
-    const cutOnly = recommend(CATALOG, null, "hourglass");
+    const cutOnly = recommend(CATALOG, null, { shape: "hourglass" });
     expect(cutOnly[0].color).toBeUndefined();
-    expect(cutOnly[0].score).toBe(cutOnly[0].silhouette!.score);
+    expect(cutOnly[0].score).toBe(cutOnly[0].fit!.score);
   });
 
   it("puts a silhouette that suits the shape ahead of the same color in a worse cut", () => {
     const a = { ...findItem("w-10")!, id: "a", silhouette: "a-line" as const };
     const b = { ...a, id: "b", silhouette: "slim" as const };
-    const ranked = recommend([b, a], season, "pear");
+    const ranked = recommend([b, a], season, { shape: "pear" });
     expect(ranked.map((r) => r.item.id)).toEqual(["a", "b"]);
   });
 });
