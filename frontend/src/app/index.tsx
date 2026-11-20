@@ -3,7 +3,6 @@ import { Link } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActionSheetIOS,
   ActivityIndicator,
   Pressable,
   RefreshControl,
@@ -118,20 +117,6 @@ function CategoryChip({
 }
 
 /** The app's one home screen: the feed over the user's season gradient. */
-/** Long-press a card: "Not for me" hides it and shows fewer like it. */
-function askNotForMe(item: CatalogItem) {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  ActionSheetIOS.showActionSheetWithOptions(
-    {
-      title: item.name,
-      options: ["Not for me", "Cancel"],
-      destructiveButtonIndex: 0,
-      cancelButtonIndex: 1,
-    },
-    (i) => i === 0 && notForMe(item),
-  );
-}
-
 export default function Home() {
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState<FeedCategory>("for-you");
@@ -246,7 +231,7 @@ export default function Home() {
 
         <View style={{ paddingHorizontal: GUTTER, marginTop: 24 }}>
           {entries.length ? (
-            <MasonryGrid entries={entries} onLongPress={askNotForMe} />
+            <MasonryGrid entries={entries} onNotForMe={notForMe} />
           ) : null}
           {feed.status === "error" ? (
             <View style={{ alignItems: "center", gap: 12, marginTop: 12 }}>

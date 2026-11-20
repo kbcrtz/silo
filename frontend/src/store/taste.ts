@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { track } from "@/api/userData";
 import { persist } from "zustand/middleware";
 import type { CatalogItem } from "@/data/catalog";
 import { bodyTraits, sinkingRules } from "@/lib/bodyFit";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/tasteLearn";
 import { useMeasurements } from "./measurements";
 import { useProfile } from "./profile";
+import { useSaved } from "./saved";
 import { storage } from "./storage";
 
 /** Hidden items are kept this long a list; older ones may come back. */
@@ -130,4 +132,17 @@ export function backfillFromSaved(saved: CatalogItem[], now = new Date()) {
   }
   useTasteLocal.setState({ ledger });
   setTaste({ learned, backfilled: true });
+}
+
+/**
+ * Save or unsave, from the item sheet or a card's menu: it reports the save
+ * for "popular with your season" and counts toward taste either way.
+ */
+export function toggleSave(item: CatalogItem, seasonId: string | undefined) {
+  if (useSaved.getState().itemIds.includes(item.id)) recordUnsave(item);
+  else {
+    track("save", item, seasonId);
+    recordSignal(item, "save");
+  }
+  useSaved.getState().toggle(item.id);
 }

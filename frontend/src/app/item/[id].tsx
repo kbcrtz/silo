@@ -29,7 +29,7 @@ import { tagsOf } from "@/lib/tags";
 import { tasteModel, tasteReason } from "@/lib/tasteLearn";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
-import { notForMe, recordSignal, recordUnsave } from "@/store/taste";
+import { notForMe, recordSignal, toggleSave as saveOrUnsave } from "@/store/taste";
 import { useTheme } from "@/theme";
 import { BRAND } from "@/theme/brand";
 
@@ -154,11 +154,7 @@ export default function ItemSheet() {
 
   const toggleSave = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!saved) {
-      track("save", item, t.season?.id);
-      recordSignal(item, "save");
-    } else recordUnsave(item);
-    useSaved.getState().toggle(item.id);
+    saveOrUnsave(item, t.season?.id);
   };
 
   const newList = () =>

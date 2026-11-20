@@ -6,6 +6,7 @@ import { Pressable, View } from "react-native";
 import type { CatalogItem } from "@/data/catalog";
 import { readableOn } from "@/lib/color";
 import { useSaved } from "@/store/saved";
+import { toggleSave } from "@/store/taste";
 import { useTheme } from "@/theme";
 import { BRAND } from "@/theme/brand";
 import { GlassPill } from "./GlassPill";
@@ -19,14 +20,15 @@ export function ItemCard({
   width,
   footer,
   pick,
-  onLongPress,
+  onNotForMe,
 }: {
   item: CatalogItem;
   width: number;
   /** Below the caption, e.g. a Shop link on saved items. */
   footer?: ReactNode;
   pick?: Pick;
-  onLongPress?: () => void;
+  /** Gives the card the native long-press menu (Save, Not for me), as on the feed. */
+  onNotForMe?: () => void;
 }) {
   const t = useTheme();
   const saved = useSaved((s) => s.itemIds.includes(item.id));
@@ -35,8 +37,8 @@ export function ItemCard({
     <Pressable
       accessibilityState={pick ? { selected: pick.picked } : undefined}
       onPress={pick?.onPress}
-      onLongPress={onLongPress}
-      style={{ width, gap: t.space(2) }}
+      // The long-press menu lifts this view; the radius keeps its corners round.
+      style={{ width, gap: t.space(2), borderRadius: t.radius.md }}
     >
       <View
         style={{
@@ -104,9 +106,30 @@ export function ItemCard({
     </Pressable>
   );
   if (pick) return card;
+  const href = { pathname: "/item/[id]", params: { id: item.id } } as const;
+  if (!onNotForMe)
+    return (
+      <Link href={href} asChild>
+        {card}
+      </Link>
+    );
+  // iOS's own context menu (Liquid Glass on iOS 26): hold a card to save it or hide it.
   return (
-    <Link href={{ pathname: "/item/[id]", params: { id: item.id } }} asChild>
-      {card}
+    <Link href={href} asChild>
+      <Link.Trigger>{card}</Link.Trigger>
+      <Link.Menu>
+        <Link.MenuAction
+          title={saved ? "Remove from saved" : "Save"}
+          icon={saved ? "heart.slash" : "heart"}
+          onPress={() => toggleSave(item, t.season?.id)}
+        />
+        <Link.MenuAction
+          title="Not for me"
+          icon="hand.thumbsdown"
+          destructive
+          onPress={onNotForMe}
+        />
+      </Link.Menu>
     </Link>
   );
 }
