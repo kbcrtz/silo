@@ -172,3 +172,10 @@ test("an IPv6 client counts as its whole /64, so rotating addresses inside it do
   assert.equal(gate.tryEnter("::ffff:203.0.113.9"), "ok");
   assert.equal(gate.tryEnter("0a0a0a0a-1b1b-4c2c-8d3d-4e4e4e4e4e4e"), "ok");
 });
+
+test("undo takes back an entry, so a request refused later doesn't count", () => {
+  const gate = createGate({ windowMs: 60_000, max: 1, concurrency: 1 });
+  assert.equal(gate.tryEnter("u"), "ok");
+  gate.undo("u");
+  assert.equal(gate.tryEnter("u"), "ok", "neither the window nor the slot is used up");
+});

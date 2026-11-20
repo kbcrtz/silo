@@ -4,6 +4,7 @@ import { eventFor, type EventKind } from "@/lib/cloud";
 import { newPhotoName, photoUri } from "@/lib/photos";
 import {
   API_URL,
+  apiFetch,
   USE_MOCKS,
   apiHeaders,
   expectOk,
@@ -20,11 +21,11 @@ import {
  */
 export async function deleteAccount(appleAuthorizationCode?: string) {
   if (USE_MOCKS) return;
-  await fetch(`${API_URL}/me`, {
+  await apiFetch(`${API_URL}/me`, {
     method: "DELETE",
     headers: appleAuthorizationCode
-      ? { ...apiHeaders(), "content-type": "application/json" }
-      : apiHeaders(),
+      ? { "content-type": "application/json" }
+      : {},
     body: appleAuthorizationCode
       ? JSON.stringify({ appleAuthorizationCode })
       : undefined,
@@ -42,9 +43,9 @@ export async function mergeAnonymous(
   anonymousToken: string,
 ): Promise<Backup | null> {
   if (USE_MOCKS) return null;
-  const res = await fetch(`${API_URL}/me/merge`, {
+  const res = await apiFetch(`${API_URL}/me/merge`, {
     method: "POST",
-    headers: { ...apiHeaders(), "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ anonymousToken }),
   }).then(expectOk);
   return res.json();
@@ -59,18 +60,16 @@ export type Backup = {
 /** The signed-in user's server copy; null when logged out. */
 export async function fetchBackup(): Promise<Backup | null> {
   if (USE_MOCKS || !isSignedIn()) return null;
-  const res = await fetch(`${API_URL}/me`, { headers: apiHeaders() }).then(
-    expectOk,
-  );
+  const res = await apiFetch(`${API_URL}/me`).then(expectOk);
   return res.json();
 }
 
 /** Logged out, nothing is sent: the data stays on the phone until sign-up. */
 async function send(method: "PUT" | "POST", path: string, body: unknown) {
   if (USE_MOCKS || !isSignedIn()) return;
-  await fetch(`${API_URL}${path}`, {
+  await apiFetch(`${API_URL}${path}`, {
     method,
-    headers: { ...apiHeaders(), "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   }).then(expectOk);
 }
@@ -109,9 +108,8 @@ export async function uploadPhoto(uri: string) {
   if (USE_MOCKS || !isSignedIn()) return;
   const body = new FormData();
   body.append("photo", fileField(uri, "photo.jpg"));
-  await fetch(`${API_URL}/me/photo`, {
+  await apiFetch(`${API_URL}/me/photo`, {
     method: "PUT",
-    headers: apiHeaders(),
     body,
   }).then(expectOk);
 }

@@ -59,3 +59,15 @@ test("an outage is remembered briefly, so every request doesn't wait out the tim
   assert.equal(await check("user-1"), null);
   assert.equal(calls.length, 1);
 });
+
+test("rate-limited by RevenueCat, someone who never paid isn't let in; a member whose answer went stale still is", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  let status = 200;
+  const body = JSON.stringify({ subscriber: { entitlements: { member: { expires_date: null } } } });
+  const check = revenueCatMembership({ secretKey: "sk_test", fetch: (async () => new Response(body, { status })) as typeof fetch });
+  assert.equal(await check("member"), true);
+  t.mock.timers.tick(6 * 60_000);
+  status = 429;
+  assert.equal(await check("member"), null);
+  assert.equal(await check("stranger"), false);
+});

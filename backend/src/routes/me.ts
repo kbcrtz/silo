@@ -11,20 +11,16 @@ import { EVENT_KINDS, familyOfHex, type Trends } from "../services/trends.ts";
 import { MEASUREMENT_TYPES, type UserData } from "../services/userData.ts";
 
 const PROFILE_LIMIT = 32 * 1024;
-const SAVED_LIMIT = 256 * 1024;
+// About 1,000 saved pieces; just under Fastify's 1 MB body limit.
+const SAVED_LIMIT = 900 * 1024;
 
 const Snapshot = z.object({ data: z.record(z.string(), z.unknown()) });
-const Measurements = z.object({
-  entries: z
-    .array(
-      z.object({
-        type: z.enum(MEASUREMENT_TYPES),
-        value: z.number().positive().max(1000),
-        measuredAt: z.iso.datetime().refine((at) => at >= "2000-01-01" && Date.parse(at) < Date.now() + 86_400_000),
-      }),
-    )
-    .max(500),
+const Measurement = z.object({
+  type: z.enum(MEASUREMENT_TYPES),
+  value: z.number().positive().max(1000),
+  measuredAt: z.iso.datetime().refine((at) => at >= "2000-01-01" && Date.parse(at) < Date.now() + 86_400_000),
 });
+const Measurements = z.object({ entries: z.array(z.unknown()).max(500) });
 const Merge = z.object({ anonymousToken: z.string().min(1).max(4000) });
 const Delete = z.object({ appleAuthorizationCode: z.string().min(1).max(2000).optional() }).optional();
 const Events = z.object({
@@ -200,8 +196,12 @@ export async function meRoute(
     handle("measurements", userData, req, reply, async (data, user, diag) => {
       const parsed = Measurements.safeParse(req.body);
       if (!parsed.success) throw new HttpError("invalid_request", 400);
-      const added = await data.addMeasurements(user, parsed.data.entries);
+      // The app resends its newest readings every time, so one bad one (a phone clock set ahead) must not block the rest for good.
+      const entries = parsed.data.entries.flatMap((e) => Measurement.safeParse(e).data ?? []);
+      if (!entries.length && parsed.data.entries.length) throw new HttpError("invalid_request", 400);
+      const added = await data.addMeasurements(user, entries);
       diag.added = added;
+      diag.skipped = parsed.data.entries.length - entries.length;
       return { added };
     }),
   );

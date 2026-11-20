@@ -46,6 +46,11 @@ export function createGate(opts: { windowMs: number; max: number; concurrency: n
     leave() {
       active = Math.max(0, active - 1);
     },
+    /** Takes back an "ok" from tryEnter, for a request a later check refused, so it doesn't use up this budget. */
+    undo(id: string) {
+      hits.get(clientKey(id))?.pop();
+      active = Math.max(0, active - 1);
+    },
     tracked: () => hits.size,
   };
 }

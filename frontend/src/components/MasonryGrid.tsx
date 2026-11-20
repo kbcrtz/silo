@@ -8,8 +8,9 @@ type Entry = { item: CatalogItem };
 
 /**
  * Two-column Pinterest-style grid. Each item goes into whichever column is
- * currently shorter, so rank order is roughly preserved top to bottom. Fine
- * for a catalog of dozens; swap for a virtualized list once it is hundreds.
+ * currently shorter, so rank order is roughly preserved top to bottom.
+ * shortcut: every loaded card stays mounted (memoized, so a new page doesn't
+ * re-render the old ones); swap for a virtualized list if long sessions lag.
  */
 export function MasonryGrid({
   entries,

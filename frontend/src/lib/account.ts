@@ -40,3 +40,18 @@ export function accountFrom(session: SessionLike): Account {
     ...(provider && { provider }),
   };
 }
+
+/**
+ * Where the sign-in step goes once signed in. "home": onboarded with a
+ * membership (or one not known yet), so the root stack moves there itself.
+ * "finish": a paying shopper, onboarding ends here.
+ */
+export function afterSignIn(s: {
+  onboarded: boolean;
+  active: boolean | null;
+  returning: boolean;
+}): "home" | "finish" | "paywall" | "back" {
+  if (s.onboarded) return s.active === false ? "paywall" : "home";
+  if (s.active) return "finish";
+  return s.returning ? "back" : "paywall";
+}

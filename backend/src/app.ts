@@ -27,8 +27,8 @@ declare module "fastify" {
   }
 }
 
-/** Onboarding runs logged out, so selfie analysis is the one route that works without a login. */
-const LOGGED_OUT_ROUTES = new Set(["POST /color-analysis"]);
+/** Onboarding runs logged out, so selfie analysis works without a login; Railway's health check does too. */
+const LOGGED_OUT_ROUTES = new Set(["POST /color-analysis", "GET /health"]);
 
 /** Finds facial regions in the model-sized JPEG (Gemini in production, a fake in tests). */
 export type Locate = (jpeg: Buffer) => Promise<{ regions: LocatedRegions; warnings: Warnings }>;
@@ -45,7 +45,7 @@ export function buildApp(deps: {
   verify: Verify;
   /** Deletes the signed-in user's account (DELETE /me); answers 503 without it. */
   deleteAccount?: DeleteAccount;
-  /** Anonymous Supabase logins count as signed in (ALLOW_ANONYMOUS). Off unless set. */
+  /** Anonymous Supabase logins count as signed in (ALLOW_ANONYMOUS=true, for old test builds). Off unless set. */
   allowAnonymous?: boolean;
   /** Revokes a deleted account's Sign in with Apple token; skipped without it. */
   revokeApple?: RevokeApple;
@@ -69,6 +69,10 @@ export function buildApp(deps: {
   dailyTryOnGate?: Gate;
   /** Per-user budget for POST /events. */
   eventsGate?: Gate;
+  /** Per-user budget for every /catalog route, so one account can't flood RevenueCat or the shared Shopify queue. */
+  catalogGate?: Gate;
+  /** One daily budget for selfie analysis across everyone, since it works logged out. */
+  analysisDailyGate?: Gate;
   /** Who has a paid membership (RevenueCat); the catalog, feed and try-on images are for members. Everyone gets in without it. */
   membership?: Membership;
   /** Proxy addresses (comma-separated IPs/CIDRs) whose X-Forwarded-For is believed, so req.ip is the client, not the proxy. */
@@ -110,7 +114,12 @@ export function buildApp(deps: {
     if (user && (!user.anonymous || deps.allowAnonymous)) [req.userId, req.anonymous] = [user.id, user.anonymous];
     if (!req.userId && !LOGGED_OUT_ROUTES.has(`${req.method} ${req.routeOptions.url}`)) return reply.code(401).send({ error: "unauthorized" });
     // Sign-up, backups and selfie analysis come before the paywall; what costs us per request comes after it.
-    if (deps.membership && req.userId && req.routeOptions.url?.startsWith("/catalog/")) {
+    if (!req.userId || !req.routeOptions.url?.startsWith("/catalog/")) return;
+    if (deps.catalogGate) {
+      if (deps.catalogGate.tryEnter(req.userId) === "rate") return reply.code(429).send({ error: "rate_limited" });
+      deps.catalogGate.leave(); // a window only: the routes hold their own slots
+    }
+    if (deps.membership) {
       const member = await deps.membership(req.userId);
       if (member === false) return reply.code(402).send({ error: "membership_required" });
       if (member === null) req.log.warn("membership_unavailable"); // let them in: a store outage shouldn't lock payers out
@@ -119,6 +128,8 @@ export function buildApp(deps: {
   app.addHook("onSend", async (req, reply) => {
     reply.header("x-request-id", req.id);
   });
+  // Railway's health check: the process is up and routes are registered.
+  app.get("/health", async () => ({ ok: true }));
   app.register(multipart);
   app.register(colorAnalysisRoute, deps);
   app.register(catalogRoute, deps);

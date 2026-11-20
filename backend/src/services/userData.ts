@@ -31,11 +31,13 @@ export function createUserData(sql: postgres.Sql): UserData {
   const json = (data: Record<string, unknown>) => sql.json(data as postgres.JSONValue);
   return {
     async get(userId) {
-      const [profile] = await sql<{ data: unknown }[]>`SELECT data FROM profiles WHERE user_id = ${userId}`;
-      const [saved] = await sql<{ data: unknown }[]>`SELECT data FROM saved WHERE user_id = ${userId}`;
-      // The newest 1000, oldest first: the app reads the latest of each type.
-      const rows = await sql<{ type: Measurement["type"]; value: number; measured_at: Date }[]>`
-        SELECT type, value, measured_at FROM measurements WHERE user_id = ${userId} ORDER BY measured_at DESC LIMIT 1000`;
+      const [[profile], [saved], rows] = await Promise.all([
+        sql<{ data: unknown }[]>`SELECT data FROM profiles WHERE user_id = ${userId}`,
+        sql<{ data: unknown }[]>`SELECT data FROM saved WHERE user_id = ${userId}`,
+        // The newest 1000, oldest first: the app reads the latest of each type.
+        sql<{ type: Measurement["type"]; value: number; measured_at: Date }[]>`
+          SELECT type, value, measured_at FROM measurements WHERE user_id = ${userId} ORDER BY measured_at DESC LIMIT 1000`,
+      ]);
       return {
         profile: profile?.data ?? null,
         saved: saved?.data ?? null,

@@ -22,6 +22,7 @@ import { useLatestMeasurements } from "@/hooks/useRecommendations";
 import { bodyFit, bodyTraits, hasTraits } from "@/lib/bodyFit";
 import { bodyShape } from "@/lib/bodyShape";
 import { recommendSize } from "@/lib/fit";
+import { upperGirth } from "@/lib/measurements";
 import { tryOnImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
 import { openProduct } from "@/lib/shop";
@@ -143,7 +144,7 @@ export default function ItemSheet() {
   );
   const chart = SIZE_CHARTS[item.sizeChartId];
   const size = chart ? recommendSize(latest, chart, fitPreference) : null;
-  const measured = latest.chest && latest.waist && latest.hips;
+  const measured = upperGirth(latest) && latest.waist && latest.hips;
 
   // Live products show the AI try-on image; demo items and mock mode the drawn mannequin.
   const aiSource = tryOnImageSource(item, shopFor, latest);
@@ -377,6 +378,7 @@ export default function ItemSheet() {
         <Button
           label={onYou ? "See photo" : "Try it on"}
           onPress={() => {
+            setFailedUri(undefined); // reopening tries the AI image again
             // The first try-on counts toward taste; flipping back and forth doesn't add more.
             if (!onYou && !triedOn) {
               setTriedOn(true);

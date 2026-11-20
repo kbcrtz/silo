@@ -25,7 +25,7 @@ function toHttpError(e: unknown): HttpError | null {
  */
 export async function colorAnalysisRoute(
   app: FastifyInstance,
-  { rules, locate, model, gate }: { rules: Rules; locate: Locate; model: string; gate: Gate },
+  { rules, locate, model, gate, analysisDailyGate }: { rules: Rules; locate: Locate; model: string; gate: Gate; analysisDailyGate?: Gate },
 ) {
   app.post("/color-analysis", async (req, reply) => {
     const started = performance.now();
@@ -33,13 +33,18 @@ export async function colorAnalysisRoute(
     const diag: Record<string, unknown> = { model, rulesVersion: rules.version };
     let entered = false;
     try {
-      const slot = gate.tryEnter(req.ip);
-      if (slot !== "ok") throw new HttpError(slot === "rate" ? "rate_limited" : "busy", slot === "rate" ? 429 : 503);
-      entered = true;
       const file = await req.file({ limits: { fileSize: MAX_BYTES, files: 1 } });
       if (!file || file.fieldname !== "selfie") throw new HttpError("missing_selfie", 400);
       const image = await prepareSelfie(await file.toBuffer());
 
+      // Taken only now: a slow or junk upload must not hold one of the few Gemini slots.
+      const slot = gate.tryEnter(req.ip);
+      if (slot !== "ok") throw new HttpError(slot === "rate" ? "rate_limited" : "busy", slot === "rate" ? 429 : 503);
+      entered = true;
+      if (analysisDailyGate) {
+        if (analysisDailyGate.tryEnter("everyone") !== "ok") throw new HttpError("busy", 503);
+        analysisDailyGate.leave(); // a window only
+      }
       const { regions, warnings } = await locate(image.modelJpeg);
       diag.regionsReturned = Object.fromEntries(Object.entries(regions).map(([k, v]) => [k, v !== null]));
       diag.warnings = Object.keys(warnings).filter((w) => warnings[w as keyof typeof warnings]);

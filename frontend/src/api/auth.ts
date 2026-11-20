@@ -17,7 +17,7 @@ import {
 import { useMembership } from "@/store/membership";
 import { useProfile } from "@/store/profile";
 import { USE_MOCKS, sleep } from "./config";
-import { identify } from "./purchases";
+import { forget, identify } from "./purchases";
 import { supabase } from "./supabase";
 import { deleteAccount, fetchBackup, mergeAnonymous } from "./userData";
 
@@ -101,18 +101,25 @@ async function connect(provider: Provider, token: string) {
   // Linking failed, normally because the identity already has an account.
   const signedIn = await supabase.auth.signInWithIdToken({ provider, token });
   if (signedIn.error) throw signedIn.error;
-  if (installIsEmpty()) {
-    const backup = await fetchBackup();
-    if (backup) applyBackup(backup);
-    // An empty phone has no selfie yet; the account's passport photo is it.
-    return restorePhoto();
+  try {
+    if (installIsEmpty()) {
+      const backup = await fetchBackup();
+      if (backup) applyBackup(backup);
+      // An empty phone has no selfie yet; the account's passport photo is it.
+      return await restorePhoto();
+    }
+    // Backups wait for sign-in, so the phone holds the newer onboarding; the
+    // merge only moves what older builds uploaded for the anonymous user.
+    const backup = anonymous
+      ? await mergeAnonymous(anonymous)
+      : await fetchBackup();
+    if (backup) joinBackup(backup);
+  } catch (e) {
+    // Signed in without the account's data, the backups would upload this
+    // phone's lists over the account's. Sign out so the next try starts clean.
+    await supabase.auth.signOut().catch(() => {});
+    throw e;
   }
-  // Backups wait for sign-in, so the phone holds the newer onboarding; the
-  // merge only moves what older builds uploaded for the anonymous user.
-  const backup = anonymous
-    ? await mergeAnonymous(anonymous)
-    : await fetchBackup();
-  if (backup) joinBackup(backup);
 }
 
 /** Runs `job` with the backups stopped, so they restart for the right user. */
@@ -164,6 +171,7 @@ async function startOver() {
   }
   useAccount.setState({ account: { kind: "none" } });
   // The last account's membership mustn't let the next one past the paywall.
+  forget();
   useMembership.setState({ active: null });
 }
 

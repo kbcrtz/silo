@@ -346,9 +346,13 @@ export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
   const [planId, setPlanId] = useState<PlanId>("annual");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
+    setOffers(null);
     loadOffers().then(setOffers, () => setOffers([]));
-  }, []);
+  };
+  useEffect(load, []);
+  // The plans didn't load (offline, the store slow): the button tries again, since a plan is the only way in.
+  const unavailable = !!offers && !offers.length;
   const offer = (id: PlanId) => offers?.find((o) => o.id === id);
   const plan = offer(planId) ?? offers?.[0];
   const annual = offer("annual");
@@ -394,10 +398,10 @@ export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
       style={{ gap: 12 }}
     >
       <PrimaryButton
-        label={offers && !offers.length ? "Plans unavailable" : "Continue"}
-        onPress={subscribe}
+        label={unavailable ? "Try again" : "Continue"}
+        onPress={unavailable ? load : subscribe}
         loading={busy || !offers}
-        disabled={!plan}
+        disabled={!plan && !unavailable}
       />
       <View
         style={{
@@ -416,7 +420,9 @@ export function Paywall({ onSubscribed }: { onSubscribed: () => void }) {
         <Text style={[TYPE.caption, { color: BRAND.inkSoft }]}>
           {plan
             ? `${plan.price} a ${PER[plan.id]}. Renews automatically; cancel anytime in Settings.`
-            : "Loading plans…"}
+            : unavailable
+              ? "Couldn't load the plans. Check your connection."
+              : "Loading plans…"}
         </Text>
       </View>
       <View style={{ flexDirection: "row", justifyContent: "center", gap: 18 }}>

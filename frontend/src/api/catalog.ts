@@ -5,7 +5,14 @@ import type { BodyTraits } from "@/lib/bodyFit";
 import { bodyOutlines, landmarks, type Outline } from "@/lib/mannequin";
 import type { Measurements } from "@/lib/measurements";
 import type { ShopFor } from "@/store/profile";
-import { API_URL, USE_MOCKS, apiHeaders, expectOk, sleep } from "./config";
+import {
+  API_URL,
+  apiFetch,
+  USE_MOCKS,
+  apiHeaders,
+  expectOk,
+  sleep,
+} from "./config";
 
 export type FeedCategory =
   | "for-you"
@@ -147,8 +154,7 @@ export async function discoverProducts(
   if (!params.cursor && params.avoid?.length)
     query.set("avoid", params.avoid.join(","));
   if (params.cursor) query.set("cursor", params.cursor);
-  const res = await fetch(`${API_URL}/catalog/discover?${query}`, {
-    headers: apiHeaders(),
+  const res = await apiFetch(`${API_URL}/catalog/discover?${query}`, {
     signal,
   }).then(expectOk);
   return res.json();

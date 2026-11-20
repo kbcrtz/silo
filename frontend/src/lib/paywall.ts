@@ -35,9 +35,9 @@ export function perMonth(plan: Plan): number {
   return plan.period === "year" ? Math.floor(plan.cents / 12) : plan.cents;
 }
 
-/** How much one plan's year saves over another's, in whole percent; 0 when the other's cost is unknown. */
+/** How much one plan's year saves over another's, in whole percent; 0 when either cost is unknown. */
 export function savingsPercent(yearly: number, otherYearly: number): number {
-  if (!otherYearly) return 0;
+  if (!yearly || !otherYearly) return 0;
   return Math.max(0, Math.floor((1 - yearly / otherYearly) * 100));
 }
 

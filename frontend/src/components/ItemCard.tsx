@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { Link } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import type { CatalogItem } from "@/data/catalog";
 import { readableOn } from "@/lib/color";
@@ -15,7 +15,8 @@ import { Text } from "./Text";
 /** Picking pieces: a tap picks the card instead of opening the item. */
 export type Pick = { picked: boolean; onPress: () => void };
 
-export function ItemCard({
+// Memoized: the feed grows a page at a time, and cards already shown keep their props.
+export const ItemCard = memo(function ItemCard({
   item,
   width,
   footer,
@@ -161,7 +162,7 @@ export function ItemCard({
       {card}
     </Link>
   );
-}
+});
 
 const MARK = 26;
 

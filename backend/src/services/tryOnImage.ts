@@ -145,7 +145,8 @@ export async function whiteBackground(image: Buffer): Promise<Buffer> {
   for (let y = 1; y < H - 1; y++) border.push(y * W, y * W + W - 1);
   const median = (c: number) => border.map((p) => data[p * 3 + c]).sort((a, b) => a - b)[border.length >> 1];
   const ref = [median(0), median(1), median(2)];
-  if (Math.min(...ref) < 200) return image; // not a light studio backdrop: leave it alone
+  // Not a light studio backdrop: leave the picture alone, but as the JPEG it is stored and served as (Gemini sends PNG).
+  if (Math.min(...ref) < 200) return sharp(image).jpeg({ quality: 90 }).toBuffer();
   const near = (p: number, q: number[], tol: number) =>
     Math.abs(data[p * 3] - q[0]) <= tol && Math.abs(data[p * 3 + 1] - q[1]) <= tol && Math.abs(data[p * 3 + 2] - q[2]) <= tol;
   const seen = new Uint8Array(W * H);
@@ -178,7 +179,8 @@ export function photoUrlAllowed(url: string): boolean {
 export type Photo = { data: Buffer; mimeType: string };
 export type TryOnStore = {
   get(key: string): Promise<Buffer | null>;
-  put(key: string, image: Buffer, model: string): Promise<void>;
+  /** `owner`: the user whose body the image is drawn on, so deleting the account deletes it. */
+  put(key: string, image: Buffer, model: string, owner: string | null): Promise<void>;
 };
 export type TryOn = {
   fetchPhoto(url: string): Promise<Photo>;
@@ -248,9 +250,9 @@ export function postgresStore(sql: postgres.Sql): TryOnStore {
       const [row] = await sql<{ image: Buffer }[]>`SELECT image FROM tryon_images WHERE key = ${key}`;
       return row?.image ?? null;
     },
-    async put(key, image, model) {
-      await sql`INSERT INTO tryon_images (key, model, image) VALUES (${key}, ${model}, ${image})
-        ON CONFLICT (key) DO UPDATE SET image = EXCLUDED.image, model = EXCLUDED.model, created_at = now()`;
+    async put(key, image, model, owner) {
+      await sql`INSERT INTO tryon_images (key, model, image, user_id) VALUES (${key}, ${model}, ${image}, ${owner})
+        ON CONFLICT (key) DO UPDATE SET image = EXCLUDED.image, model = EXCLUDED.model, user_id = EXCLUDED.user_id, created_at = now()`;
     },
   };
 }

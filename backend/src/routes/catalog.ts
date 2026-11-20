@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { discover } from "../catalog/discover.ts";
-import { normalizeProduct } from "../catalog/normalize.ts";
 import { AESTHETICS } from "../catalog/aesthetics.ts";
 import { BODY, CATEGORIES, STYLES } from "../catalog/query.ts";
 import { HttpError } from "../errors.ts";
@@ -78,10 +77,6 @@ export const jsonParam = <T extends z.ZodType>(max: number, schema: T) =>
     .pipe(schema);
 /** `selected=<JSON>`: a variant's options, e.g. [{"name":"Color","label":"Light Blue"}]. */
 export const SelectedParam = jsonParam(2000, Selected);
-const ProductQuery = z.strictObject({
-  id: z.string().regex(/^gid:\/\/shopify\/p\/[A-Za-z0-9]+$/),
-  selected: SelectedParam.optional(),
-});
 
 /** Aborts the upstream Shopify call when the app goes away mid-request. */
 function clientSignal(reply: FastifyReply): AbortSignal {
@@ -97,8 +92,8 @@ const TRENDING_BUDGET_MS = 1_500;
 const cents = (dollars?: number) => (dollars === undefined ? undefined : dollars * 100);
 
 /**
- * GET /catalog/discover and GET /catalog/product: live Shopify Global Catalog
- * listings, normalized for the app. Nothing is cached or stored, per Shopify's
+ * GET /catalog/discover: live Shopify Global Catalog listings, normalized for
+ * the app. Nothing is cached or stored, per Shopify's
  * catalog rules.
  */
 export async function catalogRoute(
@@ -144,14 +139,16 @@ export async function catalogRoute(
           season && trends
             ? Promise.race([trends.trending(season).catch(() => null), new Promise<null>((r) => setTimeout(r, TRENDING_BUDGET_MS, null))])
             : null;
-        const page = await discover(
-          catalog,
-          { ...params, priceMin: cents(priceMin), priceMax: cents(priceMax) },
-          cursor,
-          secret,
-          clientSignal(reply),
-          aiAllowed ? enrich : undefined,
-        );
+        const signal = clientSignal(reply);
+        const load = (from?: string) =>
+          discover(catalog, { ...params, priceMin: cents(priceMin), priceMax: cents(priceMax) }, from, secret, signal, aiAllowed ? enrich : undefined);
+        let page = await load(cursor);
+        // A page can filter down to nothing with more left, which the app shows as "Nothing here"; read up to two more.
+        for (let tries = 0; !page.products.length && page.cursor && tries < 2; tries++) {
+          const calls = page.upstreamCalls;
+          page = await load(page.cursor);
+          page.upstreamCalls += calls;
+        }
         if (enrich && !aiAllowed) page.estimateError = "estimate_budget";
         const top = await trending;
         if (top) page.products = markPopular(page.products, top);
@@ -162,18 +159,6 @@ export async function catalogRoute(
       } finally {
         if (aiAllowed && estimateGate) estimateGate.leave();
       }
-    }),
-  );
-
-  app.get("/catalog/product", (req, reply) =>
-    handle("product", req, reply, async (diag) => {
-      const query = ProductQuery.safeParse(req.query);
-      if (!query.success) throw new HttpError("invalid_request", 400);
-      diag.upstreamCalls = 1;
-      const raw = await catalog.getProduct(query.data.id, query.data.selected, clientSignal(reply));
-      const product = raw && normalizeProduct(raw, undefined, { detail: true });
-      if (!product) throw new HttpError("product_not_found", 404);
-      return { product };
     }),
   );
 }

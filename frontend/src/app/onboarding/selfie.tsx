@@ -9,7 +9,7 @@ import { Glass } from "@/components/onboarding/Glass";
 import { Header, stepBadge } from "@/components/onboarding/Header";
 import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
-import { persistPhoto, photoUri } from "@/lib/photos";
+import { deletePhoto, persistPhoto, photoUri } from "@/lib/photos";
 import { pickSelfie } from "@/lib/pickPhoto";
 import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
@@ -26,6 +26,7 @@ export default function Selfie() {
     if (!uri) return;
     const name = persistPhoto(uri, "selfie");
     set({ selfiePhoto: name, photoTraits: undefined });
+    if (selfie) deletePhoto(selfie);
     // Errors surface when the user asks for results, not here.
     analyzeSelfieOnce(photoUri(name)).catch(() => {});
   };

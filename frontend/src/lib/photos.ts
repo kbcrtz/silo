@@ -35,3 +35,9 @@ export function deletePhoto(name: string): void {
   const file = new File(Paths.document, DIR_NAME, name);
   if (file.exists) file.delete();
 }
+
+/** Deletes every saved photo, for sign-out and account deletion. */
+export function deleteAllPhotos(): void {
+  const dir = new Directory(Paths.document, DIR_NAME);
+  if (dir.exists) dir.delete();
+}

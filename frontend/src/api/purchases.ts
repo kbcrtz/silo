@@ -31,10 +31,16 @@ export type Offer = {
 
 const isActive = (info: CustomerInfo) =>
   info.entitlements.active[ENTITLEMENT] !== undefined;
-const track = (info: CustomerInfo) =>
-  useMembership.setState({ active: isActive(info) });
+const track = (info: CustomerInfo) => {
+  // Between accounts (signed out, or a switch that failed) the SDK still reports the previous user.
+  if (current) useMembership.setState({ active: isActive(info) });
+};
 
+let configured = false;
+/** The user RevenueCat is on; null when signed out or when switching to `wanted` failed. */
 let current: string | null = null;
+/** The signed-in user, whose purchases these must be. */
+let wanted: string | null = null;
 /** The current user's membership lookup, so a second caller waits for the same answer. */
 let known: Promise<void> = Promise.resolve();
 
@@ -45,18 +51,32 @@ let known: Promise<void> = Promise.resolve();
  */
 export async function identify(userId: string): Promise<void> {
   if (STORE_ON && userId !== current) {
-    if (current === null) {
+    let info: Promise<CustomerInfo>;
+    if (configured) {
+      info = Purchases.logIn(userId).then((r) => r.customerInfo);
+    } else {
       Purchases.configure({ apiKey: API_KEY!, appUserID: userId });
       Purchases.addCustomerInfoUpdateListener(track);
-      current = userId;
-      known = Purchases.getCustomerInfo().then(track);
-    } else {
-      current = userId;
-      known = Purchases.logIn(userId).then((r) => track(r.customerInfo));
+      configured = true;
+      info = Purchases.getCustomerInfo();
     }
+    wanted = current = userId;
+    const lookup = (known = info.then(track));
+    // A failed lookup is tried again by the next call instead of being remembered.
+    lookup.catch(() => {
+      if (known === lookup) current = null;
+    });
   }
   return known;
 }
+
+/** On sign-out, so the next sign-in looks its membership up again, even for the same account. */
+export function forget() {
+  wanted = current = null;
+}
+
+/** Before money moves: RevenueCat must be on the signed-in user, or the purchase lands on the last account. */
+const ready = () => (wanted ? identify(wanted) : Promise.resolve());
 
 const TYPES: Record<PlanId, PACKAGE_TYPE> = {
   annual: PACKAGE_TYPE.ANNUAL,
@@ -99,6 +119,7 @@ export async function buy(offer: Offer): Promise<boolean> {
     return true;
   }
   if (!offer.pkg) throw new Error("That plan isn't on sale right now.");
+  await ready();
   try {
     const { customerInfo } = await Purchases.purchasePackage(offer.pkg);
     track(customerInfo);
@@ -117,6 +138,7 @@ export async function buy(offer: Offer): Promise<boolean> {
 /** Finds a membership bought with this Apple ID before; true when one is active. */
 export async function restore(): Promise<boolean> {
   if (!STORE_ON) return false;
+  await ready();
   const info = await Purchases.restorePurchases();
   track(info);
   return isActive(info);

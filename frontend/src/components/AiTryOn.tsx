@@ -7,6 +7,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { apiHeaders, isSignedIn, refreshAccessToken } from "@/api/config";
 import { useTheme } from "@/theme";
 import { Text } from "./Text";
 
@@ -28,6 +29,8 @@ export function AiTryOn({
 }) {
   const t = useTheme();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  // A login token that expired while the app slept fails the first load once.
+  const [attempt, setAttempt] = useState(0);
   const [slow, setSlow] = useState(false);
   const progress = useSharedValue(0);
   const bar = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
@@ -50,7 +53,13 @@ export function AiTryOn({
     // alignSelf: the try-on box centers its children, which would leave this view (and the image) zero wide.
     <View style={{ flex: 1, alignSelf: "stretch" }}>
       <Image
-        source={source}
+        key={attempt}
+        // The token is read here, so the retry carries the refreshed one.
+        source={
+          typeof source === "object" && source
+            ? { ...source, headers: { ...source.headers, ...apiHeaders() } }
+            : source
+        }
         style={{ flex: 1, borderRadius: t.radius.md }}
         contentFit="contain"
         transition={250}
@@ -63,6 +72,8 @@ export function AiTryOn({
           setTimeout(() => setState("ready"), 200);
         }}
         onError={() => {
+          if (attempt === 0 && isSignedIn())
+            return void refreshAccessToken().then(() => setAttempt(1));
           setState("failed");
           onFailed?.();
         }}

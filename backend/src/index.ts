@@ -35,8 +35,8 @@ const verify = supabaseVerifier({
 // Account deletion needs the secret key; without it DELETE /me answers 503.
 const secretKey = process.env.SUPABASE_SECRET_KEY;
 const deleteAccount = secretKey ? supabaseAccounts({ url: supabaseUrl, secretKey, fetch }) : undefined;
-// Older app builds signed in anonymously; set ALLOW_ANONYMOUS=false once testers have a build without it.
-const allowAnonymous = process.env.ALLOW_ANONYMOUS !== "false";
+// Older test builds signed in anonymously; ALLOW_ANONYMOUS=true lets those logins in again.
+const allowAnonymous = process.env.ALLOW_ANONYMOUS === "true";
 // Sign in with Apple token revocation on account deletion; needs a Sign in with Apple key from the Apple Developer account.
 const { APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY } = process.env;
 const revokeApple =
@@ -131,6 +131,7 @@ const tryOn = createTryOn({
   store: tryOnStore,
 });
 // 20 new images per user per 10 minutes and 150 a day, 24 at once across all users; saved images don't count.
+// shortcut: these counts live in memory and reset on deploy; move them to Postgres if deploys get frequent.
 const tryOnGate = createGate({ windowMs: 10 * 60_000, max: 20, concurrency: 24 });
 const dailyTryOnGate = createGate({ windowMs: 24 * 60 * 60_000, max: 150, concurrency: Infinity });
 // Anonymous logins are free to make, so together they get 60 per IP per 10 minutes: room for a few people on one Wi-Fi.
@@ -141,6 +142,10 @@ const eventsGate = createGate({ windowMs: 10 * 60_000, max: 100, concurrency: 1 
 // Per IP, since onboarding runs before sign-in and anonymous logins are free: room for a few people on one Wi-Fi
 // retaking selfies, not for a loop. Six Gemini calls run at once.
 const gate = createGate({ windowMs: 10 * 60_000, max: 30, concurrency: 6 });
+// 2,000 analyses a day across everyone: far above a launch day's sign-ups, and a ceiling on what a script with many addresses can spend.
+const analysisDailyGate = createGate({ windowMs: 24 * 60 * 60_000, max: 2000, concurrency: Infinity });
+// 60 catalog requests per user per minute: scrolling makes a few, a loop can't flood RevenueCat or the Shopify queue.
+const catalogGate = createGate({ windowMs: 60_000, max: 60, concurrency: Infinity });
 const app = buildApp({
   rules,
   model,
@@ -153,6 +158,8 @@ const app = buildApp({
   revokeApple,
   membership,
   gate,
+  analysisDailyGate,
+  catalogGate,
   enrich,
   estimateGate,
   userData,

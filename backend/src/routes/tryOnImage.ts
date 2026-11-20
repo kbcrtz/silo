@@ -54,11 +54,14 @@ export async function tryOnImageRoute(
 ) {
   // Images being made right now, so a double tap (or two screens) waits for the same one instead of paying twice.
   const making = new Map<string, Promise<Buffer>>();
+  // Saves still running after their answer went out; a deploy waits for them so the next view doesn't pay again.
+  const saving = new Set<Promise<void>>();
+  app.addHook("onClose", async () => void (await Promise.allSettled(saving)));
   app.get("/catalog/tryon-image", async (req, reply) => {
     const started = performance.now();
     // Counts only: no product photos or prompts.
     const diag: Record<string, unknown> = {};
-    const entered: Gate[] = [];
+    const entered: [Gate, string][] = [];
     try {
       if (!tryOn) throw new HttpError("tryon_unavailable", 503);
       const query = Query.safeParse(req.query);
@@ -71,11 +74,11 @@ export async function tryOnImageRoute(
       // Size doesn't change the photo, so only the color is sent and keyed.
       const colors = pieces.map((p) => p.selected?.filter((c) => isColor(c.name)) ?? []);
       const body = guide ? [createHash("sha256").update(JSON.stringify(guide)).digest("hex").slice(0, 16)] : [];
-      const label = (i: number) => colors[i].map((c) => c.label.toLowerCase());
+      const label = (i: number) => colors[i].map((c) => c.label.toLowerCase().replaceAll("|", " "));
       const key = (
         fit
           ? ["fit", shopFor, ...pieces.map((p, i) => [p.category, p.id, ...label(i)].join(":")), ...body, `v${FIT_VERSION}`]
-          : [pieces[0].id, shopFor, ...label(0), ...body, `v${TEMPLATE_VERSION}`]
+          : [pieces[0].id, shopFor, query.data.category ?? "", ...label(0), ...body, `v${TEMPLATE_VERSION}`]
       ).join("|");
 
       const saved = await tryOn.store.get(key).catch(() => null);
@@ -95,8 +98,11 @@ export async function tryOnImageRoute(
       for (const [gate, key] of gates) {
         if (!gate) continue;
         const slot = gate.tryEnter(key);
-        if (slot !== "ok") throw new HttpError(slot === "rate" ? "rate_limited" : "busy", slot === "rate" ? 429 : 503);
-        entered.push(gate);
+        if (slot !== "ok") {
+          for (const [passed, id] of entered.splice(0)) passed.undo(id);
+          throw new HttpError(slot === "rate" ? "rate_limited" : "busy", slot === "rate" ? 429 : 503);
+        }
+        entered.push([gate, key]);
       }
 
       const work = (async () => {
@@ -138,10 +144,12 @@ export async function tryOnImageRoute(
       making.set(key, work);
       // Saved after answering, so the shopper doesn't wait on the database; a failed save means the next view generates again.
       // Shared until saved, so a request in between doesn't generate it again.
-      void work
-        .then((image) => tryOn.store.put(key, image, "gemini"))
+      // An image drawn on the shopper's body is theirs, so it goes when their account does.
+      const save: Promise<void> = work
+        .then((image) => tryOn.store.put(key, image, "gemini", guide ? req.userId : null))
         .catch(() => {})
-        .finally(() => making.delete(key));
+        .finally(() => (making.delete(key), saving.delete(save)));
+      saving.add(save);
       const image = await work;
       diag.generated = true;
       return reply.header("content-type", "image/jpeg").header("cache-control", "private, max-age=86400").send(image);
@@ -153,7 +161,7 @@ export async function tryOnImageRoute(
       if (err.providerStatus) diag.providerStatus = err.providerStatus;
       return reply.code(err.status).send({ error: err.code });
     } finally {
-      for (const gate of entered) gate.leave();
+      for (const [gate] of entered) gate.leave();
       diag.durationMs = Math.round(performance.now() - started);
       req.log.info({ tryOnImage: diag }, "tryon_image");
     }

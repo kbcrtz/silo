@@ -23,6 +23,34 @@ export function apiHeaders(): Record<string, string> {
   return accessToken ? { authorization: `Bearer ${accessToken}` } : {};
 }
 
+let refresh: (() => Promise<unknown>) | null = null;
+
+/** src/api/supabase.ts says how to refresh the login token. */
+export function setTokenRefresher(fn: () => Promise<unknown>) {
+  refresh = fn;
+}
+
+/** Gets a new login token now, e.g. after the server refused the old one. */
+export const refreshAccessToken = () =>
+  refresh ? refresh().catch(() => {}) : Promise.resolve();
+
+/**
+ * fetch with the login token. A token that expired while the app slept is
+ * refused (401) before Supabase refreshes it, so that one is refreshed and the
+ * request sent once more.
+ */
+export async function apiFetch(
+  url: string,
+  init: RequestInit & { headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const send = () =>
+    fetch(url, { ...init, headers: { ...apiHeaders(), ...init.headers } });
+  const res = await send();
+  if (res.status !== 401 || !accessToken || !refresh) return res;
+  await refreshAccessToken();
+  return send();
+}
+
 /** Mocks stay on until the backend exists, or when no API URL is set. */
 export const USE_MOCKS =
   process.env.EXPO_PUBLIC_USE_MOCKS !== "false" || !API_URL;

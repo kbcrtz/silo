@@ -39,6 +39,8 @@ export function revenueCatMembership(opts: {
         headers: { authorization: `Bearer ${secretKey}` },
         signal: AbortSignal.timeout(timeoutMs),
       });
+      // Rate-limited (a non-member can cause that by asking fast): only someone who was a member before gets the benefit of the doubt.
+      if (res.status === 429 && cache.get(userId)?.active !== true) return false;
       if (!res.ok) return outage(userId, now);
       const body = (await res.json()) as { subscriber?: { entitlements?: Record<string, { expires_date?: string | null; grace_period_expires_date?: string | null }> } };
       const e = body.subscriber?.entitlements?.[entitlement];

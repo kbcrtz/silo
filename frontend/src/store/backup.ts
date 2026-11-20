@@ -1,6 +1,7 @@
 import { downloadPhoto, type Backup } from "@/api/userData";
 import { rememberItems, type CatalogItem } from "@/data/catalog";
 import { entriesFromBackup, isEmptyInstall, joinEntries } from "@/lib/cloud";
+import { deleteAllPhotos } from "@/lib/photos";
 import { useMeasurements } from "./measurements";
 import { useProfile } from "./profile";
 import { useSaved } from "./saved";
@@ -50,9 +51,10 @@ export async function restorePhoto() {
   if (photo) useProfile.setState({ selfiePhoto: photo, photoSynced: photo });
 }
 
-/** Empties the phone: profile, measurements, saved items and taste bookkeeping. */
+/** Empties the phone: profile, measurements, saved items, the selfie files and taste bookkeeping. */
 export function clearLocalData() {
   useTasteLocal.getState().clear();
+  deleteAllPhotos();
   useMeasurements.getState().replaceAll([]);
   useSaved.getState().clear();
   useProfile.getState().reset();

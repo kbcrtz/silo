@@ -6,6 +6,7 @@ import { Headline } from "@/components/onboarding/Headline";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { SignInButtons } from "@/components/SignInButtons";
 import { familyOf } from "@/data/families";
+import { afterSignIn } from "@/lib/account";
 import { useProfile } from "@/store/profile";
 import { BRAND, TYPE } from "@/theme/brand";
 
@@ -22,14 +23,15 @@ export default function AccountStep() {
   // The season's gradient once there is one; a returning shopper has none yet.
   const seasonId = useProfile((s) => s.colorProfile?.seasonId);
 
-  // Onboarded (restored, or from before sign-in was required): the root stack moves home itself.
   const done = () => {
-    if (useProfile.getState().onboarded) return;
-    // A returning shopper already paying goes straight in.
-    if (useMembership.getState().active)
-      return useProfile.getState().set({ onboarded: true });
-    if (returning) router.back();
-    else router.push("/onboarding/paywall");
+    const next = afterSignIn({
+      onboarded: useProfile.getState().onboarded,
+      active: useMembership.getState().active,
+      returning: !!returning,
+    });
+    if (next === "finish") useProfile.getState().set({ onboarded: true });
+    else if (next === "paywall") router.push("/onboarding/paywall");
+    else if (next === "back") router.back();
   };
   // Sent here from the opening, there's nothing to go back to.
   const canGoBack = router.canGoBack();

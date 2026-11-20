@@ -1,4 +1,4 @@
-import { accountFrom } from "../account";
+import { accountFrom, afterSignIn } from "../account";
 
 describe("accountFrom", () => {
   it("is none without a session", () => {
@@ -36,5 +36,26 @@ describe("accountFrom", () => {
     expect(
       accountFrom({ user: { id: "u2", app_metadata: { provider: "google" } } }),
     ).toEqual({ kind: "member", userId: "u2", provider: "google" });
+  });
+});
+
+describe("afterSignIn", () => {
+  const at = (onboarded: boolean, active: boolean | null, returning = false) =>
+    afterSignIn({ onboarded, active, returning });
+
+  it("sends a restored account without a membership to the plans, not nowhere", () => {
+    expect(at(true, false, true)).toBe("paywall");
+    expect(at(true, false)).toBe("paywall");
+  });
+
+  it("leaves an onboarded member to the root stack, which moves home", () => {
+    expect(at(true, true)).toBe("home");
+    expect(at(true, null)).toBe("home"); // membership unknown: the server decides
+  });
+
+  it("finishes onboarding for a paying shopper, else the plans, or back for a returning one", () => {
+    expect(at(false, true)).toBe("finish");
+    expect(at(false, false)).toBe("paywall");
+    expect(at(false, null, true)).toBe("back");
   });
 });

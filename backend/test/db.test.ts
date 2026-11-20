@@ -25,6 +25,7 @@ async function newUser() {
 
 after(async () => {
   if (!sql) return;
+  await sql`DELETE FROM events WHERE season LIKE 'test-%'`;
   if (users.length) await sql`DELETE FROM auth.users WHERE id IN ${sql(users)}`;
   await sql.end();
 });
@@ -88,12 +89,16 @@ test("the profile photo is replaced on change, moves on merge and goes with the 
   assert.equal(await data.getPhoto(account), null);
 });
 
-test("try-on images are saved and served by key", { skip: !sql }, async () => {
+test("try-on images are saved and served by key; one drawn on a user's body goes with the account", { skip: !sql }, async () => {
   const store = postgresStore(sql!);
-  const key = `test|${randomUUID()}`;
+  const [key, mine] = [`test|${randomUUID()}`, `test|${randomUUID()}`];
+  const me = await newUser();
   assert.equal(await store.get(key), null);
-  await store.put(key, Buffer.from("jpeg"), "m");
+  await store.put(key, Buffer.from("jpeg"), "m", null);
+  await store.put(mine, Buffer.from("body"), "m", me);
   assert.equal((await store.get(key))?.toString(), "jpeg");
+  await sql!`DELETE FROM auth.users WHERE id = ${me}`;
+  assert.equal(await store.get(mine), null);
   await sql!`DELETE FROM tryon_images WHERE key = ${key}`;
 });
 

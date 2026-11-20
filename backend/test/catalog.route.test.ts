@@ -18,7 +18,7 @@ const rules = loadRules(JSON.parse(readFileSync(new URL("../rules/color-analysis
 const softAutumn = "palette=%23B07D62,%239CAF88,%23C9A66B,%237E8C6A&neutrals=%23EDE4D8,%235C5046";
 
 /** A catalog that answers every search with `products` and a cursor named after the query. */
-function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean; enrich?: Enrich; estimateGate?: Gate; membership?: Membership } = {}) {
+function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown; lastPage?: boolean; enrich?: Enrich; estimateGate?: Gate; membership?: Membership; catalogGate?: Gate } = {}) {
   const searches: SearchInput[] = [];
   const lookups: { id: string; selected?: unknown }[] = [];
   const catalog: Catalog = {
@@ -52,6 +52,7 @@ function setup(opts: { products?: unknown[]; fail?: HttpError; product?: unknown
     enrich: opts.enrich,
     estimateGate: opts.estimateGate,
     membership: opts.membership,
+    catalogGate: opts.catalogGate,
   });
   const get = (url: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${TOKEN}` } });
   return { get, searches, lookups, logs };
@@ -90,6 +91,14 @@ test("the cursor continues the same search where it left off", async () => {
 test("the last page returns a null cursor", async () => {
   const { get } = setup({ lastPage: true });
   assert.equal((await get("/catalog/discover?category=jeans")).json().cursor, null);
+});
+
+test("a page that filters down to nothing reads up to two more before answering empty", async () => {
+  const { get, searches } = setup({ products: [noUrl] });
+  const res = await get("/catalog/discover?category=jeans");
+  assert.deepEqual(res.json().products, []);
+  assert.equal(searches.length, 3);
+  assert.deepEqual(searches.map((s) => s.cursor), [undefined, "next:jeans", "next:jeans"]);
 });
 
 test("men's dresses is an empty page without a Shopify call", async () => {
@@ -174,32 +183,6 @@ test("logs count calls and products without logging queries or palette colors", 
   assert.equal(typeof d.durationMs, "number");
   const all = JSON.stringify(logs);
   assert.ok(!all.includes("B07D62") && !all.includes("women's"), "log leaked palette or query");
-});
-
-test("product detail resolves the Shopify id with the card's selected options", async () => {
-  const { get, lookups } = setup();
-  const selected = JSON.stringify([{ name: "Color", label: "Olive Green" }]);
-  const res = await get(`/catalog/product?id=${encodeURIComponent(trouser.id)}&selected=${encodeURIComponent(selected)}`);
-  assert.equal(res.statusCode, 200);
-  assert.deepEqual(lookups, [{ id: trouser.id, selected: [{ name: "Color", label: "Olive Green" }] }]);
-  const { product } = res.json();
-  assert.equal(product.description, "Relaxed fit & drawstring waist.");
-  assert.equal(product.variants.length, 2);
-  assert.equal(product.url, trouser.variants[0].url);
-});
-
-test("an unknown or unlinkable product is a 404", async () => {
-  assert.equal((await setup({ product: null }).get(`/catalog/product?id=${encodeURIComponent("gid://shopify/p/nope")}`)).statusCode, 404);
-  const res = await setup({ product: noUrl }).get(`/catalog/product?id=${encodeURIComponent(noUrl.id)}`);
-  assert.deepEqual(res.json(), { error: "product_not_found" });
-});
-
-test("product ids must be Shopify ids", async () => {
-  const { get, lookups } = setup();
-  for (const url of ["/catalog/product", "/catalog/product?id=https://evil.example/p", "/catalog/product?id=gid%3A%2F%2Fshopify%2Fp%2FA&selected=notjson"]) {
-    assert.equal((await get(url)).statusCode, 400, url);
-  }
-  assert.equal(lookups.length, 0);
 });
 
 test("each product gets the AI's estimate of its color and cut from the listing text", async () => {
@@ -386,4 +369,16 @@ test("with memberships on, the catalog answers members only; a store outage does
   assert.equal((await get("/catalog/discover?category=tops")).statusCode, 200);
   assert.ok(logs.some((l) => l.msg === "membership_unavailable"));
   assert.equal(asked.length, 3);
+});
+
+test("past a user's catalog budget, requests are refused before RevenueCat or Shopify is asked", async () => {
+  const asked: string[] = [];
+  const { get, searches } = setup({ catalogGate: createGate({ windowMs: 60_000, max: 2, concurrency: Infinity }), membership: async (id) => (asked.push(id), true) });
+  assert.equal((await get("/catalog/discover?category=tops")).statusCode, 200);
+  assert.equal((await get("/catalog/discover?category=tops")).statusCode, 200);
+  const res = await get("/catalog/discover?category=tops");
+  assert.equal(res.statusCode, 429);
+  assert.deepEqual(res.json(), { error: "rate_limited" });
+  assert.equal(asked.length, 2);
+  assert.equal(searches.length, 2);
 });

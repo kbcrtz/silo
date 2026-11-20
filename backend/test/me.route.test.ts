@@ -284,3 +284,21 @@ test("a failed Apple revocation still deletes the account; without a code nothin
   assert.deepEqual(steps, ["delete", "delete"]);
   assert.ok(logs.some((l) => l.userData?.appleRevoked === false));
 });
+
+test("one bad measurement doesn't hold back the rest of the batch", async () => {
+  const { call } = setup();
+  const res = await call("POST", "/me/measurements", {
+    entries: [
+      { type: "waist", value: 72, measuredAt: "2026-10-18T10:00:00.000Z" },
+      { type: "hips", value: 98, measuredAt: new Date(Date.now() + 3 * 86_400_000).toISOString() }, // the phone's clock was ahead
+    ],
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json(), { added: 1 });
+});
+
+test("a few hundred saved pieces still back up", async () => {
+  const { call } = setup();
+  const items = Object.fromEntries(Array.from({ length: 600 }, (_, i) => [`shopify-${i}`, { name: "x".repeat(700) }]));
+  assert.equal((await call("PUT", "/me/saved", { data: { itemIds: [], lists: [], items } })).statusCode, 204);
+});

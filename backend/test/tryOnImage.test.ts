@@ -127,9 +127,10 @@ const insight = (patch: Partial<Insight> = {}): Insight => ({
   ...patch,
 });
 
-function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate; anonymousGate?: Gate; dailyGate?: Gate } = {}) {
+function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate; anonymousGate?: Gate; dailyGate?: Gate; slowSave?: boolean } = {}) {
   const generated: { prompt: string; photo: Buffer; photos: number; guide?: Buffer }[] = [];
   const saved = new Map<string, Buffer>();
+  const owners = new Map<string, string | null>();
   const fetched: string[] = [];
   const tryOn: TryOn = {
     async fetchPhoto(url) {
@@ -144,8 +145,10 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate;
       async get(key) {
         return saved.get(key) ?? null;
       },
-      async put(key, image) {
+      async put(key, image, _model, owner) {
+        if (opts.slowSave) await new Promise((r) => setTimeout(r, 50));
         saved.set(key, image);
+        owners.set(key, owner);
       },
     },
   };
@@ -188,7 +191,7 @@ function setup(opts: { product?: unknown; insight?: Insight | null; gate?: Gate;
   // `forwardedFor` arrives the way Railway's proxy (a 100.64.0.0/10 address) sends it: the client's address appended last.
   const get = (url: string, token = TOKEN, forwardedFor = "203.0.113.1") =>
     app.inject({ method: "GET", url, remoteAddress: "100.64.0.7", headers: { authorization: `Bearer ${token}`, "x-forwarded-for": forwardedFor } });
-  return { get, generated, saved, fetched, logs, asked, enriched };
+  return { get, app, generated, saved, owners, fetched, logs, asked, enriched };
 }
 
 const url = (dept = "mens") => `/catalog/tryon-image?id=${encodeURIComponent(productDetail.id)}&shopFor=${dept}`;
@@ -232,6 +235,23 @@ test("past the daily budget, no image is generated even inside the 10-minute one
   assert.equal(res.statusCode, 429);
   assert.equal(generated.length, 1);
   assert.equal((await get(url("mens"))).statusCode, 200, "saved images don't count");
+});
+
+test("a request the daily budget refuses doesn't use up the 10-minute one", async () => {
+  const { get } = setup({ gate: createGate({ windowMs: 60_000, max: 2, concurrency: 4 }), dailyGate: createGate({ windowMs: 86_400_000, max: 1, concurrency: 100 }) });
+  assert.equal((await get(url("mens"))).statusCode, 200);
+  assert.equal((await get(url("womens"))).statusCode, 429);
+  const other = await get(url("both"));
+  assert.equal(other.statusCode, 429);
+  assert.equal(other.json().error, "rate_limited");
+});
+
+test("shutting down waits for an image that is still being saved", async () => {
+  const { get, app, saved } = setup({ slowSave: true });
+  await get(url());
+  assert.equal(saved.size, 0, "answered before the save");
+  await app.close();
+  assert.equal(saved.size, 1);
 });
 
 test("past the per-user budget, no image is generated; other users keep theirs", async () => {
@@ -312,7 +332,7 @@ test("the photo is the color the shopper saw: the variant's color goes to Shopif
 });
 
 test("a body guide goes to Gemini as a second image and keys the saved image per body", async () => {
-  const { get, generated } = setup();
+  const { get, generated, owners } = setup();
   const withGuide = (g: unknown) => `${url()}&guide=${encodeURIComponent(JSON.stringify(g))}`;
   assert.equal((await get(withGuide(GUIDE))).statusCode, 200);
   assert.match(generated[0].prompt, /body diagram[\s\S]*an average body[\s\S]*Image 2 is a store photo of a product \("/);
@@ -323,6 +343,7 @@ test("a body guide goes to Gemini as a second image and keys the saved image per
   assert.equal(generated.length, 2, "another body gets its own image");
   await get(url());
   assert.equal(generated[2].guide, undefined, "older apps without a guide still get the generic image");
+  assert.deepEqual([...owners.values()].map(Boolean), [true, true, false], "only images on the shopper's body are theirs");
   assert.doesNotMatch(generated[2].prompt, /diagram/);
   for (const bad of ["nope", JSON.stringify({ body: [] }), JSON.stringify({ body: [GUIDE.body[0], [[0, 0]]] }), JSON.stringify({ body: [GUIDE.body[0], box(-25, 25, 5000, 140)] }), JSON.stringify({ ...GUIDE, extra: 1 }), JSON.stringify(body(30, 40)), JSON.stringify({ body: [GUIDE.body[0], box(-15, -5, 30, 5)] })])
     assert.equal((await get(`${url()}&guide=${encodeURIComponent(bad)}`)).statusCode, 400, bad);
@@ -336,4 +357,17 @@ test("with the app's category, the listing reader is skipped (it already read th
   await get(url("mens"));
   assert.equal(enriched.length, 1, "older apps without a category still get the reader");
   assert.equal((await get(`${url()}&category=shoes`)).statusCode, 400);
+});
+
+test("the same product asked for as another kind of garment gets its own image", async () => {
+  const { get, generated } = setup();
+  await get(`${url()}&category=bottom`);
+  await get(`${url()}&category=top`);
+  assert.equal(generated.length, 2);
+  assert.match(generated[1].prompt, /ONLY the top/);
+});
+
+test("an image whose backdrop isn't light is left as it is, but still comes back as a JPEG", async () => {
+  const png = await sharp({ create: { width: 30, height: 40, channels: 3, background: "#223" } }).png().toBuffer();
+  assert.equal((await sharp(await whiteBackground(png)).metadata()).format, "jpeg");
 });

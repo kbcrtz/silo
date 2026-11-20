@@ -28,6 +28,8 @@ describe("paywall prices", () => {
     expect(savingsPercent(year("monthly"), year("monthly"))).toBe(0);
     // The store hasn't priced the plan to compare with.
     expect(savingsPercent(4999, 0)).toBe(0);
+    // The store gave no yearly cost for the plan itself: no "SAVE 100%".
+    expect(savingsPercent(0, 7188)).toBe(0);
   });
 });
 

@@ -7,7 +7,7 @@ import sharp from "sharp";
 import { buildApp, type Locate } from "../src/app.ts";
 import { evaluate, loadRules, type Warnings } from "../src/analysis/evaluate.ts";
 import type { Box } from "../src/analysis/regions.ts";
-import { createGate } from "../src/guard.ts";
+import { createGate, type Gate } from "../src/guard.ts";
 import { TOKEN, verify } from "./fixtures/auth.ts";
 
 const SECRET = "test-secret-0123456789";
@@ -57,7 +57,7 @@ async function multipart(field: string, file: Buffer, type: string, filename = "
   return { payload: Buffer.from(await req.arrayBuffer()), headers: { "content-type": req.headers.get("content-type")! } };
 }
 
-function setup(locate: Locate) {
+function setup(locate: Locate, opts: { gate?: Gate; dailyGate?: Gate } = {}) {
   const logs: any[] = [];
   const stream = new Writable({
     write(chunk, _enc, done) {
@@ -74,7 +74,8 @@ function setup(locate: Locate) {
     catalog,
     secret: SECRET,
     verify,
-    gate: createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
+    gate: opts.gate ?? createGate({ windowMs: 60_000, max: 100, concurrency: 4 }),
+    analysisDailyGate: opts.dailyGate,
     locate: (jpeg) => (calls++, locate(jpeg)),
   });
   return { app, logs, calls: () => calls };
@@ -197,4 +198,22 @@ test("logs prove each stage ran without logging colors, traits or images", async
   assert.equal(typeof d.durationMs, "number");
   const all = JSON.stringify(logs);
   for (const forbidden of ["warmth", "clarity", "confidence\":", String(COLORS.skin), "base64"]) assert.ok(!all.includes(forbidden), `log leaked ${forbidden}`);
+});
+
+test("the budget and the Gemini slot are only taken once the photo is in and readable", async () => {
+  const { app, calls } = setup(found, { gate: createGate({ windowMs: 60_000, max: 1, concurrency: 1 }) });
+  assert.equal((await post(app, await multipart("selfie", Buffer.from("not really a photo"), "image/jpeg"))).statusCode, 415);
+  assert.equal((await post(app, await multipart("selfie", await selfie("jpeg"), "image/jpeg"))).statusCode, 200);
+  const third = await post(app, await multipart("selfie", await selfie("jpeg"), "image/jpeg"));
+  assert.equal(third.statusCode, 429);
+  assert.equal(calls(), 1);
+});
+
+test("past the daily cap for everyone, analysis says busy instead of calling Gemini", async () => {
+  const { app, calls } = setup(found, { dailyGate: createGate({ windowMs: 86_400_000, max: 1, concurrency: Infinity }) });
+  assert.equal((await post(app, await multipart("selfie", await selfie("jpeg"), "image/jpeg"))).statusCode, 200);
+  const res = await post(app, await multipart("selfie", await selfie("jpeg"), "image/jpeg"));
+  assert.equal(res.statusCode, 503);
+  assert.deepEqual(res.json(), { error: "busy" });
+  assert.equal(calls(), 1);
 });

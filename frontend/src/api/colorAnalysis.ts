@@ -1,5 +1,12 @@
 import type { PhotoTraits } from "@/lib/colorAnalysis";
-import { API_URL, USE_MOCKS, apiHeaders, expectOk, fileField, sleep } from "./config";
+import {
+  API_URL,
+  apiFetch,
+  USE_MOCKS,
+  expectOk,
+  fileField,
+  sleep,
+} from "./config";
 
 /**
  * Estimates color traits from a selfie.
@@ -15,9 +22,8 @@ export async function analyzeSelfie(selfieUri: string): Promise<PhotoTraits> {
   }
   const body = new FormData();
   body.append("selfie", fileField(selfieUri, "selfie.jpg"));
-  const res = await fetch(`${API_URL}/color-analysis`, {
+  const res = await apiFetch(`${API_URL}/color-analysis`, {
     method: "POST",
-    headers: apiHeaders(),
     body,
   }).then(expectOk);
   return res.json();
