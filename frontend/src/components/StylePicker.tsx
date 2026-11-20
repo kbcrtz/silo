@@ -137,9 +137,6 @@ export function StylePicker({
             />
           ))}
         </View>
-        <Text style={[TYPE.bodySmall, { color: BRAND.inkSoft, marginTop: 12 }]}>
-          Everything stays in your palette; this picks which of its colors lead.
-        </Text>
       </View>
     </View>
   );

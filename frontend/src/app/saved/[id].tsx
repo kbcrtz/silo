@@ -63,10 +63,12 @@ export default function SavedList() {
 
   if (!isAll && !list) {
     return (
-      <GlassScreen badge="LIST" eyebrow="Saved" title={"List not\n*found.*"}>
-        <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
-          It may have been deleted on another device.
-        </Text>
+      <GlassScreen
+        badge="LIST"
+        eyebrow="Saved"
+        title={"List not\n*found.*"}
+      >
+        {null}
       </GlassScreen>
     );
   }
@@ -107,8 +109,8 @@ export default function SavedList() {
           style={[TYPE.caption, { color: BRAND.inkSoft, textAlign: "center" }]}
         >
           {items.length < MIN_PIECES
-            ? "Save at least two pieces to try them on together."
-            : "Add a top and bottoms, or a jacket, to try a fit on."}
+            ? "Save two pieces to try them on together."
+            : "Needs a top and bottoms, or a dress and a jacket."}
         </Text>
       )}
     </View>
@@ -124,8 +126,7 @@ export default function SavedList() {
       {picking ? (
         <Animated.View entering={FadeIn.duration(200)}>
           <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
-            Pick a top and bottoms, or a dress. Add a jacket to layer it over
-            either. Picking another of the same kind swaps it in.
+            Pick a top and bottoms, or a dress. Add a jacket if you like.
           </Text>
         </Animated.View>
       ) : null}
@@ -164,9 +165,7 @@ export default function SavedList() {
         />
       ) : (
         <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
-          {isAll
-            ? "Nothing saved yet. Tap Save on anything in your feed."
-            : "Empty for now. Open an item, tap Save, then pick this list."}
+          {isAll ? "Nothing saved yet." : "Nothing in this list yet."}
         </Text>
       )}
 

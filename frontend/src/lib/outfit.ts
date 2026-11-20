@@ -68,3 +68,14 @@ export function outfitName(pieces: CatalogItem[]): string {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" + ");
 }
+
+/**
+ * A short fingerprint of a fit image's address. The address changes with the
+ * pieces, their colors and the body outline, so a saved cover whose key no
+ * longer matches is out of date and gets replaced.
+ */
+export function coverKey(uri: string): string {
+  let h = 5381;
+  for (let i = 0; i < uri.length; i++) h = ((h * 33) ^ uri.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { findItem, rememberItems, type CatalogItem } from "@/data/catalog";
+import { deletePhoto } from "@/lib/photos";
 import { storage } from "./storage";
 
 export type SavedList = {
@@ -18,6 +19,11 @@ export type Outfit = {
   /** Inner layers first, as fitIds gives them. */
   itemIds: string[];
   createdAt: string;
+  /**
+   * The fit's AI try-on image, kept on the phone (a file name from
+   * src/lib/photos.ts) as its closet cover once it has been shown.
+   */
+  cover?: { file: string; key: string };
 };
 
 type SavedState = {
@@ -43,6 +49,8 @@ type SavedState = {
   saveOutfit: (name: string, itemIds: string[]) => string;
   renameOutfit: (outfitId: string, name: string) => void;
   deleteOutfit: (outfitId: string) => void;
+  /** Swaps in a new cover image, deleting the old file. */
+  setOutfitCover: (outfitId: string, cover: Outfit["cover"]) => void;
   clear: () => void;
 };
 
@@ -63,6 +71,16 @@ function bookmark(items: Record<string, CatalogItem>, id: string) {
 function unbookmark(items: Record<string, CatalogItem>, id: string) {
   const { [id]: _, ...rest } = items;
   return rest;
+}
+
+/** Deletes an outfit's cover file; it may already be gone (a restored backup). */
+function dropCover(outfit: Outfit | undefined) {
+  if (!outfit?.cover) return;
+  try {
+    deletePhoto(outfit.cover.file);
+  } catch {
+    // Nothing to tidy up.
+  }
 }
 
 /** Names come from Alert.prompt, which has no length limit; long ones break the headline and chips. */
@@ -163,6 +181,7 @@ export const useSaved = create<SavedState>()(
         })),
       deleteOutfit: (outfitId) =>
         set((s) => {
+          dropCover(s.outfits.find((o) => o.id === outfitId));
           const outfits = s.outfits.filter((o) => o.id !== outfitId);
           const gone = s.outfits.find((o) => o.id === outfitId)?.itemIds ?? [];
           return {
@@ -172,7 +191,19 @@ export const useSaved = create<SavedState>()(
               .reduce(unbookmark, s.items),
           };
         }),
-      clear: () => set({ itemIds: [], lists: [], items: {}, outfits: [] }),
+      setOutfitCover: (outfitId, cover) =>
+        set((s) => ({
+          outfits: s.outfits.map((o) => {
+            if (o.id !== outfitId) return o;
+            if (o.cover?.file !== cover?.file) dropCover(o);
+            return { ...o, cover };
+          }),
+        })),
+      clear: () =>
+        set((s) => {
+          s.outfits.forEach(dropCover);
+          return { itemIds: [], lists: [], items: {}, outfits: [] };
+        }),
     }),
     {
       name: "silo.saved",

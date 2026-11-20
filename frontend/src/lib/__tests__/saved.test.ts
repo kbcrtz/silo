@@ -158,3 +158,19 @@ describe("closet outfits", () => {
     expect(useSaved.getState().items[bottom.id]).toEqual(bottom);
   });
 });
+
+describe("outfit covers", () => {
+  beforeEach(() => useSaved.getState().clear());
+
+  it("sets, replaces and drops a fit's cover with the fit", () => {
+    const id = useSaved.getState().saveOutfit("Fit", ["a", "b"]);
+    const cover = () =>
+      useSaved.getState().outfits.find((o) => o.id === id)?.cover;
+    useSaved.getState().setOutfitCover(id, { file: "fit-1.jpg", key: "k1" });
+    expect(cover()).toEqual({ file: "fit-1.jpg", key: "k1" });
+    useSaved.getState().setOutfitCover(id, { file: "fit-2.jpg", key: "k2" });
+    expect(cover()).toEqual({ file: "fit-2.jpg", key: "k2" });
+    useSaved.getState().deleteOutfit(id);
+    expect(useSaved.getState().outfits).toEqual([]);
+  });
+});

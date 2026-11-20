@@ -103,7 +103,7 @@ function BodySummary() {
         </View>
       ) : (
         <Text style={[TYPE.bodySmall, { color: BRAND.inkSoft }]}>
-          Add your measurements for sizes picked to fit you.
+          No measurements yet.
         </Text>
       )}
       {!shape && types.length ? (
@@ -285,10 +285,7 @@ export default function Profile() {
         />
       </GlassSection>
 
-      <GlassSection
-        title="Your style"
-        note="Your feed searches for these looks, in your palette."
-      >
+      <GlassSection title="Your style">
         <GlassRow
           icon="sparkles"
           label="Looks and color"
@@ -300,10 +297,7 @@ export default function Profile() {
         />
       </GlassSection>
 
-      <GlassSection
-        title="Your fit"
-        note="Sizes are recommended from your latest measurements and the fit you like."
-      >
+      <GlassSection title="Your fit">
         <BodySummary />
         <GlassRow
           icon="ruler"

@@ -93,20 +93,18 @@ export default function StyleStep() {
           }
         />
       </View>
-      <Text
-        style={[
-          TYPE.bodySmall,
-          { color: BRAND.inkSoft, marginTop: 16, marginBottom: 24 },
-        ]}
-      >
-        {phase === "deck"
-          ? "Swipe right on outfits you'd wear, left on ones you wouldn't. Your feed looks for what you like, in your colors."
-          : swiped
-            ? liked.length
-              ? "From your swipes. Change them if we got it wrong; you can edit them any time in your profile."
-              : "Nothing stood out, so pick up to three below, or skip and your feed stays broad."
-            : "Your feed searches for these looks in your colors. You can change them any time in your profile."}
-      </Text>
+      {phase === "deck" ? (
+        <Text
+          style={[
+            TYPE.bodySmall,
+            { color: BRAND.inkSoft, marginTop: 16, marginBottom: 24 },
+          ]}
+        >
+          Swipe right on what you&apos;d wear.
+        </Text>
+      ) : (
+        <View style={{ height: 24 }} />
+      )}
 
       {phase === "deck" ? (
         <>

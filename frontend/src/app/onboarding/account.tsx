@@ -50,8 +50,8 @@ export default function AccountStep() {
       </View>
       <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
         {returning
-          ? "Sign in to bring back your colors, measurements and saved pieces."
-          : "Sign in to keep your colors, measurements and saved pieces, and get them back on any iPhone."}
+          ? "Sign in to pick up where you left off."
+          : "Sign in to keep your Silo on any iPhone."}
       </Text>
 
       <View style={{ marginTop: "auto", gap: 16 }}>

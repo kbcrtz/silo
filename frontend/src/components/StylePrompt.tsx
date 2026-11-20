@@ -25,10 +25,6 @@ export function StylePrompt() {
       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={TYPE.question}>Tell us your style</Text>
-          <Text style={[TYPE.bodySmall, { color: BRAND.inkSoft }]}>
-            Pick the looks you’d wear, and your feed searches for them in your
-            colors.
-          </Text>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -58,7 +54,11 @@ export function StylePrompt() {
           fill={BRAND.ink}
           solid
           edge={BRAND.ink}
-          style={{ height: 36, paddingHorizontal: 16, justifyContent: "center" }}
+          style={{
+            height: 36,
+            paddingHorizontal: 16,
+            justifyContent: "center",
+          }}
         >
           <Text style={[TYPE.button, { color: BRAND.white }]}>
             Pick my style

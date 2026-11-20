@@ -3,6 +3,7 @@ import {
   addToFit,
   canMakeFit,
   canTryOn,
+  coverKey,
   fitFromItems,
   fitIds,
   fitPieces,
@@ -115,4 +116,13 @@ it("capitalizes a fit name made from lowercase item names", () => {
       { ...of("outerwear"), name: "Olive field jacket" },
     ]),
   ).toBe("Jean + Jacket");
+});
+
+describe("coverKey", () => {
+  it("is short, repeatable, and changes with the image address", () => {
+    const a = "https://api/catalog/tryon-image?shopFor=womens&fit=%5B1%5D";
+    expect(coverKey(a)).toBe(coverKey(a));
+    expect(coverKey(a)).not.toBe(coverKey(a.replace("1", "2")));
+    expect(coverKey(a).length).toBeLessThanOrEqual(7);
+  });
 });

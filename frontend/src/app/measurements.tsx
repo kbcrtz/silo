@@ -33,7 +33,7 @@ export default function MeasurementsScreen() {
   return (
     <GlassScreen
       badge="YOUR FIT"
-      eyebrow="Sizes are picked from these"
+      eyebrow="Your fit"
       title={"Your\n*measurements.*"}
       footer={
         <PrimaryButton
@@ -86,7 +86,7 @@ export default function MeasurementsScreen() {
       })}
       {entries.length === 0 ? (
         <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
-          Save your first measurements to start tracking.
+          No measurements yet.
         </Text>
       ) : null}
     </GlassScreen>

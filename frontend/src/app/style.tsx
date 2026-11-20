@@ -38,7 +38,7 @@ export default function StyleScreen() {
   return (
     <GlassScreen
       badge="YOUR STYLE"
-      eyebrow="Your feed searches for these"
+      eyebrow="Looks and color"
       title={"Your\n*style.*"}
       footer={<PrimaryButton label="Save" arrow={false} onPress={save} />}
     >
@@ -50,10 +50,7 @@ export default function StyleScreen() {
         onColorStyleChange={setColorStyle}
       />
       {waived.length ? (
-        <GlassSection
-          title="Fit rules you've overruled"
-          note="You kept saving pieces these rules pushed down, so your feed stopped sinking them."
-        >
+        <GlassSection title="Fit rules you've overruled">
           {waived.map((rule) => (
             <GlassRow
               key={rule}

@@ -270,12 +270,7 @@ export default function ItemSheet() {
             <Pill label={`Popular with ${t.season.name}s this week`} />
           ) : null}
         </View>
-        {fit?.reason ? (
-          <Text tone="muted">
-            {fit.reason}
-            {item.source ? " (cut estimated from the listing)." : "."}
-          </Text>
-        ) : null}
+        {fit?.reason ? <Text tone="muted">{fit.reason}.</Text> : null}
         {tasteLine ? <Text tone="muted">{tasteLine}.</Text> : null}
         {item.evidence ? (
           <Text variant="caption" tone="muted">

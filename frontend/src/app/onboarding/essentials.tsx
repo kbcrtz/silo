@@ -110,7 +110,7 @@ export default function Essentials() {
           <Text
             style={[TYPE.bodySmall, { color: t.colors.danger, marginTop: 8 }]}
           >
-            Pick one so your feed shows the right cuts.
+            Pick one to continue.
           </Text>
         ) : null}
       </View>

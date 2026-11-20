@@ -21,11 +21,14 @@ export function AiTryOn({
   source,
   fallback,
   onFailed,
+  onReady,
 }: {
   source: ImageSource;
   fallback: ReactNode;
   /** So a caption can stop calling the drawn fallback an AI preview. */
   onFailed?: () => void;
+  /** The AI image is on screen (and in the image cache). */
+  onReady?: () => void;
 }) {
   const t = useTheme();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -67,6 +70,7 @@ export function AiTryOn({
         cachePolicy="disk"
         accessibilityLabel="AI preview of the item on a mannequin"
         onLoad={() => {
+          onReady?.();
           if (!slow) return setState("ready");
           progress.value = withTiming(1, { duration: 200 });
           setTimeout(() => setState("ready"), 200);

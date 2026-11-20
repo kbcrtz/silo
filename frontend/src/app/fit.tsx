@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
-import { useMemo } from "react";
+import { File } from "expo-file-system";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { fitImageSource } from "@/api/catalog";
 import { track } from "@/api/userData";
@@ -12,7 +13,14 @@ import { Mannequin } from "@/components/Mannequin";
 import { GlassButton, PrimaryButton } from "@/components/onboarding/Buttons";
 import { findItem, shopUrl } from "@/data/catalog";
 import { useLatestMeasurements } from "@/hooks/useRecommendations";
-import { fitFromItems, fitPieces, MIN_PIECES, outfitName } from "@/lib/outfit";
+import {
+  coverKey,
+  fitFromItems,
+  fitPieces,
+  MIN_PIECES,
+  outfitName,
+} from "@/lib/outfit";
+import { deletePhoto, newPhotoName, photoExists, photoUri } from "@/lib/photos";
 import { openProduct } from "@/lib/shop";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
@@ -21,6 +29,32 @@ import { BRAND, TYPE } from "@/theme/brand";
 import { recordSignal } from "@/store/taste";
 
 const VISUAL_HEIGHT = 460;
+
+type ImageAddress = { uri: string; headers: Record<string, string> };
+
+/**
+ * Keeps a saved fit's AI image as its closet cover, downloaded into the
+ * photos directory, unless the cover already shows this image and its file
+ * is here. The server saved the image when it made it, so this second fetch
+ * is served from storage and never generates (or bills) a new one.
+ */
+async function keepCover(outfitId: string, source: ImageAddress) {
+  const key = coverKey(source.uri);
+  const outfit = useSaved.getState().outfits.find((o) => o.id === outfitId);
+  if (!outfit) return;
+  // A cover restored from a backup names a file that isn't on this phone.
+  if (outfit.cover?.key === key && photoExists(outfit.cover.file)) return;
+  const file = newPhotoName("fit");
+  try {
+    await File.downloadFileAsync(source.uri, new File(photoUri(file)), {
+      headers: source.headers,
+    });
+    useSaved.getState().setOutfitCover(outfitId, { file, key });
+  } catch {
+    // No cover this time; the mosaic stays and the next view tries again.
+    deletePhoto(file);
+  }
+}
 
 /**
  * The pieces picked in a saved list or closet outfit (`?ids=a,b`), worn
@@ -44,6 +78,11 @@ export default function FitScreen() {
   const shopFor = useProfile((s) => s.shopFor);
   const latest = useLatestMeasurements();
   const source = fitImageSource(pieces, shopFor, latest);
+  // The address of the AI image once it's on screen, for the closet cover.
+  const [shown, setShown] = useState<ImageAddress>();
+  useEffect(() => {
+    if (outfit && shown) keepCover(outfit.id, shown);
+  }, [outfit?.id, shown?.uri]); // eslint-disable-line react-hooks/exhaustive-deps
   // While the image is made (or if it fails), the drawn mannequin in the whole fit.
   const drawn = pieces[0] ? (
     <Mannequin
@@ -117,27 +156,24 @@ export default function FitScreen() {
           }}
         >
           {source ? (
-            <AiTryOn key={source.uri} source={source} fallback={drawn} />
+            <AiTryOn
+              key={source.uri}
+              source={source}
+              fallback={drawn}
+              onReady={() => setShown(source)}
+            />
           ) : (
             drawn
           )}
         </View>
       ) : (
         <Text style={[TYPE.body, { color: BRAND.inkSoft }]}>
-          These pieces aren&apos;t saved anymore. Pick two or three from a saved
-          list to try them on together.
+          These pieces aren&apos;t saved anymore.
         </Text>
       )}
 
       {pieces.length ? (
-        <GlassSection
-          title="In this fit"
-          note={
-            source
-              ? undefined
-              : "Demo pieces show on the drawn mannequin; the AI image is for store listings."
-          }
-        >
+        <GlassSection title="In this fit">
           {pieces.map((item) => (
             <GlassRow
               key={item.id}

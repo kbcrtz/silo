@@ -19,7 +19,10 @@ export function persistPhoto(
 }
 
 /** A fresh file name in the photos directory (created if needed), e.g. for a download. */
-export function newPhotoName(kind: "selfie" | "body", ext = "jpg"): string {
+export function newPhotoName(
+  kind: "selfie" | "body" | "fit",
+  ext = "jpg",
+): string {
   new Directory(Paths.document, DIR_NAME).create({
     idempotent: true,
     intermediates: true,
@@ -29,6 +32,10 @@ export function newPhotoName(kind: "selfie" | "body", ext = "jpg"): string {
 
 export function photoUri(name: string): string {
   return new File(Paths.document, DIR_NAME, name).uri;
+}
+
+export function photoExists(name: string): boolean {
+  return new File(Paths.document, DIR_NAME, name).exists;
 }
 
 export function deletePhoto(name: string): void {

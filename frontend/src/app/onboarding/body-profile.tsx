@@ -222,10 +222,7 @@ export default function BodyProfile() {
           <UnitToggle value={unitSystem} onChange={switchUnits} />
         </View>
       </View>
-      <Text style={[TYPE.bodySmall, { color: BRAND.inkSoft, marginTop: 20 }]}>
-        Add your measurements and watch the silhouette adjust to your
-        proportions in real time.
-      </Text>
+      <View style={{ height: 20 }} />
 
       <Glass
         radius={37}

@@ -41,8 +41,7 @@ export default function Selfie() {
         />
       </View>
       <Text style={[TYPE.body, { color: BRAND.inkSoft, marginTop: 14 }]}>
-        Face a window, skip filters and remove tinted glasses. A small copy is
-        saved to your profile for your passport.
+        Face a window. No filters or tinted glasses.
       </Text>
 
       <Pressable

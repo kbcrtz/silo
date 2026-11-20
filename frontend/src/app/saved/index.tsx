@@ -1,9 +1,21 @@
+import { Image } from "expo-image";
 import { Link } from "expo-router";
-import { Alert, Pressable, Text, View } from "react-native";
+import { useState } from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { GlassScreen } from "@/components/GlassScreen";
 import { ProductImage } from "@/components/ItemCard";
 import { GlassButton } from "@/components/onboarding/Buttons";
+import { GUTTER } from "@/components/onboarding/OnboardingScreen";
 import { findItem } from "@/data/catalog";
+import { photoUri } from "@/lib/photos";
 import { useSaved, type Outfit } from "@/store/saved";
 import { BRAND, TYPE } from "@/theme/brand";
 
@@ -51,9 +63,10 @@ function ListTile({
   name: string;
   itemIds: string[];
 }) {
+  const width = useContext(TileWidth);
   return (
     <Link href={{ pathname: "/saved/[id]", params: { id } }} asChild>
-      <Pressable style={{ width: "48%", gap: 10 }}>
+      <Pressable style={{ width, gap: 10 }}>
         <Mosaic itemIds={itemIds} />
         <View style={{ gap: 2, paddingHorizontal: 4 }}>
           <Text style={[TYPE.control, { fontSize: 16 }]} numberOfLines={1}>
@@ -68,8 +81,41 @@ function ListTile({
   );
 }
 
+/**
+ * The fit's AI try-on image once it has been seen on the Fit screen; until
+ * then, or when the file isn't on this phone (a backup restored elsewhere),
+ * its pieces in a mosaic.
+ */
+function OutfitCover({ outfit }: { outfit: Outfit }) {
+  const [missing, setMissing] = useState<string>();
+  const file = outfit.cover?.file;
+  if (!file || missing === file) return <Mosaic itemIds={outfit.itemIds} />;
+  return (
+    <View
+      style={{
+        aspectRatio: 1,
+        borderRadius: RADIUS,
+        overflow: "hidden",
+        backgroundColor: BRAND.white,
+        borderWidth: 1,
+        borderColor: BRAND.glassEdge,
+      }}
+    >
+      <Image
+        source={photoUri(file)}
+        style={{ flex: 1 }}
+        // The mannequin stands head to feet in a 3:4 image; keep all of it.
+        contentFit="contain"
+        accessibilityLabel={`${outfit.name}, AI try-on`}
+        onError={() => setMissing(file)}
+      />
+    </View>
+  );
+}
+
 /** A closet outfit: its pieces on a cover; opens the fit, hold to rename or delete. */
 function OutfitTile({ outfit }: { outfit: Outfit }) {
+  const width = useContext(TileWidth);
   const manage = () =>
     Alert.alert(outfit.name, undefined, [
       {
@@ -101,9 +147,9 @@ function OutfitTile({ outfit }: { outfit: Outfit }) {
       <Pressable
         onLongPress={manage}
         accessibilityHint="Hold to rename or delete"
-        style={{ width: "48%", gap: 10 }}
+        style={{ width, gap: 10 }}
       >
-        <Mosaic itemIds={outfit.itemIds} />
+        <OutfitCover outfit={outfit} />
         <View style={{ gap: 2, paddingHorizontal: 4 }}>
           <Text style={[TYPE.control, { fontSize: 16 }]} numberOfLines={1}>
             {outfit.name}
@@ -123,17 +169,37 @@ const Heading = ({ label }: { label: string }) => (
   </Text>
 );
 
-const GRID = {
-  flexDirection: "row",
-  flexWrap: "wrap",
-  justifyContent: "space-between",
-  rowGap: 22,
-} as const;
+const GAP = 14;
+/** A shelf tile's width, set by the screen so about two and a bit show. */
+const TileWidth = createContext(160);
+
+/**
+ * A row of tiles that scrolls sideways, running to the screen's edges and
+ * stopping on a tile. The next tile peeks in so the row reads as scrollable.
+ */
+function Shelf({ width, children }: { width: number; children: ReactNode }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      decelerationRate="fast"
+      snapToInterval={width + GAP}
+      snapToAlignment="start"
+      style={{ marginHorizontal: -GUTTER }}
+      contentContainerStyle={{ paddingHorizontal: GUTTER, gap: GAP }}
+    >
+      <TileWidth.Provider value={width}>{children}</TileWidth.Provider>
+    </ScrollView>
+  );
+}
 
 export default function Saved() {
   const itemIds = useSaved((s) => s.itemIds);
   const lists = useSaved((s) => s.lists);
   const outfits = useSaved((s) => s.outfits);
+  const screen = useWindowDimensions().width;
+  // Two tiles and a sliver of the third across the content width.
+  const tile = Math.round((screen - GUTTER * 2 - GAP) / 2.25);
 
   const newList = () =>
     Alert.prompt("New list", undefined, (name) => {
@@ -147,25 +213,25 @@ export default function Saved() {
       title={"Your\n*closet.*"}
       footer={<GlassButton label="New list" onPress={newList} />}
     >
-      <Text style={[TYPE.body, { color: BRAND.inkSoft, marginTop: -12 }]}>
-        {itemIds.length
-          ? "Open a list and tap Try on together to see pieces on you as one fit. Save the fits you like and they wait here."
-          : "Tap Save on anything in your feed and it lands here."}
-      </Text>
+      {itemIds.length ? null : (
+        <Text style={[TYPE.body, { color: BRAND.inkSoft, marginTop: -12 }]}>
+          Nothing saved yet.
+        </Text>
+      )}
 
       {outfits.length ? (
         <>
           <Heading label="OUTFITS" />
-          <View style={GRID}>
+          <Shelf width={tile}>
             {outfits.map((outfit) => (
               <OutfitTile key={outfit.id} outfit={outfit} />
             ))}
-          </View>
+          </Shelf>
           <Heading label="LISTS" />
         </>
       ) : null}
 
-      <View style={GRID}>
+      <Shelf width={tile}>
         <ListTile id="all" name="All saved" itemIds={itemIds} />
         {lists.map((list) => (
           <ListTile
@@ -175,7 +241,7 @@ export default function Saved() {
             itemIds={list.itemIds}
           />
         ))}
-      </View>
+      </Shelf>
     </GlassScreen>
   );
 }
