@@ -7,7 +7,6 @@ import {
   Text,
   TextPath,
   vec,
-  type SkTypefaceFontProvider,
 } from "@shopify/react-native-skia";
 import { useMemo } from "react";
 import {
@@ -17,14 +16,14 @@ import {
   useCardStock,
   type HoloUniforms,
 } from "./CardSurface";
-import { sansFont, serifFont } from "./fonts";
+import { sansFont, serifFont, type PassportFonts } from "./fonts";
 import type { PassportData } from "./usePassportData";
 
 type Props = {
   width: number;
   height: number;
   data: PassportData;
-  fontMgr: SkTypefaceFontProvider;
+  fontMgr: PassportFonts;
   uniforms: HoloUniforms;
   fillUniforms: HoloUniforms;
 };
