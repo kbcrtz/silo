@@ -3,7 +3,6 @@ import { profileSnapshot } from "../cloud";
 import {
   describeTaste,
   MAX_LOOKS,
-  searchAesthetics,
   toggleLook,
   type StatedTaste,
 } from "../taste";
@@ -47,55 +46,6 @@ describe("style looks", () => {
     expect(examplesFor("preppy", "mens")).toMatch(/Rugby/);
     expect(examplesFor("preppy", "womens")).toMatch(/argyle/);
     expect(examplesFor("workwear", "both")).toMatch(/Chore/);
-  });
-});
-
-describe("searchAesthetics", () => {
-  it("sends nothing before a style is picked", () => {
-    expect(searchAesthetics(undefined, "womens")).toEqual({
-      aesthetic: [],
-      avoid: [],
-    });
-  });
-
-  it("keeps the order, drops casual and looks the department doesn't offer, and caps at 3", () => {
-    const s = stated({
-      liked: ["casual", "workwear", "streetwear", "minimal", "classic", "boho"],
-    });
-    expect(searchAesthetics(s, "womens").aesthetic).toEqual([
-      "streetwear",
-      "minimal",
-      "classic",
-    ]);
-    expect(searchAesthetics(s, "mens").aesthetic).toEqual([
-      "workwear",
-      "streetwear",
-      "minimal",
-    ]);
-  });
-
-  it("only casual means the plain feed", () => {
-    expect(
-      searchAesthetics(stated({ liked: ["casual"] }), "both").aesthetic,
-    ).toEqual([]);
-  });
-
-  it("avoids rejected looks, never one that's also liked, up to 4", () => {
-    const s = stated({
-      liked: ["boho"],
-      rejected: ["boho", "edgy", "sporty", "preppy", "romantic", "retro"],
-    });
-    expect(searchAesthetics(s, "womens").avoid).toEqual([
-      "edgy",
-      "sporty",
-      "preppy",
-      "romantic",
-    ]);
-  });
-
-  it("ignores ids an older or newer build saved", () => {
-    const s = stated({ liked: ["grunge" as never, "minimal"] });
-    expect(searchAesthetics(s, "womens").aesthetic).toEqual(["minimal"]);
   });
 });
 

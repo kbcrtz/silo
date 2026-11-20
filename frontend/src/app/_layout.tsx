@@ -7,6 +7,7 @@ import { startSession } from "@/api/supabase";
 import { useMeasurements } from "@/store/measurements";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
+import { useTasteLocal } from "@/store/taste";
 import { useHydrated } from "@/store/storage";
 import { useCloudSync } from "@/hooks/useCloudSync";
 import { useAccount } from "@/store/account";
@@ -14,7 +15,12 @@ import { useTheme } from "@/theme";
 import { BRAND, useBrandFonts } from "@/theme/brand";
 
 export default function RootLayout() {
-  const hydrated = useHydrated([useProfile, useMeasurements, useSaved]);
+  const hydrated = useHydrated([
+    useProfile,
+    useMeasurements,
+    useSaved,
+    useTasteLocal,
+  ]);
   const [sessionReady, setSessionReady] = useState(false);
   useEffect(() => {
     // Offline or slow: start logged out after 8 s rather than hold the splash; the next launch retries.

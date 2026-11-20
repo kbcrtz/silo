@@ -1,3 +1,4 @@
+import type { Aesthetic } from "./aesthetics";
 export type Category = "top" | "bottom" | "dress" | "outerwear";
 export type Cut = "womens" | "mens" | "unisex";
 export type Silhouette =
@@ -53,6 +54,10 @@ export type CatalogItem = {
   evidence?: string;
   /** Popular with the shopper's season this week (from the backend). */
   popular?: boolean;
+  /** Looks the item belongs to: the backend's tag from the look search that found it (lib/tags fills in from the title). */
+  aesthetics?: Aesthetic[];
+  /** The specific garment ("hoodie", "chinos"), finer than `category`, for taste. */
+  garment?: string;
   /** Plaid or stripes are drawn on the mannequin in colors[1]; absent means solid. */
   pattern?: "plaid" | "stripes" | "print";
 };

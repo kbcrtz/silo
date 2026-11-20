@@ -1,16 +1,19 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import type { FashionStyle } from "@/api/catalog";
+import { GlassRow, GlassSection } from "@/components/GlassList";
 import { GlassScreen } from "@/components/GlassScreen";
 import { PrimaryButton } from "@/components/onboarding/Buttons";
 import { StylePicker } from "@/components/StylePicker";
 import type { Aesthetic } from "@/data/aesthetics";
 import { useProfile } from "@/store/profile";
+import { restoreBodyRule } from "@/store/taste";
 
 /** Profile › Your style, and the feed's "Tell us your style" card: the same picker as onboarding. */
 export default function StyleScreen() {
   const profile = useProfile();
   const stated = profile.taste?.stated;
+  const waived = profile.taste?.waivers?.waived ?? [];
   const [liked, setLiked] = useState<Aesthetic[]>(stated?.liked ?? []);
   const [colorStyle, setColorStyle] = useState<FashionStyle>(
     stated?.colorStyle ?? "none",
@@ -46,6 +49,21 @@ export default function StyleScreen() {
         colorStyle={colorStyle}
         onColorStyleChange={setColorStyle}
       />
+      {waived.length ? (
+        <GlassSection
+          title="Fit rules you've overruled"
+          note="You kept saving pieces these rules pushed down, so your feed stopped sinking them."
+        >
+          {waived.map((rule) => (
+            <GlassRow
+              key={rule}
+              label={rule}
+              value="Turn back on"
+              onPress={() => restoreBodyRule(rule)}
+            />
+          ))}
+        </GlassSection>
+      ) : null}
     </GlassScreen>
   );
 }

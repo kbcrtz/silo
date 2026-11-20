@@ -186,11 +186,16 @@ const NEUTRAL = 0.7;
  * for height, build and leg length nudges it. The reason is the strongest
  * rule pulling the same way as the label (or the shape, when none do).
  */
-export function bodyFit(piece: Piece, traits: BodyTraits): BodyFit {
+export function bodyFit(
+  piece: Piece,
+  traits: BodyTraits,
+  /** Rules the shopper has overruled by saving what they sink (lib/tasteLearn). */
+  waived: ReadonlySet<string> = new Set(),
+): BodyFit {
   const base = traits.shape
     ? silhouetteMatch(piece.silhouette, traits.shape).score / 100
     : NEUTRAL;
-  const applied = rules(piece, traits);
+  const applied = rules(piece, traits).filter((r) => !waived.has(r.reason));
   const fit = Math.min(
     1,
     Math.max(0, base + applied.reduce((sum, r) => sum + r.delta, 0)),
@@ -212,19 +217,15 @@ export function bodyFit(piece: Piece, traits: BodyTraits): BodyFit {
   };
 }
 
-/** How far down a page the poorest fit can sink, in places. */
-const SINK = 10;
-
 /**
- * Lets poor fits sink within a page without sorting it: each item keeps its
- * place, plus up to SINK places the worse it fits. Sorting outright bunches
- * near-identical items, and the backend's order already mixes searches.
+ * The body rules pulling this piece down, by their reason, which is also
+ * the rule's id ("Long tops shorten the leg" is one rule wherever it
+ * applies). Saving three pieces a rule sinks waives it.
  */
-export function sinkPoorFits<T>(items: T[], fitOf: (item: T) => number): T[] {
-  return items
-    .map((item, i) => ({ item, at: i + ((100 - fitOf(item)) / 100) * SINK }))
-    .sort((a, b) => a.at - b.at)
-    .map((e) => e.item);
+export function sinkingRules(piece: Piece, traits: BodyTraits): string[] {
+  return [
+    ...new Set(rules(piece, traits).filter((r) => r.delta < 0).map((r) => r.reason)),
+  ];
 }
 
 /**

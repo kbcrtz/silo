@@ -19,12 +19,14 @@ export function ItemCard({
   width,
   footer,
   pick,
+  onLongPress,
 }: {
   item: CatalogItem;
   width: number;
   /** Below the caption, e.g. a Shop link on saved items. */
   footer?: ReactNode;
   pick?: Pick;
+  onLongPress?: () => void;
 }) {
   const t = useTheme();
   const saved = useSaved((s) => s.itemIds.includes(item.id));
@@ -33,6 +35,7 @@ export function ItemCard({
     <Pressable
       accessibilityState={pick ? { selected: pick.picked } : undefined}
       onPress={pick?.onPress}
+      onLongPress={onLongPress}
       style={{ width, gap: t.space(2) }}
     >
       <View

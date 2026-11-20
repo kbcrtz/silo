@@ -24,6 +24,8 @@ export function recommend(
   items: CatalogItem[],
   season: Season | null,
   body: BodyTraits | null,
+  /** Body rules the shopper has waived (lib/tasteLearn). */
+  waived?: ReadonlySet<string>,
 ): Recommendation[] {
   return items
     .map((item) => {
@@ -32,7 +34,7 @@ export function recommend(
         season && item.colors.length
           ? paletteMatch(item.colors, season)
           : undefined;
-      const fit = body && hasTraits(body) ? bodyFit(item, body) : undefined;
+      const fit = body && hasTraits(body) ? bodyFit(item, body, waived) : undefined;
       const score =
         color && fit
           ? Math.round(

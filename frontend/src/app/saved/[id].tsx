@@ -21,6 +21,7 @@ import { openProduct } from "@/lib/shop";
 import { useSaved } from "@/store/saved";
 import { useTheme } from "@/theme";
 import { BRAND, TYPE } from "@/theme/brand";
+import { recordSignal } from "@/store/taste";
 
 /** Stars would turn part of a list's name italic in the headline. */
 const plain = (name: string) => name.replaceAll("*", "");
@@ -149,6 +150,7 @@ export default function SavedList() {
                 hitSlop={6}
                 onPress={() => {
                   track("shop", item, t.season?.id);
+                  recordSignal(item, "shop");
                   openProduct(shopUrl(item), t.colors.accentText);
                 }}
                 style={{ marginTop: t.space(1) }}

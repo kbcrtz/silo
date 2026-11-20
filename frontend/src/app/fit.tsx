@@ -15,6 +15,7 @@ import { openProduct } from "@/lib/shop";
 import { useProfile } from "@/store/profile";
 import { useTheme } from "@/theme";
 import { BRAND, TYPE } from "@/theme/brand";
+import { recordSignal } from "@/store/taste";
 
 const VISUAL_HEIGHT = 460;
 
@@ -112,6 +113,7 @@ export default function FitScreen() {
               chevron
               onPress={() => {
                 track("shop", item, t.season?.id);
+                recordSignal(item, "shop");
                 openProduct(shopUrl(item), t.colors.accentText);
               }}
             />

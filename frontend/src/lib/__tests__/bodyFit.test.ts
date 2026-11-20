@@ -2,7 +2,7 @@ import {
   bodyFit,
   bodyTraits,
   describeBody,
-  sinkPoorFits,
+  sinkingRules,
   type BodyTraits,
 } from "../bodyFit";
 
@@ -84,14 +84,23 @@ describe("bodyFit", () => {
   });
 });
 
-describe("sinkPoorFits", () => {
-  it("sinks poor fits a few places without sorting the rest", () => {
-    const items = Array.from({ length: 12 }, (_, i) => i);
-    const fits: Record<number, number> = { 0: 10 };
-    const out = sinkPoorFits(items, (i) => fits[i] ?? 90);
-    expect(out[0]).toBe(1);
-    expect(out.indexOf(0)).toBeGreaterThan(5);
-    expect(out.filter((i) => i !== 0)).toEqual(items.slice(1));
+describe("waived rules and sinkingRules", () => {
+  const fuller: BodyTraits = { build: "fuller" };
+  it("lists the rules pulling a piece down, by their reason", () => {
+    expect(sinkingRules(top("cropped", "waist"), fuller)).toEqual([
+      "A cropped hem lands on the midsection",
+    ]);
+    expect(sinkingRules(top("wrap"), fuller)).toEqual([]);
+  });
+
+  it("a waived rule stops counting", () => {
+    const piece = top("cropped", "waist");
+    const before = bodyFit(piece, fuller).score;
+    const after = bodyFit(piece, fuller, new Set(["A cropped hem lands on the midsection"])).score;
+    expect(after).toBeGreaterThan(before);
+    expect(bodyFit(piece, fuller, new Set(["A cropped hem lands on the midsection"])).reason).not.toBe(
+      "A cropped hem lands on the midsection",
+    );
   });
 });
 

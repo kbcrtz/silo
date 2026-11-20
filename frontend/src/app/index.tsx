@@ -1,8 +1,9 @@
 import * as Haptics from "expo-haptics";
 import { Link } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Pressable,
   RefreshControl,
@@ -16,6 +17,9 @@ import { MasonryGrid } from "@/components/MasonryGrid";
 import { Backdrop, useSeasonBackdrop } from "@/components/onboarding/Backdrop";
 import { Glass } from "@/components/onboarding/Glass";
 import { StylePrompt } from "@/components/StylePrompt";
+import { findItem, type CatalogItem } from "@/data/catalog";
+import { backfillFromSaved, notForMe } from "@/store/taste";
+import { useSaved } from "@/store/saved";
 import { useDiscover } from "@/hooks/useDiscover";
 import { describeBody } from "@/lib/bodyFit";
 import { BRAND, FONTS, TYPE } from "@/theme/brand";
@@ -114,10 +118,34 @@ function CategoryChip({
 }
 
 /** The app's one home screen: the feed over the user's season gradient. */
+/** Long-press a card: "Not for me" hides it and shows fewer like it. */
+function askNotForMe(item: CatalogItem) {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  ActionSheetIOS.showActionSheetWithOptions(
+    {
+      title: item.name,
+      options: ["Not for me", "Cancel"],
+      destructiveButtonIndex: 0,
+      cancelButtonIndex: 1,
+    },
+    (i) => i === 0 && notForMe(item),
+  );
+}
+
 export default function Home() {
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState<FeedCategory>("for-you");
   const feed = useDiscover(category);
+
+  // Once: what's already saved seeds the taste learning.
+  useEffect(() => {
+    const { itemIds, items } = useSaved.getState();
+    backfillFromSaved(
+      itemIds
+        .map((id) => items[id] ?? findItem(id))
+        .filter((i): i is CatalogItem => Boolean(i)),
+    );
+  }, []);
   const { body, season } = feed;
   const backdrop = useSeasonBackdrop();
 
@@ -217,7 +245,9 @@ export default function Home() {
         </ScrollView>
 
         <View style={{ paddingHorizontal: GUTTER, marginTop: 24 }}>
-          {entries.length ? <MasonryGrid entries={entries} /> : null}
+          {entries.length ? (
+            <MasonryGrid entries={entries} onLongPress={askNotForMe} />
+          ) : null}
           {feed.status === "error" ? (
             <View style={{ alignItems: "center", gap: 12, marginTop: 12 }}>
               <Text

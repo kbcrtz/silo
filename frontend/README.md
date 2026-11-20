@@ -62,6 +62,13 @@ One home screen, the feed. Its top bar opens **Saved** (left) and **Profile** (r
 
 After the color results, the **style step** (`src/app/onboarding/style.tsx`, `src/components/StylePicker.tsx`) asks which looks they'd wear (up to 3: women's minimal, classic, casual, streetwear, sporty, preppy, boho, romantic, edgy; men's minimal, classic, casual, streetwear, sporty, preppy, workwear, retro; every look for "both") and how they wear color. The answer is `taste.stated` on the profile, so it's backed up with it and survives "Redo onboarding". Profile › Your style (`src/app/style.tsx`) edits it, and shoppers who never picked one (they onboarded before this step, or skipped it) get a one-time "Tell us your style" card on the feed (`src/components/StylePrompt.tsx`).
 
+**The feed learns from what they do** (`src/lib/tasteLearn.ts`, `src/store/taste.ts`), on the phone, with no API of its own:
+- Points go to each item's looks and specific garment (`src/lib/tags.ts`: the backend's look tag, else title words). Shop is 5, save 3, the first try-on 2, an open that stays up 3 s 1, and only the strongest action per item counts. Unsaving takes the item's points back, and "Not for me" (long-press a feed card, or the button on the item sheet) hides the item and counts against its looks. Points halve every 30 days. What was already saved counts once, at half a save.
+- A look's affinity is the stated like or dislike (±0.5) plus how far its points sit above the shopper's own average, bounded to ±1. A look counts as disliked only when stated, or when it's been dismissed and turned down more than twice as often as it earned points.
+- Each new feed sends the two looks they like most plus a third drawn at random from the rest, and avoids disliked ones (`pickLooks`). Pages keep the backend's order, but a poor fit sinks up to 10 places, taste lifts up to 8, and a disliked look goes to the end (`feedOrder`). The item sheet says "In the boho look you keep coming back to" once a look has real evidence.
+- Saving or shopping 3 different pieces a body rule pushes down waives that rule (it stops sinking and stops being the reason line); Your style lists waived rules with "Turn back on".
+- The decayed points and waivers ride on the profile (`taste.learned`, `taste.waivers`), so they're backed up, a few KB at most. Which item gave what and the hidden items stay on the phone (`silo.tasteLocal`); signing out clears them.
+
 ## Folders
 
 ```

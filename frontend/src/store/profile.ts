@@ -5,6 +5,7 @@ import type { PhotoTraits, QuizAnswers } from "@/lib/colorAnalysis";
 import type { FitPreference } from "@/lib/fit";
 import type { PhotoContext } from "@/lib/photoContext";
 import type { StatedTaste } from "@/lib/taste";
+import type { Learned, Waivers } from "@/lib/tasteLearn";
 import type { UnitSystem } from "@/lib/units";
 import { storage } from "./storage";
 
@@ -49,6 +50,12 @@ type ProfileState = {
    */
   taste?: {
     stated?: StatedTaste;
+    /** Decayed points per look and garment from saves, opens, Shop taps and "Not for me" (lib/tasteLearn). */
+    learned?: Learned;
+    /** Body rules the shopper overruled by saving what they sink. */
+    waivers?: Waivers;
+    /** Saved items were credited once, when learning first shipped. */
+    backfilled?: boolean;
     /** When the feed's "Tell us your style" card was dismissed. */
     promptDismissedAt?: string;
   };

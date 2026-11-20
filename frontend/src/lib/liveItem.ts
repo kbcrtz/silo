@@ -1,3 +1,4 @@
+import { garmentFromTitle } from "./tags";
 import type { CatalogProduct, FeedCategory } from "@/api/catalog";
 import {
   findItem,
@@ -168,6 +169,8 @@ export function toCatalogItem(
     shopifyColor: product.selected.find((o) => /colou?r/i.test(o.name)),
     ...(product.estimate && { evidence: product.estimate.evidence }),
     ...(product.popular && { popular: true }),
+    ...(product.aesthetic && { aesthetics: [product.aesthetic] }),
+    ...(garmentFromTitle(product.title) && { garment: garmentFromTitle(product.title) }),
     ...(product.estimate?.pattern &&
       product.estimate.pattern !== "solid" && {
         pattern: product.estimate.pattern,

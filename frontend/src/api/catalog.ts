@@ -47,6 +47,8 @@ export type CatalogProduct = {
   rating?: { value: number; max: number; count: number };
   /** Popular with the shopper's season this week. */
   popular?: true;
+  /** The look whose search returned it (backend catalog/aesthetics.ts); absent on plain searches. */
+  aesthetic?: Aesthetic;
   /** The backend's AI reading of the listing text (never images): estimated color and cut, with the words it used. */
   estimate?: {
     hex: string | null;
