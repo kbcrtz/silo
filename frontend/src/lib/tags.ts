@@ -1,4 +1,4 @@
-import type { Aesthetic } from "@/data/aesthetics";
+import { isAesthetic, type Aesthetic } from "@/data/aesthetics";
 
 /**
  * Words in a listing title that say which look it belongs to. The backend
@@ -84,7 +84,10 @@ export function tagsOf(item: {
 }): { id: string; aesthetics: Aesthetic[]; garment?: string } {
   return {
     id: item.id,
-    aesthetics: item.aesthetics?.length ? item.aesthetics : looksFromTitle(item.name),
+    // Only looks this app knows count toward taste; else the title's.
+    aesthetics: item.aesthetics?.some(isAesthetic)
+      ? item.aesthetics.filter(isAesthetic)
+      : looksFromTitle(item.name),
     garment: item.garment ?? garmentFromTitle(item.name),
   };
 }

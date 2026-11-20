@@ -88,6 +88,8 @@ export function recordSignal(
         )
       : taste?.waivers;
   useTasteLocal.setState({ ledger: result.ledger });
+  // Nothing new (an item already credited): no write, so no backup either.
+  if (result.learned === taste?.learned && waivers === taste?.waivers) return;
   setTaste({ learned: result.learned, ...(waivers && { waivers }) });
 }
 

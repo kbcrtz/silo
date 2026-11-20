@@ -2,6 +2,7 @@ import {
   AESTHETIC_INFO,
   AESTHETICS,
   aestheticsFor,
+  isAesthetic,
   type Aesthetic,
 } from "@/data/aesthetics";
 import type { CatalogItem } from "@/data/catalog";
@@ -228,7 +229,8 @@ export function tasteModel(
       if (stated?.liked.includes(a)) return false;
       const c = learned?.aesthetic[a];
       return (
-        stated?.rejected.includes(a) || (c !== undefined && c.n >= 4 && c.n >= 2 * c.p)
+        stated?.rejected.includes(a) ||
+        (c !== undefined && c.n >= 4 && c.n >= 2 * c.p)
       );
     }),
   );
@@ -331,7 +333,7 @@ export function pickLooks(
  */
 export function tasteReason(item: Tagged, model: TasteModel): string | null {
   const best = (item.aesthetics ?? [])
-    .filter((a) => (model.learned?.aesthetic[a]?.p ?? 0) >= 3)
+    .filter((a) => isAesthetic(a) && (model.learned?.aesthetic[a]?.p ?? 0) >= 3)
     .sort((a, b) => model.look[b] - model.look[a])[0];
   if (!best || model.look[best] < 0.3) return null;
   return `In the ${AESTHETIC_INFO[best].label.toLowerCase()} look you keep coming back to`;
@@ -356,15 +358,22 @@ export function noteOverrule(
 ): Waivers {
   const hits = { ...w.hits };
   const waived = new Set(w.waived);
+  let changed = false;
   for (const rule of sinking) {
-    if (waived.has(rule)) continue;
-    const ids = [...new Set([...(hits[rule] ?? []), itemId])];
+    if (waived.has(rule) || hits[rule]?.includes(itemId)) continue;
+    changed = true;
+    const ids = [...(hits[rule] ?? []), itemId];
     if (ids.length >= WAIVE_AFTER) {
       waived.add(rule);
       delete hits[rule];
     } else hits[rule] = ids;
   }
-  return { hits, waived: [...waived] };
+  // Unchanged, the same object back: the feed restarts when `waived` changes.
+  if (!changed) return w;
+  return {
+    hits,
+    waived: waived.size === w.waived.length ? w.waived : [...waived],
+  };
 }
 
 /** Turning a waived rule back on starts its count over. */

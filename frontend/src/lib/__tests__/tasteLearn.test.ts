@@ -296,3 +296,30 @@ describe("the backed-up taste stays small", () => {
     expect(JSON.stringify(learned).length).toBeLessThan(4 * 1024);
   });
 });
+
+describe("noteOverrule stays put when nothing changes", () => {
+  it("returns the same waivers for no sinking rules, a waived rule or a repeat item", () => {
+    const w = { hits: { r: ["a"] }, waived: ["done"] };
+    expect(noteOverrule(w, "b", [])).toBe(w);
+    expect(noteOverrule(w, "b", ["done"])).toBe(w);
+    expect(noteOverrule(w, "a", ["r"])).toBe(w);
+    const next = noteOverrule(w, "b", ["r"]);
+    expect(next).not.toBe(w);
+    expect(next.waived).toBe(w.waived);
+  });
+});
+
+describe("looks this app version doesn't know", () => {
+  it("never become a taste reason", () => {
+    const learned = {
+      ...emptyLearned(new Date()),
+      aesthetic: { cottagecore: { p: 9, n: 0 } },
+    } as unknown as Learned;
+    expect(
+      tasteReason(
+        { id: "x", aesthetics: ["cottagecore" as Aesthetic] },
+        tasteModel(undefined, learned),
+      ),
+    ).toBeNull();
+  });
+});

@@ -48,8 +48,14 @@ export function useDiscover(category: FeedCategory) {
   // Editing the style restarts the feed; it changes which searches run.
   // Learned taste is read when a page loads instead, so a save doesn't reset the feed.
   const stated = useProfile((s) => s.taste?.stated);
-  const waivedList = useProfile((s) => s.taste?.waivers?.waived);
-  const waived = useMemo(() => new Set(waivedList ?? []), [waivedList]);
+  // Keyed by content, not reference, so only a newly waived rule restarts it.
+  const waivedKey = useProfile((s) =>
+    (s.taste?.waivers?.waived ?? []).join("\n"),
+  );
+  const waived = useMemo(
+    () => new Set(waivedKey ? waivedKey.split("\n") : []),
+    [waivedKey],
+  );
   const style = stated?.colorStyle ?? "none";
   const hidden = useTasteLocal((s) => s.hidden);
   const [feed, setFeed] = useState<Feed>(START);
@@ -65,9 +71,7 @@ export function useDiscover(category: FeedCategory) {
       const seed = cursor ? undefined : Math.floor(Math.random() * 2 ** 31);
       // The looks are picked with the feed's seed, so a refresh can rotate the exploring third.
       const looks =
-        seed === undefined
-          ? {}
-          : pickLooks(model, shopFor, mulberry(seed));
+        seed === undefined ? {} : pickLooks(model, shopFor, mulberry(seed));
       try {
         const page = await discoverProducts(
           {

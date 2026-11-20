@@ -21,6 +21,13 @@ export const AESTHETICS = [
 ] as const;
 export type Aesthetic = (typeof AESTHETICS)[number];
 
+/**
+ * A look this app version knows. The server can add looks before the app
+ * does, so ids from the server or an older backup pass through this first.
+ */
+export const isAesthetic = (a: unknown): a is Aesthetic =>
+  AESTHETICS.includes(a as Aesthetic);
+
 type Dept = "womens" | "mens";
 
 export type AestheticInfo = {

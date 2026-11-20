@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { Pressable, Text, View } from "react-native";
 import type { FashionStyle } from "@/api/catalog";
-import { OptionButton } from "@/components/onboarding/Controls";
+import { OptionButton, TWO_UP } from "@/components/onboarding/Controls";
 import { Glass } from "@/components/onboarding/Glass";
 import {
   AESTHETIC_INFO,
@@ -100,7 +100,11 @@ export function StylePicker({
     <View style={{ gap: 26 }}>
       <View>
         <Label>{`PICK UP TO ${MAX_LOOKS} · ${liked.length} CHOSEN`}</Label>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9 }}>
+        <View
+          // Two 48.7% cells with a fixed 9 pt gap overflow a phone under 394 pt
+          // wide and drop to one column; spacing them apart always fits.
+          style={TWO_UP}
+        >
           {aestheticsFor(shopFor).map((look) => {
             const selected = liked.includes(look);
             return (
@@ -118,7 +122,11 @@ export function StylePicker({
       </View>
       <View>
         <Label>HOW DO YOU WEAR COLOR?</Label>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9 }}>
+        <View
+          // Two 48.7% cells with a fixed 9 pt gap overflow a phone under 394 pt
+          // wide and drop to one column; spacing them apart always fits.
+          style={TWO_UP}
+        >
           {COLOR_STYLES.map((c) => (
             <OptionButton
               key={c.id}

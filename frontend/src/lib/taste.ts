@@ -1,9 +1,5 @@
 import type { FashionStyle } from "@/api/catalog";
-import {
-  AESTHETIC_INFO,
-  AESTHETICS,
-  type Aesthetic,
-} from "@/data/aesthetics";
+import { AESTHETIC_INFO, isAesthetic, type Aesthetic } from "@/data/aesthetics";
 
 /** How many looks a shopper can pick, and how many the backend takes. */
 export const MAX_LOOKS = 3;
@@ -27,9 +23,6 @@ export const COLOR_STYLES: { id: FashionStyle; label: string }[] = [
   { id: "dark", label: "Deeper shades" },
 ];
 
-const known = (a: unknown): a is Aesthetic =>
-  AESTHETICS.includes(a as Aesthetic);
-
 /** Tapping a look in the picker: on, off, or nothing when three are already on. */
 export function toggleLook(liked: Aesthetic[], look: Aesthetic): Aesthetic[] {
   if (liked.includes(look)) return liked.filter((a) => a !== look);
@@ -40,7 +33,7 @@ export function toggleLook(liked: Aesthetic[], look: Aesthetic): Aesthetic[] {
 export function describeTaste(stated: StatedTaste | undefined): string | null {
   if (!stated) return null;
   const looks = stated.liked
-    .filter(known)
+    .filter(isAesthetic)
     .map((a) => AESTHETIC_INFO[a].label)
     .join(", ");
   const color =

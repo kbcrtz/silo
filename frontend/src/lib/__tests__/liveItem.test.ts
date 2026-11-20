@@ -243,3 +243,8 @@ describe("AI try-on image source", () => {
     ).toBeNull();
   });
 });
+
+it("drops a look this app version doesn't know", () => {
+  expect(toCatalogItem(product({ aesthetic: "cottagecore" as never }), "womens").aesthetics).toBeUndefined();
+  expect(toCatalogItem(product({ aesthetic: "boho" }), "womens").aesthetics).toEqual(["boho"]);
+});

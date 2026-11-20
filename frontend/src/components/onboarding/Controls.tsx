@@ -35,6 +35,14 @@ export const Field = forwardRef<
   );
 });
 
+/** Two cells per row (each 48.7% wide), whatever the screen width. */
+export const TWO_UP = {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  justifyContent: "space-between",
+  rowGap: 9,
+} as const;
+
 /** One of a grid of outlined options, like gender. Selected turns ink. */
 export function OptionButton({
   label,

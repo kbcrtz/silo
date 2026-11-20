@@ -50,3 +50,7 @@ describe("tagsOf", () => {
     });
   });
 });
+
+it("ignores a look this app version doesn't know", () => {
+  expect(tagsOf({ id: "c", name: "Cargo Pants", aesthetics: ["cottagecore" as never] }).aesthetics).toEqual(["streetwear"]);
+});
