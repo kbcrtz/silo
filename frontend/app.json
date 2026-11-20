@@ -25,8 +25,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Silo uses your photos for your color analysis and try-on body photo.",
-          "cameraPermission": "Silo uses the camera to take your color analysis selfie and try-on body photo.",
+          "photosPermission": "Silo uses a selfie from your photos to read your skin, hair and eye colors for your color analysis.",
+          "cameraPermission": "Silo uses the camera to take a selfie that reads your skin, hair and eye colors for your color analysis.",
           "microphonePermission": false
         }
       ],

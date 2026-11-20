@@ -29,7 +29,7 @@ import { tagsOf } from "@/lib/tags";
 import { tasteModel, tasteReason } from "@/lib/tasteLearn";
 import { useProfile } from "@/store/profile";
 import { useSaved } from "@/store/saved";
-import { notForMe, recordSignal, toggleSave as saveOrUnsave } from "@/store/taste";
+import { confirmToggleSave, notForMe, recordSignal } from "@/store/taste";
 import { useTheme } from "@/theme";
 import { BRAND } from "@/theme/brand";
 
@@ -59,6 +59,9 @@ function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={
+        active === undefined ? undefined : { selected: active }
+      }
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
     >
@@ -102,6 +105,7 @@ export default function ItemSheet() {
   const lists = useSaved((s) => s.lists);
   const [onYou, setOnYou] = useState(false);
   const [triedOn, setTriedOn] = useState(false);
+  const [failedUri, setFailedUri] = useState<string>();
   const backdrop = useSeasonBackdrop();
   const taste = useProfile((s) => s.taste);
   const waived = useMemo(
@@ -143,6 +147,7 @@ export default function ItemSheet() {
 
   // Live products show the AI try-on image; demo items and mock mode the drawn mannequin.
   const aiSource = tryOnImageSource(item, shopFor, latest);
+  const showsAi = !!aiSource && aiSource.uri !== failedUri;
   const drawn = (
     <Mannequin
       measurements={latest}
@@ -153,8 +158,10 @@ export default function ItemSheet() {
   );
 
   const toggleSave = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    saveOrUnsave(item, t.season?.id);
+    // Unsaving an item in lists asks first: it comes out of them too.
+    confirmToggleSave(item, t.season?.id, () =>
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+    );
   };
 
   const newList = () =>
@@ -211,6 +218,7 @@ export default function ItemSheet() {
                   key={aiSource.uri}
                   source={aiSource}
                   fallback={drawn}
+                  onFailed={() => setFailedUri(aiSource.uri)}
                 />
               ) : (
                 drawn
@@ -225,12 +233,12 @@ export default function ItemSheet() {
                   paddingHorizontal: t.space(4),
                 }}
               >
-                {aiSource
+                {showsAi
                   ? "AI preview of this item"
                   : measured
                     ? `${estimated}${SILHOUETTE_LABELS[item.silhouette]} cut on your ${shape?.name.toLowerCase()} shape`
                     : "Average figure · add measurements for yours"}
-                {!aiSource && item.source
+                {!showsAi && item.source
                   ? " · cut estimated from the listing"
                   : ""}
               </Text>

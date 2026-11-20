@@ -19,9 +19,12 @@ import { Text } from "./Text";
 export function AiTryOn({
   source,
   fallback,
+  onFailed,
 }: {
   source: ImageSource;
   fallback: ReactNode;
+  /** So a caption can stop calling the drawn fallback an AI preview. */
+  onFailed?: () => void;
 }) {
   const t = useTheme();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -51,13 +54,18 @@ export function AiTryOn({
         style={{ flex: 1, borderRadius: t.radius.md }}
         contentFit="contain"
         transition={250}
+        // Kept on the phone: the server holds its copy for only 7 days.
+        cachePolicy="disk"
         accessibilityLabel="AI preview of the item on a mannequin"
         onLoad={() => {
           if (!slow) return setState("ready");
           progress.value = withTiming(1, { duration: 200 });
           setTimeout(() => setState("ready"), 200);
         }}
-        onError={() => setState("failed")}
+        onError={() => {
+          setState("failed");
+          onFailed?.();
+        }}
       />
       {state === "loading" && slow ? (
         <View style={{ position: "absolute", inset: 0, alignItems: "center" }}>
@@ -86,7 +94,10 @@ export function AiTryOn({
               }}
             >
               <Animated.View
-                style={[{ height: "100%", backgroundColor: t.colors.accent }, bar]}
+                style={[
+                  { height: "100%", backgroundColor: t.colors.accent },
+                  bar,
+                ]}
               />
             </View>
           </View>

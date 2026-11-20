@@ -6,7 +6,7 @@ import { Pressable, View } from "react-native";
 import type { CatalogItem } from "@/data/catalog";
 import { readableOn } from "@/lib/color";
 import { useSaved } from "@/store/saved";
-import { toggleSave } from "@/store/taste";
+import { confirmToggleSave } from "@/store/taste";
 import { useTheme } from "@/theme";
 import { BRAND } from "@/theme/brand";
 import { GlassPill } from "./GlassPill";
@@ -122,7 +122,7 @@ export function ItemCard({
             <Link.MenuAction
               title={saved ? "Remove from saved" : "Save"}
               icon={saved ? "heart.slash" : "heart"}
-              onPress={() => toggleSave(item, t.season?.id)}
+              onPress={() => confirmToggleSave(item, t.season?.id)}
             />
             <Link.MenuAction
               title="Not for me"
@@ -228,9 +228,18 @@ export function ProductImage({ item }: { item: CatalogItem }) {
 
 /** Stand-in until catalog items have photos. */
 export function ColorBlock({ item }: { item: CatalogItem }) {
-  const fg = readableOn(item.colors[0]);
+  // Live listings can have no photo and no known color.
+  const bg = item.colors[0];
+  const fg = bg ? readableOn(bg) : BRAND.inkSoft;
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: bg,
+      }}
+    >
       {item.colors[1] ? (
         <View
           style={{

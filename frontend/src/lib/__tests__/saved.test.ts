@@ -97,3 +97,64 @@ describe("saved live products", () => {
     expect(findItem(item.id)).toEqual(item);
   });
 });
+
+describe("closet outfits", () => {
+  beforeEach(() => useSaved.getState().clear());
+
+  const live = (
+    id: string,
+    category: CatalogItem["category"],
+  ): CatalogItem => ({
+    id,
+    name: "Linen Piece",
+    brand: "Tide",
+    cut: "unisex",
+    colors: ["#9CAF88"],
+    price: 58,
+    aspect: 1.25,
+    sizeChartId: "",
+    imageUrl: "https://cdn.shopify.com/piece.jpg",
+    productUrl: "https://tide.example/products/piece",
+    source: "shopify",
+    category,
+    silhouette: "relaxed",
+    length: "hip",
+  });
+
+  it("saves, renames and deletes an outfit, newest first", () => {
+    const s = useSaved.getState();
+    const first = s.saveOutfit("Office", ["w-01", "w-02"]);
+    const second = useSaved.getState().saveOutfit("Weekend", ["w-03", "w-04"]);
+    expect(useSaved.getState().outfits.map((o) => o.id)).toEqual([
+      second,
+      first,
+    ]);
+
+    useSaved.getState().renameOutfit(first, "Work");
+    expect(useSaved.getState().outfits[1]).toMatchObject({
+      name: "Work",
+      itemIds: ["w-01", "w-02"],
+    });
+
+    useSaved.getState().deleteOutfit(second);
+    expect(useSaved.getState().outfits.map((o) => o.id)).toEqual([first]);
+  });
+
+  it("keeps an outfit's live pieces after they're unsaved, until the outfit goes", () => {
+    const top = live("shopify-FIT-TOP", "top");
+    const bottom = live("shopify-FIT-BOTTOM", "bottom");
+    rememberItems([top, bottom]);
+    useSaved.getState().toggle(top.id);
+    useSaved.getState().toggle(bottom.id);
+    const outfit = useSaved.getState().saveOutfit("Fit", [top.id, bottom.id]);
+
+    useSaved.getState().toggle(top.id); // unsave
+    expect(useSaved.getState().itemIds).toEqual([bottom.id]);
+    expect(useSaved.getState().items[top.id]).toEqual(top);
+
+    useSaved.getState().deleteOutfit(outfit);
+    expect(useSaved.getState().items[top.id]).toBeUndefined();
+    // Still saved, so still bookmarked.
+    expect(useSaved.getState().items[bottom.id]).toEqual(bottom);
+  });
+});

@@ -6,6 +6,7 @@ import {
   measurementRows,
   photoToUpload,
   profileSnapshot,
+  joinEntries,
   savedSnapshot,
 } from "../cloud";
 
@@ -138,6 +139,42 @@ describe("restore on an empty install", () => {
         value: 72,
         measuredAt: "2026-10-18T10:00:00.000Z",
       },
+    ]);
+  });
+});
+
+describe("joinEntries", () => {
+  it("keeps both histories, each reading once, oldest first", () => {
+    const account = [
+      {
+        id: "a",
+        type: "waist" as const,
+        value: 80,
+        measuredAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "b",
+        type: "chest" as const,
+        value: 95,
+        measuredAt: "2026-02-01T00:00:00.000Z",
+      },
+    ];
+    const phone = [
+      {
+        id: "c",
+        type: "waist" as const,
+        value: 78,
+        measuredAt: "2026-10-30T00:00:00.000Z",
+      },
+      {
+        id: "d",
+        type: "chest" as const,
+        value: 95,
+        measuredAt: "2026-02-01T00:00:00.000Z",
+      },
+    ];
+    expect(joinEntries(account, phone).map((e) => e.value)).toEqual([
+      80, 95, 78,
     ]);
   });
 });

@@ -159,3 +159,16 @@ test("the gate forgets clients whose window has passed, so rotating IPs don't gr
   gate.tryEnter("new-ip");
   assert.equal(gate.tracked(), 1);
 });
+
+test("an IPv6 client counts as its whole /64, so rotating addresses inside it doesn't reset the limit", () => {
+  const gate = createGate({ windowMs: 60_000, max: 2, concurrency: 10 });
+  assert.equal(gate.tryEnter("2001:db8:1:2::a"), "ok");
+  gate.leave();
+  assert.equal(gate.tryEnter("2001:0db8:0001:0002:ffff:1:2:3"), "ok");
+  gate.leave();
+  assert.equal(gate.tryEnter("2001:db8:1:2:9::1"), "rate");
+  // Another /64, an IPv4-mapped address and a user id are their own clients.
+  assert.equal(gate.tryEnter("2001:db8:1:3::a"), "ok");
+  assert.equal(gate.tryEnter("::ffff:203.0.113.9"), "ok");
+  assert.equal(gate.tryEnter("0a0a0a0a-1b1b-4c2c-8d3d-4e4e4e4e4e4e"), "ok");
+});

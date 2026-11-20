@@ -53,3 +53,18 @@ export function fitFromItems(items: (CatalogItem | undefined)[]): Fit {
     {},
   );
 }
+
+/** A name to start from: each piece's last word, like "Tee + Trouser + Blazer". */
+export function outfitName(pieces: CatalogItem[]): string {
+  return pieces
+    .map(
+      (i) =>
+        i.name
+          .replace(/\(.*?\)/g, "")
+          .trim()
+          .split(/\s+/)
+          .pop() ?? "",
+    )
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" + ");
+}

@@ -4,6 +4,7 @@ import { SymbolView } from "expo-symbols";
 import { useMemo } from "react";
 import {
   Alert,
+  Linking,
   Text,
   TextInput,
   useWindowDimensions,
@@ -131,17 +132,23 @@ function AccountSection() {
   const confirmDelete = () =>
     Alert.alert(
       "Delete your account?",
-      "Your profile, measurements and saved pieces are deleted from Silo for good.",
+      "Your profile, measurements and saved pieces are deleted from Silo for good. A membership keeps billing until you cancel it in your Apple subscriptions.",
       [
         { text: "Cancel", style: "cancel" },
+        {
+          text: "Manage subscription",
+          onPress: () =>
+            Linking.openURL("https://apps.apple.com/account/subscriptions"),
+        },
         {
           text: "Delete",
           style: "destructive",
           onPress: () =>
-            removeAccount().catch((e) =>
+            // The raw error is a status line like `502 {"error":...}`, not for people.
+            removeAccount().catch(() =>
               Alert.alert(
                 "Couldn't delete your account",
-                e instanceof Error ? e.message : "Please try again.",
+                "Check your connection and try again.",
               ),
             ),
         },

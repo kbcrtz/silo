@@ -1,3 +1,4 @@
+import { Alert } from "react-native";
 import { create } from "zustand";
 import { track } from "@/api/userData";
 import { persist } from "zustand/middleware";
@@ -56,13 +57,19 @@ function traitsNow() {
   );
 }
 
-function setTaste(patch: NonNullable<ReturnType<typeof useProfile.getState>["taste"]>) {
+function setTaste(
+  patch: NonNullable<ReturnType<typeof useProfile.getState>["taste"]>,
+) {
   const { taste, set } = useProfile.getState();
   set({ taste: { ...taste, ...patch } });
 }
 
 /** An action on an item: open (3 s on the sheet), first try-on, save or Shop. */
-export function recordSignal(item: CatalogItem, signal: Signal, now = new Date()) {
+export function recordSignal(
+  item: CatalogItem,
+  signal: Signal,
+  now = new Date(),
+) {
   const { taste } = useProfile.getState();
   const local = useTasteLocal.getState();
   const result = credit(
@@ -107,7 +114,9 @@ export function notForMe(item: CatalogItem, now = new Date()) {
       -MAX_HIDDEN,
     ),
   });
-  setTaste({ learned: dismiss(taste?.learned ?? emptyLearned(now), tagsOf(item), now) });
+  setTaste({
+    learned: dismiss(taste?.learned ?? emptyLearned(now), tagsOf(item), now),
+  });
 }
 
 /** Turns a waived body rule back on. */
@@ -145,4 +154,30 @@ export function toggleSave(item: CatalogItem, seasonId: string | undefined) {
     recordSignal(item, "save");
   }
   useSaved.getState().toggle(item.id);
+}
+
+/**
+ * toggleSave, but unsaving an item that's in lists asks first: it comes
+ * out of every list too. `onDone` runs once it has saved or unsaved.
+ */
+export function confirmToggleSave(
+  item: CatalogItem,
+  seasonId: string | undefined,
+  onDone?: () => void,
+) {
+  const { itemIds, lists } = useSaved.getState();
+  const inLists = lists.filter((l) => l.itemIds.includes(item.id)).length;
+  const go = () => {
+    onDone?.();
+    toggleSave(item, seasonId);
+  };
+  if (!itemIds.includes(item.id) || !inLists) return go();
+  Alert.alert(
+    "Remove from Saved?",
+    `It also comes out of ${inLists === 1 ? "1 list" : `${inLists} lists`}.`,
+    [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: go },
+    ],
+  );
 }

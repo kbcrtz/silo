@@ -11,6 +11,15 @@ export type SavedList = {
   createdAt: string;
 };
 
+/** A fit kept in the closet, to try on again without picking it. */
+export type Outfit = {
+  id: string;
+  name: string;
+  /** Inner layers first, as fitIds gives them. */
+  itemIds: string[];
+  createdAt: string;
+};
+
 type SavedState = {
   /** Every saved item, newest first. This is the "All saved" list. */
   itemIds: string[];
@@ -21,6 +30,8 @@ type SavedState = {
    * saved; the feed itself is never stored.
    */
   items: Record<string, CatalogItem>;
+  /** Newest first. Their live pieces stay bookmarked even once unsaved. */
+  outfits: Outfit[];
 
   toggle: (itemId: string) => void;
   /** Creates the list and returns its id. */
@@ -28,6 +39,10 @@ type SavedState = {
   /** Adding to a list also saves the item. */
   toggleInList: (listId: string, itemId: string) => void;
   deleteList: (listId: string) => void;
+  /** Saves the outfit and returns its id. */
+  saveOutfit: (name: string, itemIds: string[]) => string;
+  renameOutfit: (outfitId: string, name: string) => void;
+  deleteOutfit: (outfitId: string) => void;
   clear: () => void;
 };
 
@@ -50,12 +65,19 @@ function unbookmark(items: Record<string, CatalogItem>, id: string) {
   return rest;
 }
 
+/** Names come from Alert.prompt, which has no length limit; long ones break the headline and chips. */
+const short = (name: string) => name.slice(0, 30);
+
+const inOutfit = (outfits: Outfit[], id: string) =>
+  outfits.some((o) => o.itemIds.includes(id));
+
 export const useSaved = create<SavedState>()(
   persist(
     (set) => ({
       itemIds: [],
       lists: [],
       items: {},
+      outfits: [],
       toggle: (itemId) =>
         set((s) =>
           s.itemIds.includes(itemId)
@@ -66,7 +88,9 @@ export const useSaved = create<SavedState>()(
                   ...l,
                   itemIds: l.itemIds.filter((x) => x !== itemId),
                 })),
-                items: unbookmark(s.items, itemId),
+                items: inOutfit(s.outfits, itemId)
+                  ? s.items
+                  : unbookmark(s.items, itemId),
               }
             : {
                 itemIds: front(s.itemIds, itemId),
@@ -80,7 +104,7 @@ export const useSaved = create<SavedState>()(
             ...s.lists,
             {
               id,
-              name,
+              name: short(name),
               itemIds: firstItemId ? [firstItemId] : [],
               createdAt: new Date().toISOString(),
             },
@@ -115,7 +139,40 @@ export const useSaved = create<SavedState>()(
         }),
       deleteList: (listId) =>
         set((s) => ({ lists: s.lists.filter((l) => l.id !== listId) })),
-      clear: () => set({ itemIds: [], lists: [], items: {} }),
+      saveOutfit: (name, itemIds) => {
+        const id = `outfit-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        set((s) => ({
+          outfits: [
+            {
+              id,
+              name: short(name),
+              itemIds,
+              createdAt: new Date().toISOString(),
+            },
+            ...s.outfits,
+          ],
+          items: itemIds.reduce(bookmark, s.items),
+        }));
+        return id;
+      },
+      renameOutfit: (outfitId, name) =>
+        set((s) => ({
+          outfits: s.outfits.map((o) =>
+            o.id === outfitId ? { ...o, name: short(name) } : o,
+          ),
+        })),
+      deleteOutfit: (outfitId) =>
+        set((s) => {
+          const outfits = s.outfits.filter((o) => o.id !== outfitId);
+          const gone = s.outfits.find((o) => o.id === outfitId)?.itemIds ?? [];
+          return {
+            outfits,
+            items: gone
+              .filter((id) => !s.itemIds.includes(id) && !inOutfit(outfits, id))
+              .reduce(unbookmark, s.items),
+          };
+        }),
+      clear: () => set({ itemIds: [], lists: [], items: {}, outfits: [] }),
     }),
     {
       name: "silo.saved",

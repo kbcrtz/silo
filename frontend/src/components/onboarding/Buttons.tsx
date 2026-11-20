@@ -61,6 +61,7 @@ export function PrimaryButton({
       ]}
     >
       <Text
+        maxFontSizeMultiplier={1.3}
         style={[
           TYPE.button,
           { color: disabled ? BRAND.onDisabled : BRAND.white },
@@ -110,7 +111,9 @@ export function GlassButton({
           paddingHorizontal: 20,
         }}
       >
-        <Text style={TYPE.control}>{label}</Text>
+        <Text maxFontSizeMultiplier={1.3} style={TYPE.control}>
+          {label}
+        </Text>
       </Glass>
     </Pressable>
   );

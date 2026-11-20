@@ -35,9 +35,10 @@ export function perMonth(plan: Plan): number {
   return plan.period === "year" ? Math.floor(plan.cents / 12) : plan.cents;
 }
 
-/** How much a year of `plan` saves over a year of `other`, in whole percent. */
-export function savingsPercent(plan: Plan, other: Plan): number {
-  return Math.max(0, Math.floor((1 - yearCost(plan) / yearCost(other)) * 100));
+/** How much one plan's year saves over another's, in whole percent; 0 when the other's cost is unknown. */
+export function savingsPercent(yearly: number, otherYearly: number): number {
+  if (!otherYearly) return 0;
+  return Math.max(0, Math.floor((1 - yearly / otherYearly) * 100));
 }
 
 /** Splits a palette into `count` runs of colors, one per card in the fan. */

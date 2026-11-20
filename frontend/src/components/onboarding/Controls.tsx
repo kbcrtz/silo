@@ -65,7 +65,10 @@ export function OptionButton({
         edge={selected ? BRAND.ink : BRAND.outline}
         style={{ height: 48, alignItems: "center", justifyContent: "center" }}
       >
-        <Text style={[TYPE.control, selected && { color: BRAND.white }]}>
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={[TYPE.control, selected && { color: BRAND.white }]}
+        >
           {label}
         </Text>
       </Glass>
@@ -101,6 +104,7 @@ export function Chip({
         style={{ height: 44, paddingHorizontal: 15, justifyContent: "center" }}
       >
         <Text
+          maxFontSizeMultiplier={1.3}
           style={[
             TYPE.control,
             { color: selected ? BRAND.white : "rgba(23,19,17,0.78)" },

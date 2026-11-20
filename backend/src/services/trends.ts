@@ -83,7 +83,22 @@ export function markPopular(products: CatalogProduct[], t: Trending): CatalogPro
   return [...popular, ...products.filter((p) => !p.popular)];
 }
 
+/** A season's week of trends changes slowly, so feed pages share one lookup for this long. */
+const TRENDING_TTL_MS = 5 * 60_000;
+
 export function createTrends(sql: postgres.Sql): Trends {
+  const recent = new Map<string, { at: number; value: Promise<Trending> }>();
+  // Each user's strongest action per item (shop 5, save 3, open 1) over the last week, straight from events (indexed on season, at).
+  // shortcut: one row per user and item reaches Node, move the totals into SQL when a season's week has ~100k of them.
+  async function lookup(season: string): Promise<Trending> {
+    const rows = await sql<Row[]>`
+      SELECT coalesce(user_id::text, id::text) AS voter, item_id, garment, silhouette, color_family,
+        max(CASE kind WHEN 'shop' THEN 5 WHEN 'save' THEN 3 ELSE 1 END)::int AS score
+      FROM events
+      WHERE season = ${season} AND at > now() - INTERVAL '7 days'
+      GROUP BY 1, item_id, garment, silhouette, color_family`;
+    return pickTrending(rows);
+  }
   return {
     async record(userId, events) {
       if (!events.length) return;
@@ -98,16 +113,15 @@ export function createTrends(sql: postgres.Sql): Trends {
       }));
       await sql`INSERT INTO events ${sql(rows, "user_id", "kind", "item_id", "season", "garment", "silhouette", "color_family")}`;
     },
-    // Each user's strongest action per item (shop 5, save 3, open 1) over the last week, straight from events (indexed on season, at).
-    // shortcut: one row per user and item reaches Node, move the totals into SQL when a season's week has ~100k of them.
-    async trending(season) {
-      const rows = await sql<Row[]>`
-        SELECT coalesce(user_id::text, id::text) AS voter, item_id, garment, silhouette, color_family,
-          max(CASE kind WHEN 'shop' THEN 5 WHEN 'save' THEN 3 ELSE 1 END)::int AS score
-        FROM events
-        WHERE season = ${season} AND at > now() - INTERVAL '7 days'
-        GROUP BY 1, item_id, garment, silhouette, color_family`;
-      return pickTrending(rows);
+    trending(season) {
+      const hit = recent.get(season);
+      if (hit && Date.now() - hit.at < TRENDING_TTL_MS) return hit.value;
+      // Season ids come from the request; 12 are real, so a full map is junk and goes.
+      if (recent.size >= 50) recent.clear();
+      const value = lookup(season);
+      recent.set(season, { at: Date.now(), value });
+      value.catch(() => recent.delete(season));
+      return value;
     },
   };
 }

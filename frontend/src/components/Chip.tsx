@@ -32,7 +32,11 @@ export function Chip({
         interactive
         style={{ paddingHorizontal: 15 }}
       >
-        <Text variant="caption" style={selected && { color: BRAND.white }}>
+        <Text
+          variant="caption"
+          numberOfLines={1}
+          style={selected && { color: BRAND.white }}
+        >
           {label}
         </Text>
       </GlassPill>
