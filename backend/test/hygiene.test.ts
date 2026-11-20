@@ -21,6 +21,13 @@ test("resale listings are caught by their shorthand", () => {
   for (const title of ["Nautica Sweater NWT", "J.Crew Blazer EUC", "Pre-owned Wool Coat", "Preloved Denim Jacket", "Thrifted Flannel", "Levi's Jeans Sz 32", "Silk Blouse SZ XL"]) {
     assert.equal(junkReason(listing(title), "US"), "resale", title);
   }
+  // Seen live: a used jacket titled with its one size, and a resale shop by name.
+  assert.equal(junkReason(listing("Zyia hooded windbreaker jacket, white. Women's M"), "US"), "resale");
+  assert.equal(junkReason(listing("Windbreaker", "Rewear"), "US"), "resale");
+  assert.equal(junkReason(listing("Linen Shirt", "Northside Consignment"), "US"), "resale");
+  // A size word mid-title is ordinary retail.
+  assert.equal(junkReason(listing("Women's M Logo Tee in Cream"), "US"), null);
+  assert.equal(junkReason(listing("Wide Leg Trouser 33″ - Navy"), "US"), null);
 });
 
 test("keyword-stuffed titles are caught: too long, every size, or a run of colors", () => {
