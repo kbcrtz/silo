@@ -37,3 +37,6 @@ frontend/coverage/
 
 # Database migrations and Supabase CLI state
 supabase/
+
+# The website deploys to Vercel on its own
+website/
